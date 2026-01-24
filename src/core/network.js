@@ -5,32 +5,43 @@ export class NetworkManager {
         this.connections = []; 
         this.isHost = false;
         this.roomData = { id: '', pass: '', seed: '' };
+        this.getStateCallback = null; // Função para pegar dados do jogo
     }
 
     init(customID, callback) {
         this.peer = new Peer(customID, { debug: 1 });
-        
         this.peer.on('open', (id) => callback(true, id));
         this.peer.on('error', (err) => callback(false, err.type));
     }
 
-    hostRoom(id, pass, seed) {
+    // Adicionado parametro 'getStateFn'
+    hostRoom(id, pass, seed, getStateFn) {
         this.isHost = true;
         this.roomData = { id, pass, seed };
+        this.getStateCallback = getStateFn; // Guarda a referência da função
 
         this.peer.on('connection', (conn) => {
             conn.on('data', (data) => {
                 if (data.type === 'AUTH_REQUEST') {
                     if (!this.roomData.pass || data.password === this.roomData.pass) {
-                        conn.send({ type: 'AUTH_SUCCESS', seed: this.roomData.seed });
+                        
+                        // PEGA O ESTADO ATUAL DO JOGO PARA ENVIAR
+                        const currentState = this.getStateCallback ? this.getStateCallback() : {};
+
+                        conn.send({ 
+                            type: 'AUTH_SUCCESS', 
+                            seed: this.roomData.seed,
+                            worldState: currentState // Envia o mapa modificado
+                        });
+                        
                         this.connections.push(conn);
-                        console.log("Novo peer conectado.");
+                        console.log("Player autenticado e sincronizado.");
                     } else {
                         conn.send({ type: 'AUTH_FAIL', reason: 'Senha incorreta' });
                         setTimeout(() => conn.close(), 500);
                     }
                 } else {
-                    // Recebe dados do convidado e replica para o jogo E para outros convidados
+                    // Reenvia dados de jogo (movimento/tiles) para todos
                     window.dispatchEvent(new CustomEvent('netData', { detail: data }));
                     this.broadcast(data, conn.peer);
                 }
