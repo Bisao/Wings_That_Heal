@@ -56,13 +56,13 @@ export class Player {
             ctx.fill();
         }
 
-        // Barra de Carga (Visualização Profissional)
+        // Barra de Carga (Só mostra se tiver pólen)
         if (this.pollen > 0) {
-            ctx.fillStyle = "#444";
-            ctx.fillRect(sX - 15, sY - 35, 30, 4);
-            ctx.fillStyle = "#f1c40f"; // Amarelo Pólen
+            ctx.fillStyle = "#222";
+            ctx.fillRect(sX - 16, sY - 40, 32, 6);
+            ctx.fillStyle = "#f1c40f"; 
             const pct = this.pollen / this.maxPollen;
-            ctx.fillRect(sX - 15, sY - 35, 30 * pct, 4);
+            ctx.fillRect(sX - 15, sY - 39, 30 * pct, 4);
         }
 
         ctx.fillStyle = "white";
