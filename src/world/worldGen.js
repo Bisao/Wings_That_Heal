@@ -1,3 +1,5 @@
+// src/world/worldGen.js (ATUALIZADO)
+
 export class WorldGenerator {
     constructor(seed) {
         this.seed = this.hashSeed(seed);
@@ -17,11 +19,27 @@ export class WorldGenerator {
     }
 
     getTileAt(x, y) {
-        const dist = Math.sqrt(x*x + y*y);
+        // 1. Posição da Colmeia
         if (x === 0 && y === 0) return 'COLMEIA';
-        if (dist < 3) return 'GRAMA';
+
+        // 2. Flores Iniciais Fixas (Conforme o planejado: 3 flores na área verde)
+        const initialFlowers = [
+            {x: 1, y: 1},
+            {x: -1, y: 2},
+            {x: 2, y: -1}
+        ];
+        
+        const isInitialFlower = initialFlowers.some(f => f.x === x && f.y === y);
+        if (isInitialFlower) return 'FLOR_POLEM';
+
+        // 3. Área Verde (Grama em volta da colmeia)
+        const dist = Math.sqrt(x*x + y*y);
+        if (dist < 4) return 'GRAMA';
+
+        // 4. Geração Procedural do Resto do Mapa (Terra Queimada e Flores Raras)
         const val = this.noise(x, y);
-        if (val > 0.97) return 'FLOR_POLEM';
+        if (val > 0.98) return 'FLOR_POLEM'; // Flores raras no mapa queimado
+        
         return 'TERRA_QUEIMADA';
     }
 
