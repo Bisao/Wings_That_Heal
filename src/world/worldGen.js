@@ -19,13 +19,13 @@ export class WorldGenerator {
     getTileAt(x, y) {
         if (x === 0 && y === 0) return 'COLMEIA';
 
-        // REGRA: Apenas 1 Flor por mapa, na área verde
-        if (x === 2 && y === 2) return 'FLOR'; // 'FLOR' representa a flor cheia (100%)
+        // A Flor Mestra Inicial (Já adulta)
+        if (x === 2 && y === 2) return 'FLOR';
 
-        // Área segura (Grama)
+        // Área segura inicial
         if (Math.sqrt(x*x + y*y) < 4) return 'GRAMA';
 
-        // O resto é terra queimada (sem flores aleatórias agora)
+        // O resto é terra queimada
         return 'TERRA_QUEIMADA';
     }
 
