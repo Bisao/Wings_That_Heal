@@ -11,7 +11,7 @@
             user-select: none; -webkit-user-select: none; 
         }
         
-        /* --- LOBBY CONTAINER (TELA INICIAL) --- */
+        /* --- LOBBY --- */
         #lobby-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: radial-gradient(circle at center, #1a1a1a 0%, #000000 100%);
@@ -19,12 +19,9 @@
         }
 
         .lobby-card { 
-            background: rgba(25, 25, 25, 0.95); 
-            border: 1px solid #f1c40f;
+            background: rgba(25, 25, 25, 0.95); border: 1px solid #f1c40f;
             box-shadow: 0 0 40px rgba(241, 196, 15, 0.15); 
-            width: 90%; max-width: 380px;
-            border-radius: 16px; overflow: hidden;
-            transition: transform 0.3s;
+            width: 90%; max-width: 380px; border-radius: 16px; overflow: hidden;
         }
 
         .lobby-header {
@@ -33,7 +30,6 @@
             text-transform: uppercase; letter-spacing: 2px;
         }
 
-        /* --- ABAS (TABS) --- */
         .tabs { display: flex; background: #111; border-bottom: 1px solid #333; }
         .tab-btn {
             flex: 1; padding: 15px; cursor: pointer;
@@ -42,70 +38,64 @@
         }
         .tab-btn.active { color: #f1c40f; border-bottom: 3px solid #f1c40f; background: rgba(241, 196, 15, 0.05); }
 
-        /* --- CONTEÚDO DAS ABAS --- */
         .tab-content { display: none; padding: 25px; animation: fadeIn 0.3s; }
         .tab-content.active { display: block; }
-
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* --- INPUTS E BOTÕES --- */
         .input-group { margin-bottom: 15px; }
         .input-label { display: block; color: #ccc; font-size: 12px; margin-bottom: 5px; font-weight: bold; }
-        
-        input[type=text], input[type=password] { 
-            padding: 12px; border-radius: 8px; border: 1px solid #444; 
-            width: 100%; box-sizing: border-box; background: #222; color: white; 
-            font-size: 14px; transition: border 0.2s;
-        }
-        input:focus { border-color: #f1c40f; outline: none; }
+        input { padding: 12px; border-radius: 8px; border: 1px solid #444; width: 100%; box-sizing: border-box; background: #222; color: white; }
+        .btn-action { padding: 14px; cursor: pointer; background: #f1c40f; color: #1a1a1a; border: none; font-weight: 800; border-radius: 8px; width: 100%; margin-top: 10px; }
 
-        .btn-action { 
-            padding: 14px; cursor: pointer; background: #f1c40f; color: #1a1a1a; 
-            border: none; font-weight: 800; border-radius: 8px; width: 100%; 
-            margin-top: 10px; font-size: 16px; transition: transform 0.1s, background 0.2s;
-        }
-        .btn-action:active { transform: scale(0.98); }
-        .btn-action:hover { background: #f39c12; }
-
-        /* --- HUD ESTILO RPG (Inicialmente Oculto) --- */
+        /* --- HUD ESTILO RPG (ATUALIZADO) --- */
         #rpg-hud {
-            display: none; /* Só aparece no jogo */
-            position: absolute; top: 20px; left: 20px;
-            width: 250px; background: rgba(0, 0, 0, 0.6);
-            padding: 10px; border: 2px solid #555; border-radius: 8px;
+            display: none; position: absolute; top: 20px; left: 20px;
+            width: 260px; background: rgba(0, 0, 0, 0.7);
+            padding: 12px; border: 2px solid #555; border-radius: 8px;
             pointer-events: none; z-index: 10;
             box-shadow: 3px 3px 10px rgba(0,0,0,0.5);
             font-family: 'Consolas', 'Courier New', monospace;
         }
-        .hud-row { margin-bottom: 8px; }
-        .hud-label { color: #ddd; font-weight: bold; font-size: 14px; display: block; margin-bottom: 2px; text-transform: uppercase; }
-        .bar-container { position: relative; width: 100%; height: 18px; background: #222; border: 1px solid #000; border-radius: 4px; overflow: hidden; }
-        .bar-fill { height: 100%; width: 100%; transition: width 0.2s ease-out; }
-        .bar-text { position: absolute; top: 0; left: 0; width: 100%; height: 100%; text-align: center; line-height: 18px; color: white; font-size: 11px; font-weight: bold; text-shadow: 1px 1px 2px black; }
-        .fill-hp { background: linear-gradient(90deg, #c0392b, #e74c3c); }
-        .fill-pollen { background: linear-gradient(90deg, #d4ac0d, #f1c40f); }
 
-        /* --- JOYSTICKS & ZOOM (Inicialmente Ocultos) --- */
-        #zoom-controls {
-            display: none; /* Controlado via JS */
-            position: absolute; top: 50%; right: 10px; transform: translateY(-50%);
-            height: 200px; width: 50px; z-index: 101; pointer-events: auto;
-            align-items: center; justify-content: center;
+        /* Topo do HUD: Nome e Level */
+        .hud-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 8px; border-bottom: 1px solid #444; padding-bottom: 5px;
         }
+        .player-name { color: #f1c40f; font-weight: bold; font-size: 16px; text-transform: uppercase; }
+        .player-lvl { color: #fff; font-weight: bold; font-size: 14px; }
+        .lvl-number { color: #3498db; font-size: 16px; }
+
+        .hud-row { margin-bottom: 6px; }
+        .hud-label { color: #aaa; font-size: 10px; display: block; margin-bottom: 2px; text-transform: uppercase; }
+        
+        .bar-container { 
+            position: relative; width: 100%; height: 14px; 
+            background: #111; border: 1px solid #333; border-radius: 3px; overflow: hidden; 
+        }
+        .bar-fill { height: 100%; width: 100%; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .bar-text { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            text-align: center; line-height: 14px; color: white; 
+            font-size: 9px; font-weight: bold; text-shadow: 1px 1px 1px black; z-index: 2;
+        }
+
+        /* Cores das Barras */
+        .fill-hp { background: linear-gradient(90deg, #c0392b, #e74c3c); }     /* Vermelho */
+        .fill-xp { background: linear-gradient(90deg, #2980b9, #3498db); }     /* Azul */
+        .fill-pollen { background: linear-gradient(90deg, #d4ac0d, #f1c40f); } /* Amarelo */
+
+        /* --- CONTROLES --- */
+        #zoom-controls { display: none; position: absolute; top: 50%; right: 10px; transform: translateY(-50%); height: 200px; width: 50px; z-index: 101; pointer-events: auto; justify-content: center; }
         input[type=range].vertical-slider { -webkit-appearance: none; width: 150px; height: 8px; background: rgba(255,255,255,0.2); border-radius: 5px; outline: none; transform: rotate(-90deg); margin: 0; }
         input[type=range].vertical-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; background: #f1c40f; border-radius: 50%; cursor: pointer; }
 
-        #mobile-controls {
-            display: none; /* Controlado via JS */
-            position: absolute; bottom: 20px; left: 0; width: 100%; height: 180px;
-            pointer-events: none; z-index: 100;
-        }
+        #mobile-controls { display: none; position: absolute; bottom: 20px; left: 0; width: 100%; height: 180px; pointer-events: none; z-index: 100; }
         .joystick-zone { position: absolute; bottom: 10px; width: 150px; height: 150px; pointer-events: auto; }
         #stick-left-zone { left: 20px; }
         #stick-right-zone { right: 20px; }
         .joystick-base { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100px; height: 100px; background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.2); border-radius: 50%; }
         .joystick-knob { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 50px; height: 50px; background: rgba(241, 196, 15, 0.5); border-radius: 50%; box-shadow: 0 0 10px rgba(241, 196, 15, 0.3); transition: transform 0.1s; }
-        .stick-label { position: absolute; top: -30px; width: 100%; text-align: center; color: rgba(255,255,255,0.5); font-size: 12px; font-weight: bold; }
     </style>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
@@ -114,62 +104,51 @@
     <div id="lobby-overlay">
         <div class="lobby-card">
             <div class="lobby-header">🐝 BeeHive P2P</div>
-            
             <div class="tabs">
                 <button class="tab-btn active" onclick="openTab('create')">CRIAR MUNDO</button>
                 <button class="tab-btn" onclick="openTab('join')">ENTRAR</button>
             </div>
-
             <div id="tab-create" class="tab-content active">
-                <div class="input-group">
-                    <label class="input-label">SEU NICKNAME</label>
-                    <input type="text" id="host-nickname" placeholder="Ex: AbelhaRainha" maxlength="12">
-                </div>
-                <div class="input-group">
-                    <label class="input-label">ID DA SALA</label>
-                    <input type="text" id="create-id" placeholder="Crie um nome único">
-                </div>
-                <div class="input-group">
-                    <label class="input-label">SENHA (OPCIONAL)</label>
-                    <input type="password" id="create-pass" placeholder="***">
-                </div>
-                <div class="input-group">
-                    <label class="input-label">SEED DO MUNDO</label>
-                    <input type="text" id="world-seed" placeholder="Ex: 12345" value="12345">
-                </div>
-                <button id="btn-create" class="btn-action">HOSPEDAR JOGO</button>
+                <div class="input-group"><label class="input-label">NICKNAME</label><input type="text" id="host-nickname" maxlength="12"></div>
+                <div class="input-group"><label class="input-label">ID DA SALA</label><input type="text" id="create-id"></div>
+                <div class="input-group"><label class="input-label">SENHA</label><input type="password" id="create-pass"></div>
+                <div class="input-group"><label class="input-label">SEED</label><input type="text" id="world-seed" value="12345"></div>
+                <button id="btn-create" class="btn-action">HOSPEDAR</button>
             </div>
-
             <div id="tab-join" class="tab-content">
-                <div class="input-group">
-                    <label class="input-label">SEU NICKNAME</label>
-                    <input type="text" id="join-nickname" placeholder="Ex: Zangão01" maxlength="12">
-                </div>
-                <div class="input-group">
-                    <label class="input-label">ID DO HOST</label>
-                    <input type="text" id="join-id" placeholder="ID da sala para entrar">
-                </div>
-                <div class="input-group">
-                    <label class="input-label">SENHA DA SALA</label>
-                    <input type="password" id="join-pass" placeholder="***">
-                </div>
+                <div class="input-group"><label class="input-label">NICKNAME</label><input type="text" id="join-nickname" maxlength="12"></div>
+                <div class="input-group"><label class="input-label">ID DO HOST</label><input type="text" id="join-id"></div>
+                <div class="input-group"><label class="input-label">SENHA</label><input type="password" id="join-pass"></div>
                 <button id="btn-join" class="btn-action">CONECTAR</button>
             </div>
-            
-            <div id="status-msg" style="text-align:center; color:#e74c3c; margin-bottom:10px; font-size:12px;"></div>
+            <div id="status-msg" style="text-align:center; color:#e74c3c; margin:10px 0; font-size:12px;"></div>
         </div>
     </div>
 
     <div id="rpg-hud">
+        <div class="hud-header">
+            <span class="player-name" id="hud-name">Player</span>
+            <span class="player-lvl">LVL <span class="lvl-number" id="hud-lvl">1</span></span>
+        </div>
+
         <div class="hud-row">
-            <span class="hud-label">HP</span>
+            <span class="hud-label">Vida</span>
             <div class="bar-container">
                 <div id="bar-hp-fill" class="bar-fill fill-hp" style="width: 100%;"></div>
                 <span id="bar-hp-text" class="bar-text">100/100</span>
             </div>
         </div>
+
         <div class="hud-row">
-            <span class="hud-label">Pólen</span>
+            <span class="hud-label">Experiência</span>
+            <div class="bar-container">
+                <div id="bar-xp-fill" class="bar-fill fill-xp" style="width: 0%;"></div>
+                <span id="bar-xp-text" class="bar-text">0/100</span>
+            </div>
+        </div>
+
+        <div class="hud-row">
+            <span class="hud-label">Carga de Pólen</span>
             <div class="bar-container">
                 <div id="bar-pollen-fill" class="bar-fill fill-pollen" style="width: 0%;"></div>
                 <span id="bar-pollen-text" class="bar-text">0/100</span>
@@ -177,39 +156,23 @@
         </div>
     </div>
 
-    <div id="zoom-controls">
-        <input type="range" id="zoom-slider" class="vertical-slider" min="0.5" max="1.5" step="0.05" value="1.0">
-    </div>
-
+    <div id="zoom-controls"><input type="range" id="zoom-slider" class="vertical-slider" min="0.5" max="1.5" step="0.05" value="1.0"></div>
     <div id="mobile-controls">
-        <div id="stick-left-zone" class="joystick-zone">
-            <div class="stick-label">MOVER</div>
-            <div class="joystick-base"><div id="stick-left-knob" class="joystick-knob"></div></div>
-        </div>
-        <div id="stick-right-zone" class="joystick-zone">
-            <div class="stick-label">MIRAR</div>
-            <div class="joystick-base"><div id="stick-right-knob" class="joystick-knob"></div></div>
-        </div>
+        <div id="stick-left-zone" class="joystick-zone"><div class="joystick-base"><div id="stick-left-knob" class="joystick-knob"></div></div></div>
+        <div id="stick-right-zone" class="joystick-zone"><div class="joystick-base"><div id="stick-right-knob" class="joystick-knob"></div></div></div>
     </div>
 
     <canvas id="gameCanvas" style="display:none;"></canvas>
 
     <script>
-        function openTab(tabName) {
-            // Remove active de todos
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-            
-            // Adiciona no selecionado
-            document.getElementById('tab-' + tabName).classList.add('active');
-            
-            // Ativa botão visualmente
+        function openTab(t) {
+            document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(e => e.classList.remove('active'));
+            document.getElementById('tab-' + t).classList.add('active');
             const btns = document.querySelectorAll('.tab-btn');
-            if(tabName === 'create') btns[0].classList.add('active');
-            else btns[1].classList.add('active');
+            if(t==='create') btns[0].classList.add('active'); else btns[1].classList.add('active');
         }
     </script>
-
     <script type="module" src="src/main.js"></script>
 </body>
 </html>
