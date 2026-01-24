@@ -30,7 +30,8 @@ document.getElementById('btn-create').onclick = () => {
     document.getElementById('status-msg').innerText = "Criando sala...";
     net.init(id, (ok) => {
         if(ok) {
-            net.hostRoom(id, pass, seed);
+            // AQUI ESTÁ A MÁGICA: Passamos uma função que devolve o estado atual
+            net.hostRoom(id, pass, seed, () => worldState.getFullState());
             startGame(seed, id, nick);
         } else {
             alert("ID em uso ou erro de conexão.");
@@ -51,7 +52,15 @@ document.getElementById('btn-join').onclick = () => {
 
 // --- EVENTOS DE REDE ---
 window.addEventListener('joined', e => {
-    startGame(e.detail.seed, net.peer.id, document.getElementById('nickname').value);
+    const data = e.detail;
+    
+    // 1. Aplica o estado recebido do Host (Sincronização Inicial)
+    if (data.worldState) {
+        worldState.applyFullState(data.worldState);
+        console.log("Mundo sincronizado com o Host.");
+    }
+
+    startGame(data.seed, net.peer.id, document.getElementById('nickname').value);
 });
 
 window.addEventListener('netData', e => {
@@ -64,7 +73,7 @@ window.addEventListener('netData', e => {
         remotePlayers[d.id].currentDir = d.dir;
     }
     
-    // Mudança no mapa (flores colhidas / terra curada)
+    // Mudança no mapa em tempo real
     if(d.type === 'TILE_CHANGE') {
         worldState.setTile(d.x, d.y, d.tileType);
     }
