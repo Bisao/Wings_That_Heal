@@ -24,14 +24,16 @@ const PLANT_SPAWN_CHANCE = 0.10;
 const CURE_ATTEMPT_RATE = 20;    
 const FLOWER_COOLDOWN_TIME = 10000;
 const COLLECTION_RATE = 5; 
+
+// --- BALANCEAMENTO ATUALIZADO ---
 const DAMAGE_RATE = 10; 
-const DAMAGE_AMOUNT = 5; 
+const DAMAGE_AMOUNT = 1; // Reduzido drasticamente (era 5)
 const HEAL_RATE = 20;    
 const HEAL_AMOUNT = 2;   
 
 // XP CONFIG
-const XP_PER_CURE = 15;    // Ganha 15 XP ao plantar grama
-const XP_PER_POLLEN = 5;   // Ganha 5 XP ao coletar pólen
+const XP_PER_CURE = 15;    
+const XP_PER_POLLEN = 1;   // Reduzido para valorizar o plantio (era 5)
 
 const GROWTH_TIMES = { BROTO: 5000, MUDA: 10000, FLOR: 15000 };
 
@@ -119,7 +121,7 @@ function startGame(seed, id, nick) {
     world = new WorldGenerator(seed);
     localPlayer = new Player(id, nick, true);
     
-    updateUI(); // Inicia HUD
+    updateUI(); 
     resize();
     requestAnimationFrame(loop);
 }
@@ -189,20 +191,14 @@ function updateParticles() {
     }
 }
 
-// --- LÓGICA DE XP ---
 function gainXp(amount) {
     localPlayer.xp += amount;
-    
-    // Level UP
     if (localPlayer.xp >= localPlayer.maxXp) {
-        localPlayer.xp -= localPlayer.maxXp; // Sobra o resto
+        localPlayer.xp -= localPlayer.maxXp; 
         localPlayer.level++;
-        
-        // Aumenta dificuldade e Recompensa
-        localPlayer.maxXp = Math.floor(localPlayer.maxXp * 1.5); // Próximo nível requer 50% mais XP
-        localPlayer.maxPollen += 10; // Aumenta capacidade de carga
-        localPlayer.hp = localPlayer.maxHp; // Cura completa
-        
+        localPlayer.maxXp = Math.floor(localPlayer.maxXp * 1.5); 
+        localPlayer.maxPollen += 10; 
+        localPlayer.hp = localPlayer.maxHp; 
         console.log(`Level Up! Nível ${localPlayer.level}`);
     }
     updateUI();
@@ -271,9 +267,7 @@ function update() {
         if (collectionFrameCounter >= COLLECTION_RATE) {
             localPlayer.pollen++; 
             collectionFrameCounter = 0; 
-            
-            gainXp(XP_PER_POLLEN); // GANHA XP COLETANDO
-            
+            gainXp(XP_PER_POLLEN);
             if (localPlayer.pollen >= localPlayer.maxPollen) changeTile(gridX, gridY, 'FLOR_COOLDOWN');
         }
     } else { collectionFrameCounter = 0; }
@@ -284,7 +278,7 @@ function update() {
             cureFrameCounter = 0; localPlayer.pollen--; updateUI();
             if (Math.random() < PLANT_SPAWN_CHANCE) {
                 changeTile(gridX, gridY, 'GRAMA');
-                gainXp(XP_PER_CURE); // GANHA XP PLANTANDO
+                gainXp(XP_PER_CURE);
             }
         }
     } else { cureFrameCounter = 0; }
@@ -301,23 +295,18 @@ function changeTile(x, y, newType) {
     }
 }
 
-// --- UI ATUALIZADA ---
 function updateUI() {
-    // Topo
     document.getElementById('hud-name').innerText = localPlayer.nickname;
     document.getElementById('hud-lvl').innerText = localPlayer.level;
 
-    // HP
     const hpPct = Math.max(0, (localPlayer.hp / localPlayer.maxHp) * 100);
     document.getElementById('bar-hp-fill').style.width = `${hpPct}%`;
     document.getElementById('bar-hp-text').innerText = `${Math.ceil(localPlayer.hp)}/${localPlayer.maxHp}`;
 
-    // XP
     const xpPct = Math.max(0, (localPlayer.xp / localPlayer.maxXp) * 100);
     document.getElementById('bar-xp-fill').style.width = `${xpPct}%`;
     document.getElementById('bar-xp-text').innerText = `${Math.floor(localPlayer.xp)}/${localPlayer.maxXp}`;
 
-    // Pollen
     const polPct = Math.max(0, (localPlayer.pollen / localPlayer.maxPollen) * 100);
     document.getElementById('bar-pollen-fill').style.width = `${polPct}%`;
     document.getElementById('bar-pollen-text').innerText = `${localPlayer.pollen}/${localPlayer.maxPollen}`;
