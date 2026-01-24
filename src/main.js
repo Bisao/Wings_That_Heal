@@ -13,7 +13,7 @@ const worldState = new WorldState();
 let world, localPlayer;
 let remotePlayers = {};
 let pollenParticles = [];
-let smokeParticles = []; // Agora guarda posições do MUNDO, não da tela
+let smokeParticles = []; 
 let camera = { x: 0, y: 0 };
 
 // --- CONFIGURAÇÕES DE ZOOM ---
@@ -151,10 +151,7 @@ function startHostSimulation() {
 
 function loop() { update(); draw(); requestAnimationFrame(loop); }
 
-// --- SISTEMA DE PARTÍCULAS ATUALIZADO ---
-
 function spawnPollenParticle() {
-    // Pólen usa world coordinates também para consistência
     pollenParticles.push({
         wx: localPlayer.pos.x + (Math.random() * 0.4 - 0.2),
         wy: localPlayer.pos.y + (Math.random() * 0.4 - 0.2),
@@ -164,62 +161,36 @@ function spawnPollenParticle() {
     });
 }
 
-// CORREÇÃO AQUI: Recebe coordenadas do TILE (World Grid), não da tela (Screen Pixel)
 function spawnSmokeParticle(tileX, tileY) {
-    // Posição aleatória DENTRO do tile (0.0 a 1.0)
     const offsetX = Math.random();
     const offsetY = Math.random();
-
-    // Decide se é Fumaça (Cinza) ou Fuligem (Vermelha)
-    // 15% de chance de ser fuligem acesa
     const isEmber = Math.random() < 0.15;
 
     smokeParticles.push({
-        // Guarda posição absoluta no MUNDO (ex: Tile 10.5)
         wx: tileX + offsetX, 
         wy: tileY + offsetY,
-        
-        isEmber: isEmber, // Tipo da partícula
-        
-        // Tamanho
+        isEmber: isEmber, 
         size: isEmber ? (Math.random() * 3 + 1) : (Math.random() * 5 + 2),
-        
-        // Física
-        speedY: -(Math.random() * 0.03 + 0.01), // Sobe devagar em World Units
+        speedY: -(Math.random() * 0.03 + 0.01), 
         wobbleTick: Math.random() * 100, 
         wobbleSpeed: Math.random() * 0.05 + 0.02, 
-        wobbleAmp: 0.01, // Amplitude menor pois estamos em coordenadas de tile
-
+        wobbleAmp: 0.01, 
         life: Math.random() * 0.6 + 0.4, 
         decay: Math.random() * 0.008 + 0.005,
-        
-        // Cor para fumaça (variantes de cinza)
         grayVal: Math.floor(Math.random() * 60)
     });
 }
 
 function updateParticles() {
-    // Pólen
     for (let i = pollenParticles.length - 1; i >= 0; i--) {
         let p = pollenParticles[i];
         p.wy += p.speedY; p.life -= 0.02;
         if (p.life <= 0) pollenParticles.splice(i, 1);
     }
-
-    // Fumaça e Fuligem
     for (let i = smokeParticles.length - 1; i >= 0; i--) {
         let p = smokeParticles[i];
-        
-        p.wy += p.speedY;      // Sobe (negativo em Y)
-        p.life -= p.decay;     // Desaparece
-        
-        // Movimento lateral orgânico
-        p.wobbleTick += p.wobbleSpeed;
-        p.wx += Math.sin(p.wobbleTick) * p.wobbleAmp;
-        
-        // Fumaça cresce, Fuligem diminui
+        p.wy += p.speedY; p.life -= p.decay; p.wobbleTick += p.wobbleSpeed; p.wx += Math.sin(p.wobbleTick) * p.wobbleAmp;
         if (!p.isEmber) p.size += 0.03; 
-        
         if (p.life <= 0) smokeParticles.splice(i, 1);
     }
 }
@@ -334,7 +305,6 @@ function draw() {
 
     for(let x=-range; x<=range; x++) for(let y=-range; y<=range; y++) {
         world.getChunk(cX+x, cY+y).forEach(t => {
-            // Desenha Tiles
             const sX = (t.x - camera.x) * rTileSize + canvas.width/2;
             const sY = (t.y - camera.y) * rTileSize + canvas.height/2;
 
@@ -342,8 +312,6 @@ function draw() {
                 const finalType = worldState.getModifiedTile(t.x, t.y) || t.type;
                 let color = '#34495e'; 
                 
-                // --- SPAWN DE FUMAÇA ---
-                // Passamos as coordenadas do TILE (t.x, t.y), não da tela
                 if (finalType === 'TERRA_QUEIMADA') {
                     if (Math.random() < 0.015) spawnSmokeParticle(t.x, t.y);
                 }
@@ -363,30 +331,45 @@ function draw() {
                     const size = 20 * zoomLevel; const offset = (rTileSize - size) / 2;
                     ctx.fillRect(sX + offset, sY + offset, size, size); 
                 }
+                
+                // --- DESENHO DE FLOR ANIMADA ---
                 else if ((finalType === 'FLOR' || finalType === 'FLOR_COOLDOWN') && assets.flower.complete) {
                     if (finalType === 'FLOR_COOLDOWN') ctx.globalAlpha = 0.4;
-                    ctx.drawImage(assets.flower, sX, sY, rTileSize, rTileSize);
+                    
+                    // 1. Sombra da Flor
+                    ctx.fillStyle = "rgba(0,0,0,0.3)";
+                    ctx.beginPath();
+                    // Sombra na base
+                    ctx.ellipse(sX + rTileSize/2, sY + rTileSize - (5 * zoomLevel), 8 * zoomLevel, 3 * zoomLevel, 0, 0, Math.PI*2);
+                    ctx.fill();
+
+                    // 2. Animação de Vento
+                    ctx.save();
+                    // Translada para o centro da BASE da flor (Pivô de rotação)
+                    ctx.translate(sX + rTileSize/2, sY + rTileSize);
+                    
+                    // Cálculo do Vento: Onda senoidal baseada no tempo + posição X da flor (para não ficarem sincronizadas)
+                    // (t.x * 0.5) cria uma defasagem na onda
+                    const windAngle = Math.sin(Date.now() / 800 + t.x * 0.5) * 0.1; // 0.1 rad de inclinação max
+                    ctx.rotate(windAngle);
+
+                    // Desenha a imagem deslocada para cima (negativo Y) para que a base fique no pivô (0,0)
+                    // Ajuste visual: -size/2 no X para centralizar, -size no Y para desenhar para cima
+                    ctx.drawImage(assets.flower, -rTileSize/2, -rTileSize, rTileSize, rTileSize);
+                    
+                    ctx.restore();
                     ctx.globalAlpha = 1.0;
                 }
             }
         });
     }
 
-    // --- DESENHO DE PARTÍCULAS (CORRIGIDO PARA O MUNDO) ---
-    // Agora convertemos World -> Screen AQUI, toda frame
-    
     smokeParticles.forEach(p => {
-        // Conversão World -> Screen
         const psX = (p.wx - camera.x) * rTileSize + canvas.width/2;
         const psY = (p.wy - camera.y) * rTileSize + canvas.height/2;
 
-        if (p.isEmber) {
-            // Fuligem: Vermelho brilhante
-            ctx.fillStyle = `rgba(231, 76, 60, ${p.life})`;
-        } else {
-            // Fumaça: Cinza
-            ctx.fillStyle = `rgba(${p.grayVal}, ${p.grayVal}, ${p.grayVal}, ${p.life * 0.4})`; 
-        }
+        if (p.isEmber) ctx.fillStyle = `rgba(231, 76, 60, ${p.life})`;
+        else ctx.fillStyle = `rgba(${p.grayVal}, ${p.grayVal}, ${p.grayVal}, ${p.life * 0.4})`; 
         
         ctx.fillRect(psX, psY, p.size * zoomLevel, p.size * zoomLevel);
     });
