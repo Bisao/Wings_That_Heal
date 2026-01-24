@@ -3,56 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BeeHive P2P</title>
+    <title>BeeHive P2P - Professional</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: 'Segoe UI', sans-serif; }
+        body { margin: 0; overflow: hidden; background: #0d0d0d; font-family: 'Segoe UI', sans-serif; }
+        
         #lobby-container { 
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            color: white; text-align: center; background: rgba(0,0,0,0.85); 
-            padding: 30px; border-radius: 15px; z-index: 10; border: 1px solid #f1c40f;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            color: white; text-align: center; background: rgba(20, 20, 20, 0.95); 
+            padding: 40px; border-radius: 12px; z-index: 10; border: 1px solid #f1c40f;
+            box-shadow: 0 0 30px rgba(241, 196, 15, 0.2);
+            min-width: 300px;
         }
-        input { padding: 10px; margin: 5px; border-radius: 5px; border: none; width: 200px; }
+
+        h1 { color: #f1c40f; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 2px; }
+        
+        input { 
+            padding: 12px; margin: 8px 0; border-radius: 6px; border: 1px solid #444; 
+            width: 100%; box-sizing: border-box; background: #222; color: white;
+        }
+        
         button { 
-            padding: 10px 20px; cursor: pointer; background: #f1c40f; 
-            border: none; font-weight: bold; border-radius: 5px; color: #1a1a1a; transition: 0.3s;
+            padding: 12px 20px; cursor: pointer; background: #f1c40f; color: #1a1a1a;
+            border: none; font-weight: bold; border-radius: 6px; width: 100%; margin-top: 10px;
+            transition: transform 0.1s, background 0.2s;
         }
-        button:hover { background: #d4ac0d; }
-        canvas { display: block; }
-        .hud {
-            position: absolute; top: 10px; left: 10px; color: white; 
-            font-weight: bold; font-size: 20px; text-shadow: 2px 2px 0 #000;
-            pointer-events: none; display: none;
+        button:hover { background: #d4ac0d; transform: scale(1.02); }
+
+        .game-ui {
+            position: absolute; top: 20px; left: 20px; color: white; 
+            font-weight: bold; font-size: 24px; text-shadow: 2px 2px 4px #000;
+            pointer-events: none; display: none; background: rgba(0,0,0,0.5);
+            padding: 10px 20px; border-radius: 20px; border: 1px solid #444;
         }
+
+        #status-msg { color: #888; font-size: 14px; margin-top: 15px; min-height: 20px; }
     </style>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
     <div id="lobby-container">
-        <h1 style="color: #f1c40f;">🐝 BeeHive P2P</h1>
+        <h1>🐝 BeeHive P2P</h1>
         <input type="text" id="nickname" placeholder="Seu Nickname" maxlength="12">
-        <hr style="border-color: #444;">
         
-        <div style="display: flex; gap: 20px;">
-            <div>
-                <h3>Hospedar</h3>
-                <input type="text" id="create-id" placeholder="ID da Sala"><br>
-                <input type="password" id="create-pass" placeholder="Senha"><br>
-                <input type="text" id="world-seed" placeholder="Seed (ex: 123)"><br>
-                <button id="btn-create">Criar Mundo</button>
+        <div style="display: flex; gap: 20px; margin-top: 20px; text-align: left;">
+            <div style="flex: 1;">
+                <h3 style="margin: 0 0 10px 0; color: #ddd;">Criar Mundo</h3>
+                <input type="text" id="create-id" placeholder="ID da Sala">
+                <input type="password" id="create-pass" placeholder="Senha (Opcional)">
+                <input type="text" id="world-seed" placeholder="Seed (ex: 123)">
+                <button id="btn-create">Hospedar</button>
             </div>
-            <div style="border-left: 1px solid #444; padding-left: 20px;">
-                <h3>Entrar</h3>
-                <input type="text" id="join-id" placeholder="ID do Host"><br>
-                <input type="password" id="join-pass" placeholder="Senha"><br>
-                <br> <button id="btn-join">Conectar</button>
+            <div style="border-left: 1px solid #444; width: 1px;"></div>
+            <div style="flex: 1;">
+                <h3 style="margin: 0 0 10px 0; color: #ddd;">Entrar</h3>
+                <input type="text" id="join-id" placeholder="ID do Host">
+                <input type="password" id="join-pass" placeholder="Senha da Sala">
+                <div style="height: 52px;"></div> <button id="btn-join">Conectar</button>
             </div>
         </div>
-        <p id="status-msg" style="color: #ccc; margin-top: 15px;">Pronto.</p>
+        <div id="status-msg">Pronto para iniciar.</div>
     </div>
 
-    <div id="game-ui" class="hud">
-        Pólen: <span id="pollen-count" style="color: #f1c40f;">0</span> 🌻
+    <div id="game-ui" class="game-ui">
+        Pólen: <span id="pollen-count" style="color: #f1c40f;">0 / 100</span> 🌻
     </div>
 
     <canvas id="gameCanvas" style="display:none;"></canvas>
