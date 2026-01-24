@@ -16,9 +16,9 @@ let pollenParticles = [];
 let smokeParticles = []; 
 let camera = { x: 0, y: 0 };
 
-let zoomLevel = 1.0; 
+let zoomLevel = 1.5; 
 const MIN_ZOOM = 0.5;
-const MAX_ZOOM = 1.5;
+const MAX_ZOOM = 2.0;
 
 const PLANT_SPAWN_CHANCE = 0.10; 
 const CURE_ATTEMPT_RATE = 20;    
