@@ -1,11 +1,11 @@
 export class WorldState {
     constructor() {
-        this.modifiedTiles = {}; // Armazena "x,y": "TIPO"
+        this.modifiedTiles = {}; // "x,y": "TIPO"
+        this.growingPlants = {}; // "x,y": timestamp_inicio (Apenas Host usa)
     }
 
     setTile(x, y, type) {
         const key = `${x},${y}`;
-        // Só retorna true se houve mudança real (evita spam de rede)
         if (this.modifiedTiles[key] === type) return false;
         
         this.modifiedTiles[key] = type;
@@ -16,17 +16,33 @@ export class WorldState {
         return this.modifiedTiles[`${x},${y}`] || null;
     }
 
-    // --- NOVOS MÉTODOS DE SINCRONIZAÇÃO ---
+    // --- MÉTODOS DE SINCRONIZAÇÃO E GROWTH ---
     
-    // Retorna todo o histórico de mudanças para enviar a novos jogadores
-    getFullState() {
-        return this.modifiedTiles;
+    // Registra uma planta para crescer (Host Only)
+    addGrowingPlant(x, y) {
+        const key = `${x},${y}`;
+        // Só registra se já não estiver crescendo
+        if (!this.growingPlants[key]) {
+            this.growingPlants[key] = Date.now();
+        }
     }
 
-    // Aplica um histórico recebido do host
+    // Remove da lista de crescimento (quando vira adulta)
+    removeGrowingPlant(x, y) {
+        delete this.growingPlants[`${x},${y}`];
+    }
+
+    getFullState() {
+        return {
+            tiles: this.modifiedTiles,
+            plants: this.growingPlants
+        };
+    }
+
     applyFullState(stateData) {
         if (stateData) {
-            this.modifiedTiles = stateData;
+            this.modifiedTiles = stateData.tiles || {};
+            this.growingPlants = stateData.plants || {};
         }
     }
 }
