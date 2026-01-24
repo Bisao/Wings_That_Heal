@@ -332,29 +332,32 @@ function draw() {
                     ctx.fillRect(sX + offset, sY + offset, size, size); 
                 }
                 
-                // --- DESENHO DE FLOR ANIMADA ---
+                // --- DESENHO DE FLOR ANIMADA (AJUSTADO) ---
                 else if ((finalType === 'FLOR' || finalType === 'FLOR_COOLDOWN') && assets.flower.complete) {
                     if (finalType === 'FLOR_COOLDOWN') ctx.globalAlpha = 0.4;
                     
-                    // 1. Sombra da Flor
+                    // Definimos a "Base" visual da flor como 65% da altura do tile
+                    // Isso coloca o ponto de nascimento da flor um pouco abaixo do centro visual do tile
+                    const baseOffsetY = rTileSize * 0.65; 
+
+                    // 1. Sombra da Flor (Abaixo da base)
                     ctx.fillStyle = "rgba(0,0,0,0.3)";
                     ctx.beginPath();
-                    // Sombra na base
-                    ctx.ellipse(sX + rTileSize/2, sY + rTileSize - (5 * zoomLevel), 8 * zoomLevel, 3 * zoomLevel, 0, 0, Math.PI*2);
+                    // Desenha sombra no local da base
+                    ctx.ellipse(sX + rTileSize/2, sY + baseOffsetY, 8 * zoomLevel, 3 * zoomLevel, 0, 0, Math.PI*2);
                     ctx.fill();
 
                     // 2. Animação de Vento
                     ctx.save();
-                    // Translada para o centro da BASE da flor (Pivô de rotação)
-                    ctx.translate(sX + rTileSize/2, sY + rTileSize);
+                    // Translada o pivô para a nossa nova BASE (65% para baixo)
+                    ctx.translate(sX + rTileSize/2, sY + baseOffsetY);
                     
-                    // Cálculo do Vento: Onda senoidal baseada no tempo + posição X da flor (para não ficarem sincronizadas)
-                    // (t.x * 0.5) cria uma defasagem na onda
-                    const windAngle = Math.sin(Date.now() / 800 + t.x * 0.5) * 0.1; // 0.1 rad de inclinação max
+                    const windAngle = Math.sin(Date.now() / 800 + t.x * 0.5) * 0.1; 
                     ctx.rotate(windAngle);
 
-                    // Desenha a imagem deslocada para cima (negativo Y) para que a base fique no pivô (0,0)
-                    // Ajuste visual: -size/2 no X para centralizar, -size no Y para desenhar para cima
+                    // Desenha a flor para CIMA a partir do pivô
+                    // X: centralizado (-metade da largura)
+                    // Y: desenha para cima (-altura completa da imagem)
                     ctx.drawImage(assets.flower, -rTileSize/2, -rTileSize, rTileSize, rTileSize);
                     
                     ctx.restore();
