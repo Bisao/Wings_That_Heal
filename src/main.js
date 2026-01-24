@@ -12,31 +12,23 @@ const worldState = new WorldState();
 
 let world, localPlayer;
 let remotePlayers = {};
+let particles = []; // Sistema de Partículas
 let camera = { x: 0, y: 0 };
 
-// --- CONFIGURAÇÕES DE BALANÇO (CRÍTICO) ---
-
-// Chance de nascer grama quando tenta curar (10%).
-// Se falhar, o chão continua queimado.
-const PLANT_SPAWN_CHANCE = 0.10; 
-
-// Velocidade da tentativa de cura (A cada 20 frames = 3 tentativas por segundo)
-// Isso impede que o jogador pinte o chão instantaneamente ao andar.
-const CURE_ATTEMPT_RATE = 20;
-
+// --- CONFIGURAÇÕES DE BALANÇO ---
+const PLANT_SPAWN_CHANCE = 0.10; // 10% de chance de nascer grama ao voar
+const CURE_ATTEMPT_RATE = 20;    // Tenta curar a cada 20 frames (aprox 3x/segundo)
 const FLOWER_COOLDOWN_TIME = 10000;
 const COLLECTION_RATE = 5; 
 
-// Tempos de Crescimento
 const GROWTH_TIMES = {
-    BROTO: 30000,    // 30s
-    MUDA: 120000,    // 2min
-    FLOR: 300000     // 5min
+    BROTO: 30000,
+    MUDA: 120000,
+    FLOR: 300000
 };
 
-// Contadores de Frames (Para controlar a velocidade das ações)
 let collectionFrameCounter = 0;
-let cureFrameCounter = 0; 
+let cureFrameCounter = 0;
 
 const assets = { flower: new Image() };
 assets.flower.src = 'assets/Flower.png';
@@ -84,9 +76,7 @@ window.addEventListener('netData', e => {
     if(d.type === 'TILE_CHANGE') {
         worldState.setTile(d.x, d.y, d.tileType);
 
-        // LÓGICA DO HOST
         if (net.isHost) {
-            // Se virou GRAMA, é porque o teste de semente passou. Inicia crescimento.
             if (d.tileType === 'GRAMA') {
                 worldState.addGrowingPlant(d.x, d.y);
             }
@@ -107,12 +97,12 @@ function startGame(seed, id, nick) {
     requestAnimationFrame(loop);
 }
 
-// --- SIMULAÇÃO DO HOST ---
+// --- HOST SIMULATION ---
 function startHostSimulation() {
     setInterval(() => {
         const now = Date.now();
 
-        // 1. Processar Crescimento
+        // 1. Crescimento
         for (const [key, startTime] of Object.entries(worldState.growingPlants)) {
             const [x, y] = key.split(',').map(Number);
             const elapsed = now - startTime;
@@ -126,10 +116,9 @@ function startHostSimulation() {
             }
         }
 
-        // 2. Cura Passiva (Flor Adulta tentando expandir)
+        // 2. Cura Passiva
         for (const [key, type] of Object.entries(worldState.modifiedTiles)) {
             if (type === 'FLOR') {
-                // Tenta expandir a cada segundo (30% chance)
                 if (Math.random() < 0.30) { 
                     const [fx, fy] = key.split(',').map(Number);
                     const tx = fx + (Math.floor(Math.random() * 3) - 1);
@@ -138,8 +127,6 @@ function startHostSimulation() {
                     const tType = worldState.getModifiedTile(tx, ty) || world.getTileAt(tx, ty);
                     
                     if (tType === 'TERRA_QUEIMADA') {
-                        // AQUI TAMBÉM DEPENDE DA SORTE
-                        // Se falhar, continua queimado. Se passar, vira grama e nasce planta.
                         if (Math.random() < PLANT_SPAWN_CHANCE) {
                             changeTile(tx, ty, 'GRAMA');
                             worldState.addGrowingPlant(tx, ty);
@@ -157,13 +144,37 @@ function loop() {
     requestAnimationFrame(loop);
 }
 
+// --- SISTEMA DE PARTÍCULAS ---
+function spawnPollenParticle() {
+    // Cria uma partícula na posição atual do jogador (com leve variação)
+    particles.push({
+        x: localPlayer.pos.x + (Math.random() * 0.4 - 0.2), // Variação X
+        y: localPlayer.pos.y + (Math.random() * 0.4 - 0.2), // Variação Y
+        size: Math.random() * 3 + 2, // Tamanho entre 2 e 5px (em escala de tela será ajustado)
+        speedY: Math.random() * 0.02 + 0.01, // Cai devagar
+        life: 1.0 // Opacidade inicial
+    });
+}
+
+function updateParticles() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i];
+        p.y += p.speedY; // Cai
+        p.life -= 0.02;  // Desaparece
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+}
+
 function update() {
     if(!localPlayer) return;
 
     const m = input.getMovement();
     localPlayer.update(m);
 
-    if(m.x !== 0 || m.y !== 0) {
+    // Verifica se está se movendo
+    const isMoving = m.x !== 0 || m.y !== 0;
+
+    if(isMoving) {
         localPlayer.pos.x += m.x * localPlayer.speed;
         localPlayer.pos.y += m.y * localPlayer.speed;
         net.sendPayload({ 
@@ -172,11 +183,14 @@ function update() {
         });
     }
 
+    // Atualiza Partículas
+    updateParticles();
+
     const gridX = Math.round(localPlayer.pos.x);
     const gridY = Math.round(localPlayer.pos.y);
     const currentTile = worldState.getModifiedTile(gridX, gridY) || world.getTileAt(gridX, gridY);
 
-    // 1. Coleta de Pólen
+    // 1. Coleta (Tile Exato)
     if (currentTile === 'FLOR' && localPlayer.pollen < localPlayer.maxPollen) {
         collectionFrameCounter++;
         if (collectionFrameCounter >= COLLECTION_RATE) {
@@ -189,32 +203,25 @@ function update() {
         collectionFrameCounter = 0;
     }
 
-    // 2. CURA MANUAL (CORRIGIDA)
-    // Agora existe um contador (cureFrameCounter)
-    if (currentTile === 'TERRA_QUEIMADA' && localPlayer.pollen > 0) {
-        cureFrameCounter++;
+    // 2. CURA MANUAL (CORRIGIDA COM MOVIMENTO E PARTÍCULAS)
+    // Regra: Chão Queimado + Tem Pólen + ESTÁ VOANDO
+    if (currentTile === 'TERRA_QUEIMADA' && localPlayer.pollen > 0 && isMoving) {
         
-        // Só tenta curar a cada X frames (definido em CURE_ATTEMPT_RATE)
-        // Isso evita que o jogador gaste 60 pólens por segundo e pinte tudo.
+        // Efeito Visual: Solta partículas de pólen caindo
+        spawnPollenParticle();
+
+        cureFrameCounter++;
         if (cureFrameCounter >= CURE_ATTEMPT_RATE) {
-            cureFrameCounter = 0; // Reseta timer
+            cureFrameCounter = 0;
             
-            // Gasta 1 pólen pela tentativa
-            localPlayer.pollen--; 
+            localPlayer.pollen--;
             updateUI();
 
-            // Tenta plantar a semente (10% de chance)
             if (Math.random() < PLANT_SPAWN_CHANCE) {
-                // SUCESSO: Vira GRAMA.
-                // Isso garante que o Host iniciará o crescimento.
                 changeTile(gridX, gridY, 'GRAMA');
             } 
-            // FALHA:
-            // O código NÃO faz nada. O tile continua 'TERRA_QUEIMADA'.
-            // O jogador perdeu 1 pólen, mas o chão continua preto.
         }
     } else {
-        // Se sair da terra queimada, reseta o timer para não "acumular" tentativa
         cureFrameCounter = 0;
     }
 
@@ -250,9 +257,9 @@ function draw() {
             if(sX > -32 && sX < canvas.width+32 && sY > -32 && sY < canvas.height+32) {
                 const finalType = worldState.getModifiedTile(t.x, t.y) || t.type;
                 
-                let color = '#34495e'; // Preto/Cinza (Queimado)
-                if(['GRAMA', 'BROTO', 'MUDA', 'FLOR', 'FLOR_COOLDOWN'].includes(finalType)) color = '#2ecc71'; // Verde
-                if(finalType === 'COLMEIA') color = '#f1c40f'; // Amarelo
+                let color = '#34495e'; 
+                if(['GRAMA', 'BROTO', 'MUDA', 'FLOR', 'FLOR_COOLDOWN'].includes(finalType)) color = '#2ecc71';
+                if(finalType === 'COLMEIA') color = '#f1c40f';
                 
                 ctx.fillStyle = color;
                 ctx.fillRect(sX, sY, world.tileSize, world.tileSize);
@@ -271,6 +278,16 @@ function draw() {
             }
         });
     }
+
+    // Desenha Partículas (Antes dos players, depois do chão)
+    particles.forEach(p => {
+        const sX = (p.x - camera.x) * world.tileSize + canvas.width/2;
+        const sY = (p.y - camera.y) * world.tileSize + canvas.height/2;
+        
+        ctx.fillStyle = `rgba(241, 196, 15, ${p.life})`; // Amarelo com fade
+        // Desenha pequeno quadrado ou círculo
+        ctx.fillRect(sX, sY, p.size, p.size);
+    });
 
     Object.values(remotePlayers).forEach(p => p.draw(ctx, camera, canvas, world.tileSize));
     localPlayer.draw(ctx, camera, canvas, world.tileSize);
