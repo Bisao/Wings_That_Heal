@@ -13,11 +13,11 @@ const worldState = new WorldState();
 let world, localPlayer;
 let remotePlayers = {};
 let pollenParticles = [];
-let smokeParticles = [];
+let smokeParticles = []; // Array dedicado à fumaça
 let camera = { x: 0, y: 0 };
 
 // --- CONFIGURAÇÕES DE ZOOM ---
-let zoomLevel = 1.0; // 1.0 = Normal (32px), 0.5 = Longe, 1.5 = Perto
+let zoomLevel = 1.0; 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 1.5;
 
@@ -68,30 +68,23 @@ document.getElementById('btn-join').onclick = () => {
     net.init(null, (ok) => { if(ok) net.joinRoom(id, pass, nick); });
 };
 
-// --- CONTROLE DE ZOOM (PC & MOBILE) ---
-
-// 1. PC: Mouse Scroll
+// --- CONTROLE DE ZOOM ---
 window.addEventListener('wheel', (e) => {
-    // Se o jogo não começou, ignora
     if (!localPlayer) return;
-
-    // Delta negativo = Scroll Up (Zoom In)
     const delta = e.deltaY > 0 ? -0.05 : 0.05;
     zoomLevel += delta;
-    
-    // Clamp
     if (zoomLevel < MIN_ZOOM) zoomLevel = MIN_ZOOM;
     if (zoomLevel > MAX_ZOOM) zoomLevel = MAX_ZOOM;
-
-    // Atualiza visualmente o slider caso ele esteja visível (opcional)
     const slider = document.getElementById('zoom-slider');
     if (slider) slider.value = zoomLevel;
 }, { passive: true });
 
-// 2. Mobile: Slider Input
-document.getElementById('zoom-slider').addEventListener('input', (e) => {
-    zoomLevel = parseFloat(e.target.value);
-});
+const zoomSlider = document.getElementById('zoom-slider');
+if(zoomSlider) {
+    zoomSlider.addEventListener('input', (e) => {
+        zoomLevel = parseFloat(e.target.value);
+    });
+}
 
 // --- REDE ---
 window.addEventListener('joined', e => {
@@ -120,10 +113,9 @@ function startGame(seed, id, nick) {
     document.getElementById('lobby-container').style.display = 'none';
     document.getElementById('game-ui').style.display = 'block';
     
-    // Ativa controles se for mobile
     if (input.isMobile) {
-        document.getElementById('zoom-controls').style.display = 'flex';
-        // (Os joysticks já são ativados pelo input.js, mas o zoom é manual aqui)
+        const zc = document.getElementById('zoom-controls');
+        if(zc) zc.style.display = 'flex';
     }
 
     canvas.style.display = 'block';
@@ -165,6 +157,8 @@ function startHostSimulation() {
 
 function loop() { update(); draw(); requestAnimationFrame(loop); }
 
+// --- SISTEMA DE PARTÍCULAS ORGÂNICAS ---
+
 function spawnPollenParticle() {
     pollenParticles.push({
         x: localPlayer.pos.x + (Math.random() * 0.4 - 0.2),
@@ -176,27 +170,54 @@ function spawnPollenParticle() {
 }
 
 function spawnSmokeParticle(sX, sY, tileSize) {
+    // 1. Posição aleatória dentro do tile (não apenas no centro)
     const posX = sX + Math.random() * tileSize;
     const posY = sY + Math.random() * tileSize;
+
     smokeParticles.push({
-        x: posX, y: posY,
-        size: Math.random() * 4 + 2,
-        speedY: -(Math.random() * 0.5 + 0.2),
-        drift: (Math.random() * 0.4) - 0.2,
-        life: 1.0,
-        colorVal: Math.floor(Math.random() * 50) 
+        x: posX, 
+        y: posY,
+        size: Math.random() * 5 + 2, // Tamanhos variados
+        
+        // 2. Velocidade de subida variável
+        speedY: -(Math.random() * 0.4 + 0.1), 
+        
+        // 3. Oscilação (Wobble) para parecer fumaça real
+        // Cada partícula tem sua própria frequência e amplitude de onda
+        wobbleTick: Math.random() * 100, // Começa em fase aleatória
+        wobbleSpeed: Math.random() * 0.05 + 0.02,
+        wobbleAmp: Math.random() * 0.5,
+        
+        life: Math.random() * 0.5 + 0.5, // Algumas duram mais, outras menos
+        decay: Math.random() * 0.005 + 0.005, // Velocidade que desaparece
+        
+        // Cor: Cinza escuro a preto
+        colorVal: Math.floor(Math.random() * 40) 
     });
 }
 
 function updateParticles() {
+    // Pólen (Simples, cai para baixo)
     for (let i = pollenParticles.length - 1; i >= 0; i--) {
         let p = pollenParticles[i];
         p.y += p.speedY; p.life -= 0.02;
         if (p.life <= 0) pollenParticles.splice(i, 1);
     }
+
+    // Fumaça (Complexa, sobe oscilando)
     for (let i = smokeParticles.length - 1; i >= 0; i--) {
         let p = smokeParticles[i];
-        p.y += p.speedY; p.x += p.drift; p.life -= 0.015; p.size += 0.05;
+        
+        p.y += p.speedY;      // Sobe constante
+        p.life -= p.decay;    // Desaparece gradualmente
+        
+        // Movimento Orgânico: Onda Senoidal
+        p.wobbleTick += p.wobbleSpeed;
+        p.x += Math.sin(p.wobbleTick) * p.wobbleAmp;
+        
+        // Expande levemente ao subir (dispersão)
+        p.size += 0.02;       
+        
         if (p.life <= 0) smokeParticles.splice(i, 1);
     }
 }
@@ -299,33 +320,30 @@ function draw() {
     ctx.fillStyle = "#0d0d0d"; ctx.fillRect(0, 0, canvas.width, canvas.height);
     if(!world) return;
 
-    // --- LÓGICA DE RENDERIZAÇÃO COM ZOOM ---
-    // Calculamos o tamanho do tile baseado no zoom atual
     const rTileSize = world.tileSize * zoomLevel;
-
-    // Ajuste da câmera para o mouse/centro
-    // Para manter a posição do player no centro, o cálculo permanece relativo,
-    // mas multiplicamos as distâncias pelo rTileSize.
-
     const cX = Math.floor(localPlayer.pos.x / world.chunkSize);
     const cY = Math.floor(localPlayer.pos.y / world.chunkSize);
-
-    // Aumentamos o range de renderização (3 -> 5) para evitar buracos quando der Zoom Out (Longe)
+    
+    // Aumenta range de renderização se zoom estiver longe
     const range = zoomLevel < 0.8 ? 2 : 1; 
 
     for(let x=-range; x<=range; x++) for(let y=-range; y<=range; y++) {
         world.getChunk(cX+x, cY+y).forEach(t => {
-            // Cálculo de Posição de Tela com Zoom
             const sX = (t.x - camera.x) * rTileSize + canvas.width/2;
             const sY = (t.y - camera.y) * rTileSize + canvas.height/2;
 
-            // Culling (Margem ajustada pelo rTileSize)
             if(sX > -rTileSize && sX < canvas.width+rTileSize && sY > -rTileSize && sY < canvas.height+rTileSize) {
                 const finalType = worldState.getModifiedTile(t.x, t.y) || t.type;
                 let color = '#34495e'; 
                 
+                // --- LÓGICA DE FUMAÇA ORGÂNICA ---
                 if (finalType === 'TERRA_QUEIMADA') {
-                    if (Math.random() < 0.005) spawnSmokeParticle(sX, sY, rTileSize);
+                    // Chance de spawnar fumaça neste frame para este tile.
+                    // Ajuste 0.015 para mais ou menos fumaça.
+                    // Math.random garante que não spawnem todos juntos.
+                    if (Math.random() < 0.015) {
+                        spawnSmokeParticle(sX, sY, rTileSize);
+                    }
                 }
 
                 if(['GRAMA', 'GRAMA_SAFE', 'BROTO', 'MUDA', 'FLOR', 'FLOR_COOLDOWN'].includes(finalType)) color = '#2ecc71';
@@ -333,17 +351,15 @@ function draw() {
                 
                 ctx.fillStyle = color; ctx.fillRect(sX, sY, rTileSize, rTileSize);
 
-                // Desenho de objetos também escala
                 if (finalType === 'BROTO') { 
                     ctx.fillStyle = '#006400'; 
-                    // Escala proporcional
-                    const size = 12 * (zoomLevel); 
+                    const size = 12 * zoomLevel; 
                     const offset = (rTileSize - size) / 2;
                     ctx.fillRect(sX + offset, sY + offset, size, size); 
                 }
                 else if (finalType === 'MUDA') { 
                     ctx.fillStyle = '#228B22'; 
-                    const size = 20 * (zoomLevel);
+                    const size = 20 * zoomLevel;
                     const offset = (rTileSize - size) / 2;
                     ctx.fillRect(sX + offset, sY + offset, size, size); 
                 }
@@ -356,23 +372,17 @@ function draw() {
         });
     }
 
-    // Fumaça (Overlay)
+    // Desenha Fumaça (Com transparência baseada na vida)
     smokeParticles.forEach(p => {
-        ctx.fillStyle = `rgba(${p.colorVal}, ${p.colorVal}, ${p.colorVal}, ${p.life * 0.5})`; 
-        // Partículas não escalam com o zoom para manter a performance/estética de overlay,
-        // mas seria ideal escalar se quiser realismo total. Vamos manter simples.
-        ctx.fillRect(p.x, p.y, p.size, p.size);
+        ctx.fillStyle = `rgba(${p.colorVal}, ${p.colorVal}, ${p.colorVal}, ${p.life * 0.4})`; 
+        // Desenhamos quadrados, mas com a oscilação do updateParticles, parece orgânico
+        ctx.fillRect(p.x, p.y, p.size * zoomLevel, p.size * zoomLevel);
     });
 
-    // Pólen
+    // Desenha Pólen
     pollenParticles.forEach(p => {
-        // Recalcular posição do pólen baseado no zoom é complexo se guardamos WorldPos.
-        // Como o pólen é visual e efêmero, vamos recalcular baseado na posição relativa.
-        // ATENÇÃO: Para partículas funcionarem bem com zoom, precisamos guardar WorldPos nelas (já fazemos isso em spawnPollenParticle).
-        // Agora convertemos para tela usando rTileSize.
         const sX = (p.x - camera.x) * rTileSize + canvas.width/2;
         const sY = (p.y - camera.y) * rTileSize + canvas.height/2;
-        
         ctx.fillStyle = `rgba(241, 196, 15, ${p.life})`; 
         ctx.fillRect(sX, sY, p.size * zoomLevel, p.size * zoomLevel);
     });
