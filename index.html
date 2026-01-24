@@ -7,6 +7,7 @@
     <style>
         body { margin: 0; overflow: hidden; background: #0d0d0d; font-family: 'Segoe UI', sans-serif; touch-action: none; user-select: none; -webkit-user-select: none; }
         
+        /* TELA DE LOGIN */
         #lobby-container { 
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
             color: white; text-align: center; background: rgba(20, 20, 20, 0.95); 
@@ -18,76 +19,93 @@
         input[type=text], input[type=password] { padding: 12px; margin: 8px 0; border-radius: 6px; border: 1px solid #444; width: 100%; box-sizing: border-box; background: #222; color: white; }
         button { padding: 12px 20px; cursor: pointer; background: #f1c40f; color: #1a1a1a; border: none; font-weight: bold; border-radius: 6px; width: 100%; margin-top: 10px; }
 
-        .game-ui {
-            position: absolute; top: 20px; left: 20px; color: white; 
-            font-weight: bold; font-size: 24px; text-shadow: 2px 2px 4px #000;
-            pointer-events: none; display: none; background: rgba(0,0,0,0.5);
-            padding: 10px 20px; border-radius: 20px; border: 1px solid #444; z-index: 15;
-        }
-
-        /* --- CONTROLES MOBILE --- */
-        #mobile-controls {
+        /* --- HUD ESTILO RPG --- */
+        #rpg-hud {
             display: none; /* Ativado via JS */
-            position: absolute; bottom: 20px; left: 0; width: 100%; height: 180px;
-            pointer-events: none; z-index: 100;
+            position: absolute; top: 20px; left: 20px;
+            width: 250px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px;
+            border: 2px solid #555;
+            border-radius: 8px;
+            pointer-events: none; /* Deixa clicar no jogo através dele */
+            z-index: 10;
+            box-shadow: 3px 3px 10px rgba(0,0,0,0.5);
+            font-family: 'Consolas', 'Courier New', monospace; /* Fonte mais "técnica" */
         }
 
-        .joystick-zone {
-            position: absolute; bottom: 10px; width: 150px; height: 150px;
-            pointer-events: auto; 
-        }
-        #stick-left-zone { left: 20px; }
-        #stick-right-zone { right: 20px; }
-
-        .joystick-base {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 100px; height: 100px;
-            background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 50%;
-        }
-
-        .joystick-knob {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 50px; height: 50px;
-            background: rgba(241, 196, 15, 0.5);
-            border-radius: 50%; box-shadow: 0 0 10px rgba(241, 196, 15, 0.3);
-            transition: transform 0.1s; 
-        }
+        .hud-row { margin-bottom: 8px; }
+        .hud-row:last-child { margin-bottom: 0; }
         
-        .stick-label {
-            position: absolute; top: -30px; width: 100%; text-align: center; 
-            color: rgba(255,255,255,0.5); font-size: 12px; font-weight: bold;
+        .hud-label {
+            color: #ddd; font-weight: bold; font-size: 14px;
+            display: block; margin-bottom: 2px; text-transform: uppercase;
         }
 
-        /* --- CONTROLE DE ZOOM (Novo) --- */
+        .bar-container {
+            position: relative;
+            width: 100%; height: 18px;
+            background: #222;
+            border: 1px solid #000;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%; width: 100%;
+            transition: width 0.2s ease-out; /* Animação suave */
+        }
+
+        .bar-text {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            text-align: center; line-height: 18px;
+            color: white; font-size: 11px; font-weight: bold;
+            text-shadow: 1px 1px 2px black;
+        }
+
+        /* Cores das Barras */
+        .fill-hp { background: linear-gradient(90deg, #c0392b, #e74c3c); }
+        .fill-pollen { background: linear-gradient(90deg, #d4ac0d, #f1c40f); }
+
+        /* --- ZOOM SLIDER --- */
         #zoom-controls {
-            display: none; /* Ativado via JS */
-            position: absolute; 
-            top: 50%; right: 10px; /* Centro Direito */
-            transform: translateY(-50%);
-            height: 200px; width: 50px;
+            display: none; position: absolute; top: 50%; right: 10px; 
+            transform: translateY(-50%); height: 200px; width: 50px;
             z-index: 101; pointer-events: auto;
             align-items: center; justify-content: center;
         }
-
-        /* Input Range Vertical hack */
         input[type=range].vertical-slider {
-            -webkit-appearance: none;
-            width: 150px; /* Largura vira altura devido a rotação */
-            height: 8px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 5px;
-            outline: none;
-            transform: rotate(-90deg); /* Faz ficar vertical */
-            margin: 0;
+            -webkit-appearance: none; width: 150px; height: 8px;
+            background: rgba(255,255,255,0.2); border-radius: 5px; outline: none;
+            transform: rotate(-90deg); margin: 0;
+        }
+        input[type=range].vertical-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 20px; height: 20px;
+            background: #f1c40f; border-radius: 50%; cursor: pointer;
         }
 
-        input[type=range].vertical-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 20px; height: 20px;
-            background: #f1c40f;
-            border-radius: 50%;
-            cursor: pointer;
+        /* --- JOYSTICKS --- */
+        #mobile-controls {
+            display: none; position: absolute; bottom: 20px; left: 0; width: 100%; height: 180px;
+            pointer-events: none; z-index: 100;
+        }
+        .joystick-zone { position: absolute; bottom: 10px; width: 150px; height: 150px; pointer-events: auto; }
+        #stick-left-zone { left: 20px; }
+        #stick-right-zone { right: 20px; }
+        .joystick-base {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 100px; height: 100px;
+            background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.2); border-radius: 50%;
+        }
+        .joystick-knob {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 50px; height: 50px;
+            background: rgba(241, 196, 15, 0.5); border-radius: 50%;
+            box-shadow: 0 0 10px rgba(241, 196, 15, 0.3); transition: transform 0.1s; 
+        }
+        .stick-label {
+            position: absolute; top: -30px; width: 100%; text-align: center; 
+            color: rgba(255,255,255,0.5); font-size: 12px; font-weight: bold;
         }
     </style>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -110,8 +128,21 @@
         <div id="status-msg" style="color:#888; margin-top:10px;"></div>
     </div>
 
-    <div id="game-ui" class="game-ui">
-        Pólen: <span id="pollen-count" style="color: #f1c40f;">0 / 100</span> 🌻
+    <div id="rpg-hud">
+        <div class="hud-row">
+            <span class="hud-label">HP</span>
+            <div class="bar-container">
+                <div id="bar-hp-fill" class="bar-fill fill-hp" style="width: 100%;"></div>
+                <span id="bar-hp-text" class="bar-text">100/100</span>
+            </div>
+        </div>
+        <div class="hud-row">
+            <span class="hud-label">Pólen</span>
+            <div class="bar-container">
+                <div id="bar-pollen-fill" class="bar-fill fill-pollen" style="width: 0%;"></div>
+                <span id="bar-pollen-text" class="bar-text">0/100</span>
+            </div>
+        </div>
     </div>
 
     <div id="zoom-controls">
@@ -121,15 +152,11 @@
     <div id="mobile-controls">
         <div id="stick-left-zone" class="joystick-zone">
             <div class="stick-label">MOVER</div>
-            <div class="joystick-base">
-                <div id="stick-left-knob" class="joystick-knob"></div>
-            </div>
+            <div class="joystick-base"><div id="stick-left-knob" class="joystick-knob"></div></div>
         </div>
         <div id="stick-right-zone" class="joystick-zone">
             <div class="stick-label">MIRAR</div>
-            <div class="joystick-base">
-                <div id="stick-right-knob" class="joystick-knob"></div>
-            </div>
+            <div class="joystick-base"><div id="stick-right-knob" class="joystick-knob"></div></div>
         </div>
     </div>
 
