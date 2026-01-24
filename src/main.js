@@ -20,7 +20,7 @@ let zoomLevel = 1.5;
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2.0;
 
-const PLANT_SPAWN_CHANCE = 0.10; 
+const PLANT_SPAWN_CHANCE = 0.05; 
 const CURE_ATTEMPT_RATE = 20;    
 const FLOWER_COOLDOWN_TIME = 10000;
 const COLLECTION_RATE = 5; 
