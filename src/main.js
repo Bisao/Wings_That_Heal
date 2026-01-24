@@ -14,14 +14,18 @@ let world, localPlayer;
 let remotePlayers = {};
 let camera = { x: 0, y: 0 };
 
-// --- CONFIGURAÇÕES DE TEMPO E CHANCE ---
+// --- CONFIGURAÇÕES DE GAMEPLAY ---
 const PLANT_SPAWN_CHANCE = 0.15; // 15% de chance ao curar
-const FLOWER_COOLDOWN_TIME = 10000; // 10s para recuperar pólen
+const FLOWER_COOLDOWN_TIME = 10000; // 10s para recuperar
+const COLLECTION_RATE = 5; // A cada quantos frames coleta 1 pólen (menor = mais rápido)
 const GROWTH_TIMES = {
     BROTO: 30000,    // 30 segundos
     MUDA: 120000,    // 2 minutos
     FLOR: 300000     // 5 minutos
 };
+
+// Variável para controlar a velocidade da coleta gradual
+let collectionFrameCounter = 0; 
 
 // Assets
 const assets = { flower: new Image() };
@@ -38,7 +42,7 @@ document.getElementById('btn-create').onclick = () => {
         if(ok) {
             net.hostRoom(id, pass, seed, () => worldState.getFullState());
             startGame(seed, id, nick);
-            if(net.isHost) startHostSimulation(); // Inicia a IA do mundo
+            if(net.isHost) startHostSimulation();
         }
     });
 };
@@ -59,27 +63,21 @@ window.addEventListener('joined', e => {
 window.addEventListener('netData', e => {
     const d = e.detail;
     
-    // Sincroniza players
     if(d.type === 'MOVE') {
         if(!remotePlayers[d.id]) remotePlayers[d.id] = new Player(d.id, d.nick);
         remotePlayers[d.id].targetPos = { x: d.x, y: d.y };
         remotePlayers[d.id].currentDir = d.dir;
     }
     
-    // Sincroniza mapa
     if(d.type === 'TILE_CHANGE') {
         worldState.setTile(d.x, d.y, d.tileType);
 
-        // LÓGICA DO HOST: Reação a eventos
         if (net.isHost) {
-            // Se alguém curou grama, chance de nascer planta
-            if (d.tileType === 'GRAMA') {
-                if (Math.random() < PLANT_SPAWN_CHANCE) {
-                    worldState.addGrowingPlant(d.x, d.y); // Começa timer
-                    console.log(`Semente plantada em ${d.x},${d.y}`);
-                }
+            // Chance de nascer semente ao curar grama
+            if (d.tileType === 'GRAMA' && Math.random() < PLANT_SPAWN_CHANCE) {
+                worldState.addGrowingPlant(d.x, d.y);
             }
-            // Se flor entrou em cooldown, agendar volta
+            // Cooldown da flor
             if (d.tileType === 'FLOR_COOLDOWN') {
                 setTimeout(() => changeTile(d.x, d.y, 'FLOR'), FLOWER_COOLDOWN_TIME);
             }
@@ -97,61 +95,42 @@ function startGame(seed, id, nick) {
     requestAnimationFrame(loop);
 }
 
-// --- LOOP DE SIMULAÇÃO DO HOST (1 Segundo Tick) ---
+// --- SIMULAÇÃO DO HOST (Ciclo de Vida das Plantas) ---
 function startHostSimulation() {
     setInterval(() => {
         const now = Date.now();
 
-        // 1. Processar Crescimento
+        // 1. Crescimento (Broto -> Muda -> Flor)
         for (const [key, startTime] of Object.entries(worldState.growingPlants)) {
             const [x, y] = key.split(',').map(Number);
             const elapsed = now - startTime;
             const currentType = worldState.getModifiedTile(x, y);
 
-            // Evolução: Grama -> Broto
-            if (currentType === 'GRAMA' && elapsed > GROWTH_TIMES.BROTO) {
-                changeTile(x, y, 'BROTO');
-            }
-            // Evolução: Broto -> Muda
-            else if (currentType === 'BROTO' && elapsed > GROWTH_TIMES.MUDA) {
-                changeTile(x, y, 'MUDA');
-            }
-            // Evolução: Muda -> Flor Adulta
+            if (currentType === 'GRAMA' && elapsed > GROWTH_TIMES.BROTO) changeTile(x, y, 'BROTO');
+            else if (currentType === 'BROTO' && elapsed > GROWTH_TIMES.MUDA) changeTile(x, y, 'MUDA');
             else if (currentType === 'MUDA' && elapsed > GROWTH_TIMES.FLOR) {
                 changeTile(x, y, 'FLOR');
-                worldState.removeGrowingPlant(x, y); // Para de crescer
+                worldState.removeGrowingPlant(x, y);
             }
         }
 
-        // 2. Processar Cura Passiva das Flores Adultas
-        // Percorre todos os tiles modificados para achar flores
+        // 2. Cura Passiva das Flores Adultas (Raízes)
         for (const [key, type] of Object.entries(worldState.modifiedTiles)) {
             if (type === 'FLOR') {
-                // Tenta curar um tile aleatório em 3x3
-                if (Math.random() < 0.3) { // 30% de chance por segundo
+                if (Math.random() < 0.3) { // 30% chance/s
                     const [fx, fy] = key.split(',').map(Number);
-                    const dx = Math.floor(Math.random() * 3) - 1; // -1, 0, 1
-                    const dy = Math.floor(Math.random() * 3) - 1;
+                    // Escolhe vizinho aleatório em 3x3
+                    const tx = fx + (Math.floor(Math.random() * 3) - 1);
+                    const ty = fy + (Math.floor(Math.random() * 3) - 1);
                     
-                    const targetX = fx + dx;
-                    const targetY = fy + dy;
-                    
-                    // Verifica o que tem no alvo
-                    const targetType = worldState.getModifiedTile(targetX, targetY) || world.getTileAt(targetX, targetY);
-                    
-                    if (targetType === 'TERRA_QUEIMADA') {
-                        changeTile(targetX, targetY, 'GRAMA');
-                        // Nota: Ao curar passivamente, também dispara a chance de nascer nova planta
-                        // pois envia TILE_CHANGE 'GRAMA' que o Host escuta no listener acima.
-                    }
+                    const tType = worldState.getModifiedTile(tx, ty) || world.getTileAt(tx, ty);
+                    if (tType === 'TERRA_QUEIMADA') changeTile(tx, ty, 'GRAMA');
                 }
             }
         }
-
     }, 1000);
 }
 
-// --- GAME LOOP VISUAL ---
 function loop() {
     update();
     draw();
@@ -164,6 +143,7 @@ function update() {
     const m = input.getMovement();
     localPlayer.update(m);
 
+    // Movimento e Rede
     if(m.x !== 0 || m.y !== 0) {
         localPlayer.pos.x += m.x * localPlayer.speed;
         localPlayer.pos.y += m.y * localPlayer.speed;
@@ -173,22 +153,30 @@ function update() {
         });
     }
 
+    // --- LÓGICA DE TILE EXATO ---
+    // Math.round garante que só interage se estiver visualmente "em cima" do tile (centro)
     const gridX = Math.round(localPlayer.pos.x);
     const gridY = Math.round(localPlayer.pos.y);
     const currentTile = worldState.getModifiedTile(gridX, gridY) || world.getTileAt(gridX, gridY);
 
-    // 1. Coleta Gradual
+    // 1. Coleta Gradual (Tile Exato)
     if (currentTile === 'FLOR' && localPlayer.pollen < localPlayer.maxPollen) {
-        // Coleta 1 de pólen a cada 10 frames (aprox) para ser gradual
-        if (Date.now() % 10 === 0) {
+        collectionFrameCounter++;
+        
+        // A cada X frames, ganha 1 pólen (Simula enchimento gradual)
+        if (collectionFrameCounter >= COLLECTION_RATE) {
             localPlayer.pollen++;
+            collectionFrameCounter = 0; // Reseta contador
             updateUI();
             
-            // Se encheu o tanque, a flor entra em cooldown
+            // Se encheu o tanque, consome a flor
             if (localPlayer.pollen >= localPlayer.maxPollen) {
                 changeTile(gridX, gridY, 'FLOR_COOLDOWN');
             }
         }
+    } else {
+        // Se sair de cima da flor, zera o contador para não "guardar" progresso de coleta
+        collectionFrameCounter = 0;
     }
 
     // 2. Cura Manual (Gasta pólen)
@@ -196,7 +184,6 @@ function update() {
         localPlayer.pollen--;
         updateUI();
         changeTile(gridX, gridY, 'GRAMA');
-        // O Host detectará esse 'GRAMA' e rolará o dado para ver se nasce uma semente
     }
 
     camera.x = localPlayer.pos.x;
@@ -211,7 +198,8 @@ function changeTile(x, y, newType) {
 }
 
 function updateUI() {
-    document.getElementById('pollen-count').innerText = `${localPlayer.pollen} / ${localPlayer.maxPollen}`;
+    const el = document.getElementById('pollen-count');
+    if(el) el.innerText = `${localPlayer.pollen} / ${localPlayer.maxPollen}`;
 }
 
 function draw() {
@@ -230,7 +218,7 @@ function draw() {
             if(sX > -32 && sX < canvas.width+32 && sY > -32 && sY < canvas.height+32) {
                 const finalType = worldState.getModifiedTile(t.x, t.y) || t.type;
                 
-                // --- CAMADA 1: CHÃO ---
+                // Camada 1: Terreno
                 let color = '#34495e'; // Terra Queimada
                 if(['GRAMA', 'BROTO', 'MUDA', 'FLOR', 'FLOR_COOLDOWN'].includes(finalType)) color = '#2ecc71';
                 if(finalType === 'COLMEIA') color = '#f1c40f';
@@ -238,21 +226,15 @@ function draw() {
                 ctx.fillStyle = color;
                 ctx.fillRect(sX, sY, world.tileSize, world.tileSize);
 
-                // --- CAMADA 2: OBJETOS ---
-                
-                // BROTO (30s): Quadradinho verde escuro pequeno
+                // Camada 2: Objetos e Plantas
                 if (finalType === 'BROTO') {
                     ctx.fillStyle = '#006400';
                     ctx.fillRect(sX + 10, sY + 10, 12, 12);
                 }
-
-                // MUDA (2m): Quadrado verde médio
                 else if (finalType === 'MUDA') {
                     ctx.fillStyle = '#228B22';
                     ctx.fillRect(sX + 6, sY + 6, 20, 20);
                 }
-
-                // FLOR (5m): Sprite
                 else if ((finalType === 'FLOR' || finalType === 'FLOR_COOLDOWN') && assets.flower.complete) {
                     if (finalType === 'FLOR_COOLDOWN') ctx.globalAlpha = 0.4;
                     ctx.drawImage(assets.flower, sX, sY, world.tileSize, world.tileSize);
