@@ -29,6 +29,10 @@ const DAMAGE_AMOUNT = 5;
 const HEAL_RATE = 20;    
 const HEAL_AMOUNT = 2;   
 
+// XP CONFIG
+const XP_PER_CURE = 15;    // Ganha 15 XP ao plantar grama
+const XP_PER_POLLEN = 5;   // Ganha 5 XP ao coletar pólen
+
 const GROWTH_TIMES = { BROTO: 5000, MUDA: 10000, FLOR: 15000 };
 
 let collectionFrameCounter = 0;
@@ -38,43 +42,34 @@ let damageFrameCounter = 0;
 const assets = { flower: new Image() };
 assets.flower.src = 'assets/Flower.png';
 
-// --- UI HANDLERS (ATUALIZADOS PARA O NOVO HTML) ---
-
-// Botão da Aba "CRIAR"
+// --- UI HANDLERS ---
 document.getElementById('btn-create').onclick = () => {
     const nick = document.getElementById('host-nickname').value || "Host";
     const id = document.getElementById('create-id').value;
     const pass = document.getElementById('create-pass').value;
     const seed = document.getElementById('world-seed').value || Date.now().toString();
-    
-    if(!id) return alert("Por favor, digite um ID para a sala.");
+    if(!id) return alert("ID obrigatório");
     
     net.init(id, (ok) => {
         if(ok) {
             net.hostRoom(id, pass, seed, () => worldState.getFullState());
             startGame(seed, id, nick);
             if(net.isHost) startHostSimulation();
-        } else {
-            document.getElementById('status-msg').innerText = "Erro: ID já em uso ou inválido.";
-        }
+        } else { document.getElementById('status-msg').innerText = "Erro ao criar sala."; }
     });
 };
 
-// Botão da Aba "ENTRAR"
 document.getElementById('btn-join').onclick = () => {
     const nick = document.getElementById('join-nickname').value || "Guest";
     const id = document.getElementById('join-id').value;
     const pass = document.getElementById('join-pass').value;
-    
-    if(!id) return alert("Digite o ID da sala para entrar.");
+    if(!id) return alert("ID obrigatório");
 
     net.init(null, (ok) => { 
         if(ok) net.joinRoom(id, pass, nick); 
-        else document.getElementById('status-msg').innerText = "Erro ao conectar servidor.";
+        else document.getElementById('status-msg').innerText = "Erro ao conectar.";
     });
 };
-
-// --- RESTO DO CÓDIGO (ZOOM, REDE, ETC) ---
 
 window.addEventListener('wheel', (e) => {
     if (!localPlayer) return;
@@ -87,15 +82,11 @@ window.addEventListener('wheel', (e) => {
 }, { passive: true });
 
 const zoomSlider = document.getElementById('zoom-slider');
-if(zoomSlider) {
-    zoomSlider.addEventListener('input', (e) => { zoomLevel = parseFloat(e.target.value); });
-}
+if(zoomSlider) { zoomSlider.addEventListener('input', (e) => { zoomLevel = parseFloat(e.target.value); }); }
 
 window.addEventListener('joined', e => {
     const data = e.detail;
     if (data.worldState) worldState.applyFullState(data.worldState);
-    
-    // Pega o nick correto (que agora está no input de join)
     const nick = document.getElementById('join-nickname').value || "Guest";
     startGame(data.seed, net.peer.id, nick);
 });
@@ -116,30 +107,23 @@ window.addEventListener('netData', e => {
     }
 });
 
-// --- START GAME (LÓGICA DE VISIBILIDADE DOS CONTROLES) ---
 function startGame(seed, id, nick) {
-    // 1. Oculta o Lobby inteiro
     document.getElementById('lobby-overlay').style.display = 'none';
-    
-    // 2. Mostra o HUD e o Canvas
     document.getElementById('rpg-hud').style.display = 'block';
     canvas.style.display = 'block';
-    
-    // 3. Verifica se é mobile para mostrar controles
     if (input.isMobile) {
         document.getElementById('zoom-controls').style.display = 'flex';
-        // O joystick é controlado pelo CSS do #mobile-controls no CSS global, 
-        // mas aqui garantimos o display: block no elemento pai
         document.getElementById('mobile-controls').style.display = 'block';
     }
 
     world = new WorldGenerator(seed);
     localPlayer = new Player(id, nick, true);
+    
+    updateUI(); // Inicia HUD
     resize();
     requestAnimationFrame(loop);
 }
 
-// --- HOST SIMULATION ---
 function startHostSimulation() {
     setInterval(() => {
         const now = Date.now();
@@ -175,9 +159,7 @@ function spawnPollenParticle() {
     pollenParticles.push({
         wx: localPlayer.pos.x + (Math.random() * 0.4 - 0.2),
         wy: localPlayer.pos.y + (Math.random() * 0.4 - 0.2),
-        size: Math.random() * 3 + 2,
-        speedY: Math.random() * 0.02 + 0.01,
-        life: 1.0
+        size: Math.random() * 3 + 2, speedY: Math.random() * 0.02 + 0.01, life: 1.0
     });
 }
 
@@ -185,19 +167,11 @@ function spawnSmokeParticle(tileX, tileY) {
     const offsetX = Math.random();
     const offsetY = Math.random();
     const isEmber = Math.random() < 0.15;
-
     smokeParticles.push({
-        wx: tileX + offsetX, 
-        wy: tileY + offsetY,
-        isEmber: isEmber, 
+        wx: tileX + offsetX, wy: tileY + offsetY, isEmber: isEmber, 
         size: isEmber ? (Math.random() * 3 + 1) : (Math.random() * 5 + 2),
-        speedY: -(Math.random() * 0.03 + 0.01), 
-        wobbleTick: Math.random() * 100, 
-        wobbleSpeed: Math.random() * 0.05 + 0.02, 
-        wobbleAmp: 0.01, 
-        life: Math.random() * 0.6 + 0.4, 
-        decay: Math.random() * 0.008 + 0.005,
-        grayVal: Math.floor(Math.random() * 60)
+        speedY: -(Math.random() * 0.03 + 0.01), wobbleTick: Math.random() * 100, wobbleSpeed: Math.random() * 0.05 + 0.02, wobbleAmp: 0.01, 
+        life: Math.random() * 0.6 + 0.4, decay: Math.random() * 0.008 + 0.005, grayVal: Math.floor(Math.random() * 60)
     });
 }
 
@@ -213,6 +187,25 @@ function updateParticles() {
         if (!p.isEmber) p.size += 0.03; 
         if (p.life <= 0) smokeParticles.splice(i, 1);
     }
+}
+
+// --- LÓGICA DE XP ---
+function gainXp(amount) {
+    localPlayer.xp += amount;
+    
+    // Level UP
+    if (localPlayer.xp >= localPlayer.maxXp) {
+        localPlayer.xp -= localPlayer.maxXp; // Sobra o resto
+        localPlayer.level++;
+        
+        // Aumenta dificuldade e Recompensa
+        localPlayer.maxXp = Math.floor(localPlayer.maxXp * 1.5); // Próximo nível requer 50% mais XP
+        localPlayer.maxPollen += 10; // Aumenta capacidade de carga
+        localPlayer.hp = localPlayer.maxHp; // Cura completa
+        
+        console.log(`Level Up! Nível ${localPlayer.level}`);
+    }
+    updateUI();
 }
 
 function update() {
@@ -258,10 +251,7 @@ function update() {
             if (localPlayer.hp <= 0) {
                 localPlayer.respawn();
                 updateUI();
-                net.sendPayload({ 
-                    type: 'MOVE', id: localPlayer.id, nick: localPlayer.nickname, 
-                    x: localPlayer.pos.x, y: localPlayer.pos.y, dir: localPlayer.currentDir
-                });
+                net.sendPayload({ type: 'MOVE', id: localPlayer.id, nick: localPlayer.nickname, x: localPlayer.pos.x, y: localPlayer.pos.y, dir: localPlayer.currentDir });
             }
         }
     } else {
@@ -279,7 +269,11 @@ function update() {
     if (currentTile === 'FLOR' && localPlayer.pollen < localPlayer.maxPollen) {
         collectionFrameCounter++;
         if (collectionFrameCounter >= COLLECTION_RATE) {
-            localPlayer.pollen++; collectionFrameCounter = 0; updateUI();
+            localPlayer.pollen++; 
+            collectionFrameCounter = 0; 
+            
+            gainXp(XP_PER_POLLEN); // GANHA XP COLETANDO
+            
             if (localPlayer.pollen >= localPlayer.maxPollen) changeTile(gridX, gridY, 'FLOR_COOLDOWN');
         }
     } else { collectionFrameCounter = 0; }
@@ -288,7 +282,10 @@ function update() {
         cureFrameCounter++;
         if (cureFrameCounter >= CURE_ATTEMPT_RATE) {
             cureFrameCounter = 0; localPlayer.pollen--; updateUI();
-            if (Math.random() < PLANT_SPAWN_CHANCE) changeTile(gridX, gridY, 'GRAMA');
+            if (Math.random() < PLANT_SPAWN_CHANCE) {
+                changeTile(gridX, gridY, 'GRAMA');
+                gainXp(XP_PER_CURE); // GANHA XP PLANTANDO
+            }
         }
     } else { cureFrameCounter = 0; }
 
@@ -304,11 +301,23 @@ function changeTile(x, y, newType) {
     }
 }
 
+// --- UI ATUALIZADA ---
 function updateUI() {
+    // Topo
+    document.getElementById('hud-name').innerText = localPlayer.nickname;
+    document.getElementById('hud-lvl').innerText = localPlayer.level;
+
+    // HP
     const hpPct = Math.max(0, (localPlayer.hp / localPlayer.maxHp) * 100);
     document.getElementById('bar-hp-fill').style.width = `${hpPct}%`;
     document.getElementById('bar-hp-text').innerText = `${Math.ceil(localPlayer.hp)}/${localPlayer.maxHp}`;
 
+    // XP
+    const xpPct = Math.max(0, (localPlayer.xp / localPlayer.maxXp) * 100);
+    document.getElementById('bar-xp-fill').style.width = `${xpPct}%`;
+    document.getElementById('bar-xp-text').innerText = `${Math.floor(localPlayer.xp)}/${localPlayer.maxXp}`;
+
+    // Pollen
     const polPct = Math.max(0, (localPlayer.pollen / localPlayer.maxPollen) * 100);
     document.getElementById('bar-pollen-fill').style.width = `${polPct}%`;
     document.getElementById('bar-pollen-text').innerText = `${localPlayer.pollen}/${localPlayer.maxPollen}`;
@@ -354,13 +363,9 @@ function draw() {
                 else if ((finalType === 'FLOR' || finalType === 'FLOR_COOLDOWN') && assets.flower.complete) {
                     if (finalType === 'FLOR_COOLDOWN') ctx.globalAlpha = 0.4;
                     const baseOffsetY = rTileSize * 0.65; 
-                    ctx.fillStyle = "rgba(0,0,0,0.3)";
-                    ctx.beginPath();
-                    ctx.ellipse(sX + rTileSize/2, sY + baseOffsetY, 8 * zoomLevel, 3 * zoomLevel, 0, 0, Math.PI*2);
-                    ctx.fill();
+                    ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.ellipse(sX + rTileSize/2, sY + baseOffsetY, 8 * zoomLevel, 3 * zoomLevel, 0, 0, Math.PI*2); ctx.fill();
 
-                    ctx.save();
-                    ctx.translate(sX + rTileSize/2, sY + baseOffsetY);
+                    ctx.save(); ctx.translate(sX + rTileSize/2, sY + baseOffsetY);
                     const windAngle = Math.sin(Date.now() / 800 + t.x * 0.5) * 0.1; 
                     ctx.rotate(windAngle);
                     ctx.drawImage(assets.flower, -rTileSize/2, -rTileSize, rTileSize, rTileSize);
@@ -374,7 +379,6 @@ function draw() {
     smokeParticles.forEach(p => {
         const psX = (p.wx - camera.x) * rTileSize + canvas.width/2;
         const psY = (p.wy - camera.y) * rTileSize + canvas.height/2;
-
         if (p.isEmber) ctx.fillStyle = `rgba(231, 76, 60, ${p.life})`;
         else ctx.fillStyle = `rgba(${p.grayVal}, ${p.grayVal}, ${p.grayVal}, ${p.life * 0.4})`; 
         ctx.fillRect(psX, psY, p.size * zoomLevel, p.size * zoomLevel);
