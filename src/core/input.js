@@ -3,11 +3,11 @@ export class InputHandler {
         this.keys = {};
         
         window.addEventListener('keydown', e => {
-            if (e.key) this.keys[e.key.toLowerCase()] = true;
+            if(e.key) this.keys[e.key.toLowerCase()] = true;
         });
         
         window.addEventListener('keyup', e => {
-            if (e.key) this.keys[e.key.toLowerCase()] = false;
+            if(e.key) this.keys[e.key.toLowerCase()] = false;
         });
     }
 
@@ -18,7 +18,7 @@ export class InputHandler {
         if (this.keys['a'] || this.keys['arrowleft']) x -= 1;
         if (this.keys['d'] || this.keys['arrowright']) x += 1;
         
-        // Normalizar vetor diagonal
+        // Normaliza vetor diagonal
         if (x !== 0 && y !== 0) {
             x *= 0.707;
             y *= 0.707;
