@@ -15,7 +15,7 @@
         }
 
         h1 { color: #f1c40f; margin-bottom: 20px; }
-        input { padding: 12px; margin: 8px 0; border-radius: 6px; border: 1px solid #444; width: 100%; box-sizing: border-box; background: #222; color: white; }
+        input[type=text], input[type=password] { padding: 12px; margin: 8px 0; border-radius: 6px; border: 1px solid #444; width: 100%; box-sizing: border-box; background: #222; color: white; }
         button { padding: 12px 20px; cursor: pointer; background: #f1c40f; color: #1a1a1a; border: none; font-weight: bold; border-radius: 6px; width: 100%; margin-top: 10px; }
 
         .game-ui {
@@ -27,7 +27,7 @@
 
         /* --- CONTROLES MOBILE --- */
         #mobile-controls {
-            display: none; /* Ativado via JS se for mobile */
+            display: none; /* Ativado via JS */
             position: absolute; bottom: 20px; left: 0; width: 100%; height: 180px;
             pointer-events: none; z-index: 100;
         }
@@ -54,10 +54,40 @@
             transition: transform 0.1s; 
         }
         
-        /* Instrução visual para mobile */
         .stick-label {
             position: absolute; top: -30px; width: 100%; text-align: center; 
             color: rgba(255,255,255,0.5); font-size: 12px; font-weight: bold;
+        }
+
+        /* --- CONTROLE DE ZOOM (Novo) --- */
+        #zoom-controls {
+            display: none; /* Ativado via JS */
+            position: absolute; 
+            top: 50%; right: 10px; /* Centro Direito */
+            transform: translateY(-50%);
+            height: 200px; width: 50px;
+            z-index: 101; pointer-events: auto;
+            align-items: center; justify-content: center;
+        }
+
+        /* Input Range Vertical hack */
+        input[type=range].vertical-slider {
+            -webkit-appearance: none;
+            width: 150px; /* Largura vira altura devido a rotação */
+            height: 8px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 5px;
+            outline: none;
+            transform: rotate(-90deg); /* Faz ficar vertical */
+            margin: 0;
+        }
+
+        input[type=range].vertical-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px; height: 20px;
+            background: #f1c40f;
+            border-radius: 50%;
+            cursor: pointer;
         }
     </style>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -82,6 +112,10 @@
 
     <div id="game-ui" class="game-ui">
         Pólen: <span id="pollen-count" style="color: #f1c40f;">0 / 100</span> 🌻
+    </div>
+
+    <div id="zoom-controls">
+        <input type="range" id="zoom-slider" class="vertical-slider" min="0.5" max="1.5" step="0.05" value="1.0">
     </div>
 
     <div id="mobile-controls">
