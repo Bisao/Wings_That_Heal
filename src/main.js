@@ -17,7 +17,7 @@ let camera = { x: 0, y: 0 };
 // --- CONFIGURAÇÕES DE BALANÇO ---
 // Chance REAL de nascer grama/semente (20% de chance)
 // Se falhar, o chão continua PRETO.
-const PLANT_SPAWN_CHANCE = 0.20; 
+const PLANT_SPAWN_CHANCE = 0.002; 
 
 // Chance da Flor Adulta tentar expandir para um vizinho por segundo
 const PASSIVE_ATTEMPT_CHANCE = 0.30; 
