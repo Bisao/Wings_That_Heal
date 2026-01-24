@@ -1,16 +1,42 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
-  <meta charset="UTF-8">
-  <title>Bee World</title>
-  <link rel="stylesheet" href="css/style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BeeHive P2P - Professional Game</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
-  <div id="login">
-    <h1>Bee World</h1>
-    <input type="text" id="nickname" placeholder="Digite seu nickname">
-    <button id="startBtn">Entrar</button>
-  </div>
-  <script type="module" src="src/main.js"></script>
+    <div id="lobby-container">
+        <h1>BeeHive P2P</h1>
+        
+        <div id="login-screen">
+            <input type="text" id="nickname" placeholder="Seu Nickname" maxlength="15">
+            <hr>
+            <div class="modes">
+                <div class="mode-box">
+                    <h3>Criar Mapa</h3>
+                    <input type="text" id="create-id" placeholder="ID da Sala (ex: sala-da-colmeia)">
+                    <input type="password" id="create-pass" placeholder="Senha (Opcional)">
+                    <input type="text" id="world-seed" placeholder="Seed do Mapa">
+                    <button id="btn-create">Criar e Hospedar</button>
+                </div>
+
+                <div class="mode-box">
+                    <h3>Entrar</h3>
+                    <input type="text" id="join-id" placeholder="ID da Sala do Host">
+                    <input type="password" id="join-pass" placeholder="Senha da Sala">
+                    <button id="btn-join">Validar e Entrar</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="status-msg"></div>
+    </div>
+
+    <canvas id="gameCanvas" style="display:none;"></canvas>
+
+    <script type="module" src="src/main.js"></script>
 </body>
 </html>
