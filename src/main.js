@@ -505,5 +505,10 @@ function draw() {
     }
 }
 
-function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-window.onresize = resize;
+// Desenhando outros jogadores passando o ID do seu parceiro de grupo
+Object.values(remotePlayers).forEach(p => {
+    p.draw(ctx, camera, canvas, rTileSize, currentPartyPartner);
+});
+
+// Desenhando você mesmo
+localPlayer.draw(ctx, camera, canvas, rTileSize, currentPartyPartner);
