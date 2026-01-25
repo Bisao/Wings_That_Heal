@@ -6,7 +6,7 @@ export class Player {
         
         this.pos = { x: 0, y: 0 };
         this.targetPos = { x: 0, y: 0 };
-        this.speed = 0.06;
+        this.speed = 0.06; // Velocidade ajustada conforme seu pedido anterior
         this.currentDir = 'Down';
         
         // --- SISTEMA DE RPG ---
@@ -19,7 +19,7 @@ export class Player {
         // Novo Sistema de Nível
         this.level = 1;
         this.xp = 0;
-        this.maxXp = 100; // XP necessário para o nível 2
+        this.maxXp = 100; 
 
         this.sprites = {};
         ['Up', 'Down', 'Left', 'Right', 'Idle', 'LeftIdle', 'RightIdle'].forEach(d => {
@@ -59,30 +59,89 @@ export class Player {
         this.pos.y = 0;
         this.hp = this.maxHp;
         this.pollen = 0;
-        // Perde 50% do XP atual ao morrer como penalidade leve
         this.xp = Math.floor(this.xp / 2); 
         this.currentDir = 'Down';
     }
 
+    // --- MÉTODOS DE SAVE SYSTEM (NOVOS) ---
+
+    /**
+     * Exporta os dados essenciais do jogador para salvar
+     */
+    serialize() {
+        return {
+            id: this.id,
+            nickname: this.nickname,
+            x: this.pos.x,
+            y: this.pos.y,
+            stats: {
+                level: this.level,
+                xp: this.xp,
+                maxXp: this.maxXp,
+                hp: this.hp,
+                maxHp: this.maxHp,
+                pollen: this.pollen,
+                maxPollen: this.maxPollen
+            }
+        };
+    }
+
+    /**
+     * Importa dados salvos para este jogador
+     */
+    deserialize(data) {
+        if (!data) return;
+
+        // Recupera posição
+        if (data.x !== undefined) this.pos.x = data.x;
+        if (data.y !== undefined) this.pos.y = data.y;
+        if (this.isLocal) this.targetPos = { ...this.pos }; // Evita interpolação maluca ao carregar
+
+        // Recupera Status
+        if (data.stats) {
+            this.level = data.stats.level || 1;
+            this.xp = data.stats.xp || 0;
+            this.maxXp = data.stats.maxXp || 100;
+            this.hp = data.stats.hp || 100;
+            this.maxHp = data.stats.maxHp || 100;
+            this.pollen = data.stats.pollen || 0;
+            this.maxPollen = data.stats.maxPollen || 100;
+        }
+    }
+
+    // --- RENDERIZAÇÃO (COM ANIMAÇÃO REINTEGRADA) ---
     draw(ctx, cam, canvas, tileSize) {
         const sX = (this.pos.x - cam.x) * tileSize + canvas.width / 2;
         const sY = (this.pos.y - cam.y) * tileSize + canvas.height / 2;
         const sprite = this.sprites[this.currentDir] || this.sprites['Idle'];
 
+        const zoomScale = tileSize / 32;
+
+        // 1. Cálculo de Balanço (Bobbing)
+        const floatY = Math.sin(Date.now() / 200) * (3 * zoomScale); 
+        const drawY = sY - (12 * zoomScale) + floatY;
+
+        // 2. Sombra (No chão)
+        ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+        ctx.beginPath();
+        ctx.ellipse(sX, sY + (8 * zoomScale), 10 * zoomScale, 4 * zoomScale, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 3. Sprite (Flutuando)
         if (sprite.complete && sprite.naturalWidth !== 0) {
-            ctx.drawImage(sprite, sX - tileSize/2, sY - tileSize/2, tileSize, tileSize);
+            ctx.drawImage(sprite, sX - tileSize/2, drawY - tileSize/2, tileSize, tileSize);
         } else {
             ctx.fillStyle = "yellow";
-            ctx.beginPath(); ctx.arc(sX, sY, 10, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(sX, drawY, 10 * zoomScale, 0, Math.PI*2); ctx.fill();
         }
 
-        // Nome
+        // 4. Nickname
         ctx.fillStyle = "white"; 
-        ctx.font = "bold 12px sans-serif"; 
+        ctx.font = `bold ${12 * zoomScale}px sans-serif`; 
         ctx.textAlign = "center";
         ctx.strokeStyle = "black"; ctx.lineWidth = 2; 
         
-        const nickY = sY - tileSize/2 - 10;
+        const nickY = drawY - (20 * zoomScale);
         ctx.strokeText(this.nickname, sX, nickY); 
         ctx.fillText(this.nickname, sX, nickY);
     }
