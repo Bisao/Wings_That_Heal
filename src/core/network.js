@@ -6,7 +6,6 @@ export class NetworkManager {
         this.isHost = false;
         this.roomData = { id: '', pass: '', seed: '' };
         
-        // Callbacks para obter dados do jogo atual
         this.getStateCallback = null;
         this.getGuestDataCallback = null; 
     }
@@ -24,14 +23,6 @@ export class NetworkManager {
         });
     }
 
-    /**
-     * Inicia a sala como Host.
-     * @param {string} id - ID da sala
-     * @param {string} pass - Senha
-     * @param {string} seed - Semente do mundo
-     * @param {Function} getStateFn - Função que retorna o estado atual do mundo (tiles/plantas)
-     * @param {Function} getGuestDataFn - Função que busca dados salvos de um guest pelo Nickname
-     */
     hostRoom(id, pass, seed, getStateFn, getGuestDataFn) {
         this.isHost = true;
         this.roomData = { id, pass, seed };
@@ -39,36 +30,25 @@ export class NetworkManager {
         this.getGuestDataCallback = getGuestDataFn;
 
         this.peer.on('connection', (conn) => {
-            // Gerencia desconexão do Guest
             conn.on('close', () => {
                 this.connections = this.connections.filter(c => c !== conn);
-                // Dispara evento para o main.js saber quem saiu (útil para limpar remotePlayers)
                 window.dispatchEvent(new CustomEvent('peerDisconnected', { detail: { peerId: conn.peer } }));
             });
 
             conn.on('data', (data) => {
                 if (data.type === 'AUTH_REQUEST') {
-                    // Verifica senha
                     if (!this.roomData.pass || data.password === this.roomData.pass) {
-                        
-                        // 1. Pega estado do mundo (para o guest ver o mapa atualizado)
                         const currentState = this.getStateCallback ? this.getStateCallback() : {};
-                        
-                        // 2. Tenta recuperar o SAVE desse guest específico (Pelo Nickname)
                         let savedPlayerData = null;
                         if (this.getGuestDataCallback && data.nickname) {
                             savedPlayerData = this.getGuestDataCallback(data.nickname);
-                            if(savedPlayerData) {
-                                console.log(`[Host] Dados recuperados para o guest: ${data.nickname}`);
-                            }
                         }
 
-                        // 3. Envia Sucesso com Mundo + Save Pessoal
                         conn.send({ 
                             type: 'AUTH_SUCCESS', 
                             seed: this.roomData.seed, 
                             worldState: currentState,
-                            playerData: savedPlayerData // <--- AQUI VAI O PROGRESSO DO GUEST
+                            playerData: savedPlayerData 
                         });
                         
                         this.connections.push(conn);
@@ -77,9 +57,15 @@ export class NetworkManager {
                         setTimeout(() => conn.close(), 500);
                     }
                 } else {
-                    // Repassa dados de jogo (Movimento, Tiles, etc)
-                    window.dispatchEvent(new CustomEvent('netData', { detail: data }));
-                    this.broadcast(data, conn.peer);
+                    // --- LÓGICA DE ROTEAMENTO (NOVO) ---
+                    // Se a mensagem tem um targetId, o Host atua como servidor e repassa APENAS para o alvo
+                    if (data.targetId) {
+                        this.sendToId(data.targetId, data);
+                    } else {
+                        // Se não tem alvo, é uma mensagem global (Movimento, Chat Global, etc)
+                        window.dispatchEvent(new CustomEvent('netData', { detail: data }));
+                        this.broadcast(data, conn.peer);
+                    }
                 }
             });
         });
@@ -89,13 +75,11 @@ export class NetworkManager {
         this.conn = this.peer.connect(targetID);
         
         this.conn.on('open', () => {
-            // Envia credenciais
             this.conn.send({ type: 'AUTH_REQUEST', password, nickname });
         });
 
         this.conn.on('data', (data) => {
             if (data.type === 'AUTH_SUCCESS') {
-                // Conectado com sucesso! O detail contém seed, worldState e playerData
                 window.dispatchEvent(new CustomEvent('joined', { detail: data }));
             }
             else if (data.type === 'AUTH_FAIL') {
@@ -103,27 +87,47 @@ export class NetworkManager {
                 this.conn.close();
             }
             else {
-                // Dados normais de jogo
                 window.dispatchEvent(new CustomEvent('netData', { detail: data }));
             }
         });
         
         this.conn.on('close', () => {
             alert("Desconectado do Host.");
-            location.reload(); // Recarrega para o menu
+            location.reload();
         });
     }
 
-    sendPayload(payload) {
-        if (this.isHost) this.broadcast(payload);
-        else if (this.conn) this.conn.send(payload);
+    /**
+     * Envia dados. 
+     * @param {Object} payload - Dados a enviar
+     * @param {string} targetId - (Opcional) Enviar apenas para este Peer ID
+     */
+    sendPayload(payload, targetId = null) {
+        if (targetId) payload.targetId = targetId; // Marca o alvo no pacote
+
+        if (this.isHost) {
+            if (targetId) {
+                this.sendToId(targetId, payload);
+            } else {
+                this.broadcast(payload);
+            }
+        } else if (this.conn && this.conn.open) {
+            this.conn.send(payload);
+        }
+    }
+
+    // Envia para um ID específico (usado pelo Host)
+    sendToId(peerId, data) {
+        const targetConn = this.connections.find(c => c.peer === peerId);
+        if (targetConn && targetConn.open) {
+            targetConn.send(data);
+        }
     }
 
     broadcast(data, excludePeerId = null) {
         this.connections.forEach(c => { 
-            if (c.peer !== excludePeerId) {
-                // Tenta enviar apenas se a conexão estiver aberta
-                if(c.open) c.send(data);
+            if (c.peer !== excludePeerId && c.open) {
+                c.send(data);
             }
         });
     }
