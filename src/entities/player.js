@@ -16,12 +16,10 @@ export class Player {
         this.pollen = 0;
         this.maxPollen = 100;
 
-        // Novo Sistema de Nível
         this.level = 1;
         this.xp = 0;
         this.maxXp = 100; 
 
-        // NOVO: Estatística para o Ranking
         this.tilesCured = 0;
 
         this.sprites = {};
@@ -58,19 +56,12 @@ export class Player {
     }
 
     respawn() {
-        this.pos.x = 0;
-        this.pos.y = 0;
         this.hp = this.maxHp;
         this.pollen = 0;
         this.xp = Math.floor(this.xp / 2); 
         this.currentDir = 'Down';
     }
 
-    // --- MÉTODOS DE SAVE SYSTEM ---
-
-    /**
-     * Exporta os dados essenciais do jogador para salvar
-     */
     serialize() {
         return {
             id: this.id,
@@ -85,24 +76,17 @@ export class Player {
                 maxHp: this.maxHp,
                 pollen: this.pollen,
                 maxPollen: this.maxPollen,
-                // Salva o contador de cura
                 tilesCured: this.tilesCured 
             }
         };
     }
 
-    /**
-     * Importa dados salvos para este jogador
-     */
     deserialize(data) {
         if (!data) return;
-
-        // Recupera posição
         if (data.x !== undefined) this.pos.x = data.x;
         if (data.y !== undefined) this.pos.y = data.y;
         if (this.isLocal) this.targetPos = { ...this.pos }; 
 
-        // Recupera Status
         if (data.stats) {
             this.level = data.stats.level || 1;
             this.xp = data.stats.xp || 0;
@@ -111,30 +95,31 @@ export class Player {
             this.maxHp = data.stats.maxHp || 100;
             this.pollen = data.stats.pollen || 0;
             this.maxPollen = data.stats.maxPollen || 100;
-            // Recupera o contador (ou inicia em 0 se for save antigo)
             this.tilesCured = data.stats.tilesCured || 0;
         }
     }
 
     // --- RENDERIZAÇÃO ---
-    draw(ctx, cam, canvas, tileSize) {
+    draw(ctx, cam, canvas, tileSize, partyPartnerId = null) {
         const sX = (this.pos.x - cam.x) * tileSize + canvas.width / 2;
         const sY = (this.pos.y - cam.y) * tileSize + canvas.height / 2;
         const sprite = this.sprites[this.currentDir] || this.sprites['Idle'];
-
         const zoomScale = tileSize / 32;
 
-        // 1. Cálculo de Balanço (Bobbing)
+        // Identifica se este player é da party
+        const isPartner = this.id === partyPartnerId;
+
+        // 1. Balanço (Bobbing)
         const floatY = Math.sin(Date.now() / 200) * (3 * zoomScale); 
         const drawY = sY - (12 * zoomScale) + floatY;
 
-        // 2. Sombra (No chão)
+        // 2. Sombra
         ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
         ctx.beginPath();
         ctx.ellipse(sX, sY + (8 * zoomScale), 10 * zoomScale, 4 * zoomScale, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // 3. Sprite (Flutuando)
+        // 3. Sprite
         if (sprite.complete && sprite.naturalWidth !== 0) {
             ctx.drawImage(sprite, sX - tileSize/2, drawY - tileSize/2, tileSize, tileSize);
         } else {
@@ -142,14 +127,32 @@ export class Player {
             ctx.beginPath(); ctx.arc(sX, drawY, 10 * zoomScale, 0, Math.PI*2); ctx.fill();
         }
 
-        // 4. Nickname
-        ctx.fillStyle = "white"; 
+        // 4. Nickname e Level
+        // Se for parceiro, usa cor dourada e adiciona ícone
+        const nameText = isPartner ? `[GROUP] ${this.nickname}` : this.nickname;
+        ctx.fillStyle = isPartner ? "#f1c40f" : "white"; 
+        
         ctx.font = `bold ${12 * zoomScale}px sans-serif`; 
         ctx.textAlign = "center";
-        ctx.strokeStyle = "black"; ctx.lineWidth = 2; 
+        ctx.strokeStyle = "black"; 
+        ctx.lineWidth = 3; 
         
         const nickY = drawY - (20 * zoomScale);
-        ctx.strokeText(this.nickname, sX, nickY); 
-        ctx.fillText(this.nickname, sX, nickY);
+        ctx.strokeText(nameText, sX, nickY); 
+        ctx.fillText(nameText, sX, nickY);
+
+        // Barra de HP pequena sobre a cabeça (Apenas para outros players)
+        if (!this.isLocal) {
+            const barW = 30 * zoomScale;
+            const barH = 4 * zoomScale;
+            const barY = nickY - (12 * zoomScale);
+            
+            // Fundo
+            ctx.fillStyle = "black";
+            ctx.fillRect(sX - barW/2, barY, barW, barH);
+            // Vida
+            ctx.fillStyle = isPartner ? "#2ecc71" : "#e74c3c";
+            ctx.fillRect(sX - barW/2, barY, barW * (this.hp / this.maxHp), barH);
+        }
     }
 }
