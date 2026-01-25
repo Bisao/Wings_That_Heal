@@ -39,7 +39,7 @@ const HEAL_RATE = 1;
 const HEAL_AMOUNT = 1;   
 const XP_PER_CURE = 15;    
 const XP_PER_POLLEN = 0.2;
-const XP_PASSIVE_CURE = 5; // XP que ganha quando sua flor cura sozinha
+const XP_PASSIVE_CURE = 5; 
 
 const GROWTH_TIMES = { BROTO: 5000, MUDA: 10000, FLOR: 15000 };
 
@@ -126,9 +126,8 @@ window.addEventListener('peerDisconnected', e => {
         console.log(`🔌 Jogador ${p.nickname} desconectou.`);
         chat.addMessage('SYSTEM', null, `${p.nickname || 'Alguém'} saiu do jogo.`);
         
-        // Salva dados ao sair
         guestDataDB[p.nickname] = p.serialize().stats;
-        saveProgress(); // Salva DB no disco
+        saveProgress(); 
 
         delete remotePlayers[peerId];
         updateRanking(); 
@@ -142,15 +141,11 @@ window.addEventListener('netData', e => {
         chat.addMessage('GLOBAL', d.nick, d.text);
     }
 
-    // EVENTO DE CURA PASSIVA (Flor curou sozinha)
     if (d.type === 'FLOWER_CURE') {
-        // Se eu sou o dono da flor que curou, ganho pontos e XP
         if (localPlayer && d.ownerId === localPlayer.id) {
             localPlayer.tilesCured++;
             gainXp(XP_PASSIVE_CURE);
-            // Efeito visual no player ou som poderia vir aqui
         }
-        // Se foi outro player, atualizamos o ranking visualmente se tivermos o objeto dele
         if (remotePlayers[d.ownerId]) {
             remotePlayers[d.ownerId].tilesCured = (remotePlayers[d.ownerId].tilesCured || 0) + 1;
         }
@@ -167,7 +162,6 @@ window.addEventListener('netData', e => {
     }
 
     if(d.type === 'TILE_CHANGE') {
-        // Agora passamos o ownerId se vier no pacote
         changeTile(d.x, d.y, d.tileType, d.ownerId); 
     }
 });
@@ -179,8 +173,8 @@ function startGame(seed, id, nick) {
     document.getElementById('rpg-hud').style.display = 'block';
     document.getElementById('chat-toggle-btn').style.display = 'block';
     
+    // Aviso de Sistema
     chat.addMessage('SYSTEM', null, "Bem-vindo ao Wings That Heal!");
-    chat.addMessage('SYSTEM', null, "Flores maduras curam a terra ao redor automaticamente!");
 
     canvas.style.display = 'block';
     if (input.isMobile) {
@@ -191,6 +185,38 @@ function startGame(seed, id, nick) {
     world = new WorldGenerator(seed);
     localPlayer = new Player(id, nick, true);
 
+    // --- DISTRIBUIÇÃO DE COLMEIAS (SPAWN) ---
+    // Pega as localizações geradas pela Seed
+    const hives = world.getHiveLocations(); 
+    let spawnIndex = 0;
+
+    if (net.isHost) {
+        // Host sempre fica na Colmeia 0 (Centro/Primeira)
+        spawnIndex = 0;
+    } else {
+        // Guest: Gera um índice determinístico baseado no ID (Hash)
+        // Isso garante que o mesmo Guest sempre caia na mesma colmeia neste mapa
+        let hash = 0;
+        for (let i = 0; i < id.length; i++) hash = id.charCodeAt(i) + ((hash << 5) - hash);
+        // Pega um índice de 1 a 7 (evita a 0 que é do Host)
+        spawnIndex = (Math.abs(hash) % (hives.length - 1)) + 1;
+    }
+
+    // Define a "Casa" do jogador
+    if (hives[spawnIndex]) {
+        // Adiciona propriedade dinâmica no objeto player para saber onde respawnar
+        localPlayer.homeBase = { x: hives[spawnIndex].x, y: hives[spawnIndex].y };
+        
+        // Move para a base
+        localPlayer.pos.x = localPlayer.homeBase.x;
+        localPlayer.pos.y = localPlayer.homeBase.y;
+        localPlayer.targetPos = { ...localPlayer.pos };
+        
+        chat.addMessage('SYSTEM', null, `Você está na Colmeia #${spawnIndex}.`);
+    }
+
+    // --- CARREGAMENTO DE SAVE (Host) ---
+    // (O save sobrescreve a posição se o jogador já tiver jogado antes)
     if (net.isHost) {
         const savedGame = saveSystem.load();
         if (savedGame) {
@@ -210,13 +236,11 @@ function startGame(seed, id, nick) {
 }
 
 function startHostSimulation() {
-    // Loop de Crescimento e Cura Passiva
     setInterval(() => {
         const now = Date.now();
         let changed = false;
 
         for (const [key, plantData] of Object.entries(worldState.growingPlants)) {
-            // Suporte a save antigo (se plantData for número, converte)
             const startTime = plantData.time || plantData;
             const ownerId = plantData.owner || null;
 
@@ -224,21 +248,14 @@ function startHostSimulation() {
             const elapsed = now - startTime;
             const currentType = worldState.getModifiedTile(x, y);
 
-            // Estágios de crescimento
             if (currentType === 'GRAMA' && elapsed > GROWTH_TIMES.BROTO) changeTile(x, y, 'BROTO', ownerId);
             else if (currentType === 'BROTO' && elapsed > GROWTH_TIMES.MUDA) changeTile(x, y, 'MUDA', ownerId);
             else if (currentType === 'MUDA' && elapsed > GROWTH_TIMES.FLOR) {
                 changeTile(x, y, 'FLOR', ownerId);
-                // Não removemos do growingPlants aqui para ela continuar ativa curando!
-                // Mas precisamos marcar que ela já é adulta para não tentar virar flor de novo?
-                // O check 'currentType === MUDA' já resolve.
             }
 
-            // MECÂNICA DE CURA 3x3 (Apenas Flores Maduras)
             if (currentType === 'FLOR') {
-                // 10% de chance por segundo de tentar curar um vizinho
                 if (Math.random() < 0.10) {
-                    // Escolhe um vizinho aleatório
                     const dx = Math.floor(Math.random() * 3) - 1;
                     const dy = Math.floor(Math.random() * 3) - 1;
                     if (dx === 0 && dy === 0) continue;
@@ -249,51 +266,30 @@ function startHostSimulation() {
                     const targetType = worldState.getModifiedTile(tx, ty) || world.getTileAt(tx, ty);
                     
                     if (targetType === 'TERRA_QUEIMADA') {
-                        // Cura para GRAMA_SAFE (Não gera novas plantas para evitar infinito)
                         changeTile(tx, ty, 'GRAMA_SAFE');
-                        
-                        // Notifica rede sobre a cura (para dar XP/Score ao dono)
                         if (ownerId) {
                             net.sendPayload({ type: 'FLOWER_CURE', ownerId: ownerId, x: tx, y: ty });
-                            
-                            // Se o dono sou eu (Host), ganho aqui mesmo
                             if (ownerId === localPlayer.id) {
                                 localPlayer.tilesCured++;
                                 gainXp(XP_PASSIVE_CURE);
                             } 
-                            // Se for guest offline, atualiza DB
-                            else if (guestDataDB[ownerId]) { // TODO: Usar nick ou ID no DB? Estamos usando Nick no main, mas ID aqui. 
-                                // Simplificação: Atualiza se estiver online via remotePlayers no netData, 
-                                // mas se estiver offline o Host precisaria achar pelo ID.
-                                // Por enquanto, foca nos online.
-                            }
                         }
-                        
-                        changed = true; // Marca para salvar
+                        changed = true; 
                     }
                 }
             }
         }
-        
-        // Se houve cura automática, salva o jogo
         if (changed) saveProgress();
-
     }, 1000);
 
-    // Auto-Save periódico de segurança (30s)
-    setInterval(() => {
-        saveProgress();
-    }, 30000); 
+    setInterval(() => { saveProgress(); }, 30000); 
 }
 
 function saveProgress() {
     if (!net.isHost || !localPlayer) return;
-    
-    // Atualiza DB com players online
     Object.values(remotePlayers).forEach(p => {
         if (p.nickname) guestDataDB[p.nickname] = p.serialize().stats;
     });
-
     const fullData = {
         seed: world.seed,
         world: worldState.getFullState(),
@@ -351,7 +347,6 @@ function update() {
     const currentTile = worldState.getModifiedTile(gridX, gridY) || world.getTileAt(gridX, gridY);
     const isSafeZone = ['GRAMA', 'GRAMA_SAFE', 'BROTO', 'MUDA', 'FLOR', 'FLOR_COOLDOWN', 'COLMEIA'].includes(currentTile);
 
-    // Dano e Cura
     if (!isSafeZone) {
         damageFrameCounter++;
         if (damageFrameCounter >= DAMAGE_RATE) {
@@ -359,7 +354,14 @@ function update() {
             localPlayer.hp -= DAMAGE_AMOUNT;
             updateUI();
             if (localPlayer.hp <= 0) {
+                // --- LÓGICA DE RESPAWN ATUALIZADA ---
                 localPlayer.respawn();
+                // Se tiver uma base definida, volta para lá. Se não, vai pro 0,0
+                if (localPlayer.homeBase) {
+                    localPlayer.pos.x = localPlayer.homeBase.x;
+                    localPlayer.pos.y = localPlayer.homeBase.y;
+                }
+                
                 updateUI();
                 net.sendPayload({ type: 'MOVE', id: localPlayer.id, nick: localPlayer.nickname, x: localPlayer.pos.x, y: localPlayer.pos.y, dir: localPlayer.currentDir });
             }
@@ -376,7 +378,6 @@ function update() {
         }
     }
 
-    // Coleta
     if (currentTile === 'FLOR' && localPlayer.pollen < localPlayer.maxPollen) {
         collectionFrameCounter++;
         if (collectionFrameCounter >= COLLECTION_RATE) {
@@ -387,20 +388,15 @@ function update() {
         }
     } else { collectionFrameCounter = 0; }
 
-    // Plantio (Cura Manual)
     if (currentTile === 'TERRA_QUEIMADA' && localPlayer.pollen > 0 && isMoving) {
         cureFrameCounter++;
         if (cureFrameCounter >= CURE_ATTEMPT_RATE) {
             cureFrameCounter = 0; localPlayer.pollen--; 
             
             if (Math.random() < PLANT_SPAWN_CHANCE) {
-                // SUCESSO NO PLANTIO!
-                changeTile(gridX, gridY, 'GRAMA', localPlayer.id); // Registra dono
-                
+                changeTile(gridX, gridY, 'GRAMA', localPlayer.id);
                 localPlayer.tilesCured++; 
                 gainXp(XP_PER_CURE);
-                
-                // GATILHO DE SAVE ROBUSTO: Plantou flor? Salva!
                 saveProgress();
             }
             updateUI();
@@ -428,33 +424,16 @@ function gainXp(amount) {
         localPlayer.maxXp = Math.floor(localPlayer.maxXp * 1.5); 
         localPlayer.maxPollen += 10; 
         localPlayer.hp = localPlayer.maxHp; 
-        
         chat.addMessage('SYSTEM', null, `Você alcançou o Nível ${localPlayer.level}!`);
     }
 
-    // GATILHO DE SAVE ROBUSTO: Subiu de nível? Salva!
-    if (localPlayer.level > oldLevel) {
-        saveProgress();
-    }
-
+    if (localPlayer.level > oldLevel) saveProgress();
     updateUI();
 }
 
-/**
- * Altera um tile e propaga pela rede.
- * @param {number} x 
- * @param {number} y 
- * @param {string} newType 
- * @param {string|null} ownerId - ID do jogador dono da planta (opcional)
- */
 function changeTile(x, y, newType, ownerId = null) {
     if(worldState.setTile(x, y, newType)) {
-        // Se for grama, adiciona planta com dono
-        if (net.isHost && newType === 'GRAMA') {
-            worldState.addGrowingPlant(x, y, ownerId);
-        }
-        
-        // Envia para a rede com ownerId
+        if (net.isHost && newType === 'GRAMA') worldState.addGrowingPlant(x, y, ownerId);
         net.sendPayload({ type: 'TILE_CHANGE', x, y, tileType: newType, ownerId: ownerId });
     }
 }
@@ -507,6 +486,12 @@ function updateUI() {
     const polPct = Math.max(0, (localPlayer.pollen / localPlayer.maxPollen) * 100);
     document.getElementById('bar-pollen-fill').style.width = `${polPct}%`;
     document.getElementById('bar-pollen-text').innerText = `${localPlayer.pollen}/${localPlayer.maxPollen}`;
+
+    // --- ATUALIZAÇÃO DO HUD DE COORDENADAS ---
+    const cx = Math.round(localPlayer.pos.x);
+    const cy = Math.round(localPlayer.pos.y);
+    const coordEl = document.getElementById('coords-display');
+    if(coordEl) coordEl.innerText = `X: ${cx} | Y: ${cy}`;
 }
 
 function updateRanking() {
