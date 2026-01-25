@@ -35,7 +35,6 @@ const MAX_ZOOM = 1.5;
 
 const PLANT_SPAWN_CHANCE = 0.20; 
 const CURE_ATTEMPT_RATE = 60;    
-const FLOWER_COOLDOWN_TIME = 10000;
 const COLLECTION_RATE = 5; 
 
 // --- BALANCEAMENTO ---
@@ -154,7 +153,7 @@ window.addEventListener('wheel', (e) => {
 const zoomSlider = document.getElementById('zoom-slider');
 if(zoomSlider) { zoomSlider.addEventListener('input', (e) => { zoomLevel = parseFloat(e.target.value); }); }
 
-// --- CHAT SEND (ATUALIZADO PARA ABAS) ---
+// --- CHAT SEND (INTEGRADO COM ABAS) ---
 window.addEventListener('chatSend', e => {
     const data = e.detail; 
     if (!localPlayer) return;
@@ -201,7 +200,9 @@ window.addEventListener('peerDisconnected', e => {
 window.addEventListener('netData', e => {
     const d = e.detail;
 
-    if (d.type === 'WHISPER') chat.addMessage('WHISPER', d.fromNick, d.text);
+    if (d.type === 'WHISPER') {
+        chat.addMessage('WHISPER', d.fromNick, d.text);
+    }
 
     if (d.type === 'PARTY_INVITE') {
         pendingInviteFrom = d.fromId;
@@ -347,19 +348,19 @@ function loop() { update(); draw(); requestAnimationFrame(loop); }
 function update() {
     if(!localPlayer) return;
 
-    const currentGridX = Math.round(localPlayer.pos.x);
-    const currentGridY = Math.round(localPlayer.pos.y);
-    if (currentGridX !== lastGridX || currentGridY !== lastGridY) {
-        lastGridX = currentGridX; lastGridY = currentGridY;
-        const coordEl = document.getElementById('hud-coords');
-        if(coordEl) coordEl.innerText = `${currentGridX}, ${currentGridY}`;
+    const gx = Math.round(localPlayer.pos.x);
+    const gy = Math.round(localPlayer.pos.y);
+    if (gx !== lastGridX || gy !== lastGridY) {
+        lastGridX = gx; lastGridY = gy;
+        const el = document.getElementById('hud-coords');
+        if(el) el.innerText = `${gx}, ${gy}`;
     }
 
     const m = input.getMovement();
     localPlayer.update(m);
-    const isMoving = m.x !== 0 || m.y !== 0;
+    const moving = m.x !== 0 || m.y !== 0;
 
-    if(isMoving || Math.random() < 0.05) { 
+    if(moving || Math.random() < 0.05) { 
         localPlayer.pos.x += m.x * localPlayer.speed;
         localPlayer.pos.y += m.y * localPlayer.speed;
         net.sendPayload({ 
@@ -369,13 +370,13 @@ function update() {
         });
     }
 
-    if (localPlayer.pollen > 0 && isMoving) spawnPollenParticle();
+    if (localPlayer.pollen > 0 && moving) spawnPollenParticle();
     updateParticles();
 
-    const tile = worldState.getModifiedTile(currentGridX, currentGridY) || world.getTileAt(currentGridX, currentGridY);
-    const isSafeZone = ['GRAMA', 'GRAMA_SAFE', 'BROTO', 'MUDA', 'FLOR', 'FLOR_COOLDOWN', 'COLMEIA'].includes(tile);
+    const tile = worldState.getModifiedTile(gx, gy) || world.getTileAt(gx, gy);
+    const safe = ['GRAMA', 'GRAMA_SAFE', 'BROTO', 'MUDA', 'FLOR', 'FLOR_COOLDOWN', 'COLMEIA'].includes(tile);
 
-    if (!isSafeZone) {
+    if (!safe) {
         if (++damageFrameCounter >= DAMAGE_RATE) {
             damageFrameCounter = 0; localPlayer.hp -= DAMAGE_AMOUNT; updateUI();
             if (localPlayer.hp <= 0) {
@@ -392,13 +393,13 @@ function update() {
 
     if (tile === 'FLOR' && localPlayer.pollen < localPlayer.maxPollen && ++collectionFrameCounter >= COLLECTION_RATE) {
         localPlayer.pollen++; collectionFrameCounter = 0; gainXp(XP_PER_POLLEN);
-        if (localPlayer.pollen >= localPlayer.maxPollen) changeTile(currentGridX, currentGridY, 'FLOR_COOLDOWN', localPlayer.id);
+        if (localPlayer.pollen >= localPlayer.maxPollen) changeTile(gx, gy, 'FLOR_COOLDOWN', localPlayer.id);
     }
 
-    if (tile === 'TERRA_QUEIMADA' && localPlayer.pollen > 0 && isMoving && ++cureFrameCounter >= CURE_ATTEMPT_RATE) {
+    if (tile === 'TERRA_QUEIMADA' && localPlayer.pollen > 0 && moving && ++cureFrameCounter >= CURE_ATTEMPT_RATE) {
         cureFrameCounter = 0; localPlayer.pollen--; 
         if (Math.random() < PLANT_SPAWN_CHANCE) {
-            changeTile(currentGridX, currentGridY, 'GRAMA', localPlayer.id);
+            changeTile(gx, gy, 'GRAMA', localPlayer.id);
             localPlayer.tilesCured++; gainXp(XP_PER_CURE); saveProgress();
         }
         updateUI();
@@ -412,7 +413,7 @@ function update() {
 }
 
 function gainXp(amount) {
-    const oldLevel = localPlayer.level;
+    const old = localPlayer.level;
     localPlayer.xp += amount;
     if (localPlayer.xp >= localPlayer.maxXp) {
         localPlayer.xp -= localPlayer.maxXp; localPlayer.level++;
@@ -420,7 +421,7 @@ function gainXp(amount) {
         localPlayer.maxPollen += 10; localPlayer.hp = localPlayer.maxHp; 
         chat.addMessage('SYSTEM', null, `Você alcançou o Nível ${localPlayer.level}!`);
     }
-    if (localPlayer.level > oldLevel) saveProgress();
+    if (localPlayer.level > old) saveProgress();
     updateUI();
 }
 
@@ -431,14 +432,12 @@ function changeTile(x, y, newType, ownerId = null) {
     }
 }
 
-// --- VISUAL E UTILITÁRIOS ---
-
 function spawnPollenParticle() {
     pollenParticles.push({ wx: localPlayer.pos.x + (Math.random()*0.4-0.2), wy: localPlayer.pos.y + (Math.random()*0.4-0.2), size: Math.random()*3+2, speedY: Math.random()*0.02+0.01, life: 1.0 });
 }
 
-function spawnSmokeParticle(tileX, tileY) {
-    smokeParticles.push({ wx: tileX + Math.random(), wy: tileY + Math.random(), size: Math.random()*5+2, speedY: -(Math.random()*0.03+0.01), life: Math.random()*0.6+0.4, decay: 0.006, grayVal: Math.floor(Math.random()*60) });
+function spawnSmokeParticle(tx, ty) {
+    smokeParticles.push({ wx: tx + Math.random(), wy: ty + Math.random(), size: Math.random()*5+2, speedY: -(Math.random()*0.03+0.01), life: Math.random()*0.6+0.4, decay: 0.006, grayVal: Math.floor(Math.random()*60) });
 }
 
 function updateParticles() {
@@ -458,13 +457,9 @@ function updateUI() {
 }
 
 function updateRanking() {
-    const listEl = document.getElementById('ranking-list');
-    if (!listEl || listEl.style.display === 'none') return;
-    const allPlayers = [localPlayer, ...Object.values(remotePlayers)];
-    allPlayers.sort((a, b) => (b.tilesCured || 0) - (a.tilesCured || 0));
-    listEl.innerHTML = allPlayers.slice(0, 5).map((p, index) => `
-        <div class="rank-item"><span>${index + 1}. ${p.nickname}</span><span class="rank-val">${p.tilesCured || 0}</span></div>
-    `).join('');
+    const list = document.getElementById('ranking-list'); if (!list || list.style.display === 'none') return;
+    const all = [localPlayer, ...Object.values(remotePlayers)].sort((a,b) => (b.tilesCured||0)-(a.tilesCured||0));
+    list.innerHTML = all.slice(0, 5).map((p, i) => `<div class="rank-item"><span>${i+1}. ${p.nickname}</span><span class="rank-val">${p.tilesCured||0}</span></div>`).join('');
 }
 
 function draw() {
@@ -477,42 +472,36 @@ function draw() {
         world.getChunk(cX+x, cY+y).forEach(t => {
             const sX = (t.x - camera.x)*rTileSize + canvas.width/2, sY = (t.y - camera.y)*rTileSize + canvas.height/2;
             if(sX > -rTileSize && sX < canvas.width+rTileSize && sY > -rTileSize && sY < canvas.height+rTileSize) {
-                const finalType = worldState.getModifiedTile(t.x, t.y) || t.type;
-                if (finalType === 'TERRA_QUEIMADA' && Math.random() < 0.01) spawnSmokeParticle(t.x, t.y);
-                
-                let color = '#34495e';
-                if(['GRAMA', 'GRAMA_SAFE', 'BROTO', 'MUDA', 'FLOR'].includes(finalType)) color = '#2ecc71';
-                else if(finalType === 'COLMEIA') color = '#f1c40f';
-                
-                ctx.fillStyle = color; ctx.fillRect(sX, sY, rTileSize, rTileSize);
-                
-                if (['FLOR','FLOR_COOLDOWN'].includes(finalType) && assets.flower.complete) {
-                    ctx.drawImage(assets.flower, sX, sY, rTileSize, rTileSize);
-                }
+                const type = worldState.getModifiedTile(t.x, t.y) || t.type;
+                if (type === 'TERRA_QUEIMADA' && Math.random() < 0.01) spawnSmokeParticle(t.x, t.y);
+                ctx.fillStyle = (type === 'COLMEIA') ? '#f1c40f' : (['GRAMA','GRAMA_SAFE','BROTO','MUDA','FLOR'].includes(type) ? '#2ecc71' : '#34495e');
+                ctx.fillRect(sX, sY, rTileSize, rTileSize);
+                if (['FLOR','FLOR_COOLDOWN'].includes(type) && assets.flower.complete) ctx.drawImage(assets.flower, sX, sY, rTileSize, rTileSize);
             }
         });
     }
-    
+
     smokeParticles.forEach(p => { 
-        const psX = (p.wx - camera.x)*rTileSize + canvas.width/2, psY = (p.wy - camera.y)*rSize + canvas.height/2; 
-        ctx.fillStyle = `rgba(${p.grayVal},${p.grayVal},${p.grayVal},${p.life})`; ctx.fillRect(psX, psY, p.size*zoomLevel, p.size*zoomLevel); 
+        const psX = (p.wx - camera.x) * rTileSize + canvas.width / 2;
+        const psY = (p.wy - camera.y) * rTileSize + canvas.height / 2; 
+        ctx.fillStyle = `rgba(${p.grayVal},${p.grayVal},${p.grayVal},${p.life})`; 
+        ctx.fillRect(psX, psY, p.size * zoomLevel, p.size * zoomLevel); 
     });
     
     pollenParticles.forEach(p => { 
-        const psX = (p.wx - camera.x)*rTileSize + canvas.width/2, psY = (p.wy - camera.y)*rSize + canvas.height/2; 
-        ctx.fillStyle = `rgba(241,196,15,${p.life})`; ctx.fillRect(psX, psY, 2*zoomLevel, 2*zoomLevel); 
+        const psX = (p.wx - camera.x) * rTileSize + canvas.width / 2;
+        const psY = (p.wy - camera.y) * rTileSize + canvas.height / 2; 
+        ctx.fillStyle = `rgba(241,196,15,${p.life})`; 
+        ctx.fillRect(psX, psY, 2 * zoomLevel, 2 * zoomLevel); 
     });
     
     Object.values(remotePlayers).forEach(p => p.draw(ctx, camera, canvas, rTileSize, currentPartyPartner));
     localPlayer.draw(ctx, camera, canvas, rTileSize, currentPartyPartner);
 
-    if (localPlayer.homeBase) {
-        const dx = localPlayer.homeBase.x - localPlayer.pos.x, dy = localPlayer.homeBase.y - localPlayer.pos.y;
-        if (Math.sqrt(dx*dx + dy*dy) > 30) {
-            const angle = Math.atan2(dy, dx), orbit = 60*zoomLevel;
-            ctx.save(); ctx.translate(canvas.width/2+Math.cos(angle)*orbit, canvas.height/2+Math.sin(angle)*orbit); ctx.rotate(angle);
-            ctx.fillStyle = "#f1c40f"; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-10*zoomLevel, -5*zoomLevel); ctx.lineTo(-10*zoomLevel, 5*zoomLevel); ctx.fill(); ctx.restore();
-        }
+    if (localPlayer.homeBase && Math.sqrt(Math.pow(localPlayer.homeBase.x-localPlayer.pos.x,2)+Math.pow(localPlayer.homeBase.y-localPlayer.pos.y,2)) > 30) {
+        const angle = Math.atan2(localPlayer.homeBase.y-localPlayer.pos.y, localPlayer.homeBase.x-localPlayer.pos.x), orbit = 60*zoomLevel;
+        ctx.save(); ctx.translate(canvas.width/2+Math.cos(angle)*orbit, canvas.height/2+Math.sin(angle)*orbit); ctx.rotate(angle);
+        ctx.fillStyle = "#f1c40f"; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-10*zoomLevel, -5*zoomLevel); ctx.lineTo(-10*zoomLevel, 5*zoomLevel); ctx.fill(); ctx.restore();
     }
 }
 
