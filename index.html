@@ -56,7 +56,7 @@
 
         .hud-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px solid #333; padding-bottom: 4px; }
         .player-name { color: #f1c40f; font-weight: bold; font-size: 13px; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70px; }
-        .player-coords { color: #aaa; font-size: 10px; font-weight: normal; margin: 0 5px; } 
+        .player-coords { color: #aaa; font-size: 10px; font-weight: normal; margin: 0 5px; }
         .player-lvl { color: #fff; font-weight: bold; font-size: 12px; }
         .lvl-number { color: #3498db; }
         
@@ -91,8 +91,8 @@
         .msg-global { margin-bottom: 4px; line-height: 1.3; }
         .msg-system { color: #f39c12; font-style: italic; margin-bottom: 4px; }
         .msg-time { color: #555; font-size: 9px; margin-right: 4px; }
-        .name-self { color: #3498db; font-weight: bold; cursor: pointer; } /* Cursor pointer para indicar clique */
-        .name-other { color: #2ecc71; font-weight: bold; cursor: pointer; } /* Cursor pointer para indicar clique */
+        .name-self { color: #3498db; font-weight: bold; cursor: pointer; }
+        .name-other { color: #2ecc71; font-weight: bold; cursor: pointer; }
         .msg-text { color: #fff; }
         .chat-input-area { display: flex; padding: 5px; border-top: 1px solid #333; }
         #chat-input { padding: 6px; font-size: 11px; border: 1px solid #444; background: #111; color: white; flex: 1; border-radius: 4px; outline: none; }
@@ -101,33 +101,35 @@
         /* --- MODAL DE INTERAÇÃO (NOVO) --- */
         #player-modal {
             display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 280px; background: rgba(20, 20, 20, 0.95); border: 1px solid #f1c40f;
-            border-radius: 12px; padding: 20px; text-align: center; z-index: 300;
-            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            width: 260px; background: rgba(20, 20, 20, 0.95); border: 1px solid #f1c40f;
+            border-radius: 12px; padding: 20px; z-index: 300; text-align: center;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8); backdrop-filter: blur(5px);
         }
-        #modal-player-name { font-size: 18px; font-weight: bold; color: #f1c40f; margin-bottom: 5px; }
-        #modal-player-info { font-size: 12px; color: #aaa; margin-bottom: 15px; }
+        #modal-player-name { color: #f1c40f; font-size: 20px; font-weight: 800; margin-bottom: 5px; }
+        #modal-player-info { color: #aaa; font-size: 12px; margin-bottom: 20px; }
         .modal-btn { 
-            display: block; width: 100%; padding: 10px; margin-bottom: 8px; border-radius: 6px;
-            border: none; cursor: pointer; font-weight: bold; font-size: 13px;
+            display: block; width: 100%; padding: 12px; margin-bottom: 10px; 
+            border: none; border-radius: 6px; font-weight: bold; cursor: pointer;
+            transition: 0.2s;
         }
         #btn-party-action { background: #3498db; color: white; }
         #btn-whisper-action { background: #9b59b6; color: white; }
-        #btn-modal-close { background: #333; color: #ccc; margin-top: 10px; }
+        #btn-modal-close { background: #444; color: #ccc; margin-top: 10px; }
+        .modal-btn:active { transform: scale(0.95); }
 
         /* --- NOTIFICAÇÃO DE CONVITE (NOVO) --- */
-        #party-invite {
-            display: none; position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
-            width: 300px; background: rgba(30, 30, 30, 0.95); border: 1px solid #2ecc71;
-            border-radius: 8px; padding: 10px; z-index: 350; text-align: center;
-            animation: slideDown 0.3s;
+        #party-invite-popup {
+            display: none; position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            width: 280px; background: rgba(30, 30, 30, 0.98); border: 2px solid #2ecc71;
+            border-radius: 10px; padding: 15px; z-index: 400; text-align: center;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.5); animation: slideDown 0.4s ease-out;
         }
-        @keyframes slideDown { from { top: 0; opacity: 0; } to { top: 60px; opacity: 1; } }
-        #invite-text { color: white; font-size: 13px; margin-bottom: 8px; }
-        .invite-actions { display: flex; gap: 10px; }
-        .invite-btn { flex: 1; padding: 8px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        @keyframes slideDown { from { top: -100px; } to { top: 20px; } }
+        #invite-msg { color: white; font-size: 14px; margin-bottom: 15px; }
+        .invite-btns { display: flex; gap: 10px; }
+        .invite-btn { flex: 1; padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
         .btn-accept { background: #2ecc71; color: #000; }
-        .btn-decline { background: #e74c3c; color: white; }
+        .btn-decline { background: #e74c3c; color: #fff; }
 
         /* CONTROLES */
         #zoom-controls { display: none; position: absolute; top: 50%; right: 5px; transform: translateY(-50%); height: 180px; width: 40px; z-index: 101; pointer-events: auto; justify-content: center; }
@@ -174,9 +176,18 @@
             <span class="player-coords" id="hud-coords">0, 0</span> <span class="player-lvl">LV <span class="lvl-number" id="hud-lvl">1</span></span>
         </div>
 
-        <div class="hud-row"><div class="hud-icon">❤️</div><div class="bar-container"><div id="bar-hp-fill" class="bar-fill fill-hp" style="width: 100%;"></div><span id="bar-hp-text" class="bar-text">100/100</span></div></div>
-        <div class="hud-row"><div class="hud-icon">💠</div><div class="bar-container"><div id="bar-xp-fill" class="bar-fill fill-xp" style="width: 0%;"></div><span id="bar-xp-text" class="bar-text">0/100</span></div></div>
-        <div class="hud-row"><div class="hud-icon">🌻</div><div class="bar-container"><div id="bar-pollen-fill" class="bar-fill fill-pollen" style="width: 0%;"></div><span id="bar-pollen-text" class="bar-text">0/100</span></div></div>
+        <div class="hud-row">
+            <div class="hud-icon">❤️</div>
+            <div class="bar-container"><div id="bar-hp-fill" class="bar-fill fill-hp" style="width: 100%;"></div><span id="bar-hp-text" class="bar-text">100/100</span></div>
+        </div>
+        <div class="hud-row">
+            <div class="hud-icon">💠</div>
+            <div class="bar-container"><div id="bar-xp-fill" class="bar-fill fill-xp" style="width: 0%;"></div><span id="bar-xp-text" class="bar-text">0/100</span></div>
+        </div>
+        <div class="hud-row">
+            <div class="hud-icon">🌻</div>
+            <div class="bar-container"><div id="bar-pollen-fill" class="bar-fill fill-pollen" style="width: 0%;"></div><span id="bar-pollen-text" class="bar-text">0/100</span></div>
+        </div>
 
         <div id="ranking-container">
             <button id="btn-ranking" onclick="toggleRanking()"><span>🏆 Top Curadores</span><span style="font-size:9px">▼</span></button>
@@ -192,18 +203,18 @@
     </div>
 
     <div id="player-modal">
-        <div id="modal-player-name">Player Name</div>
+        <div id="modal-player-name">---</div>
         <div id="modal-player-info">Nível: 1</div>
         <button id="btn-party-action" class="modal-btn">Convidar para Party</button>
-        <button id="btn-whisper-action" class="modal-btn">Cochichar (Whisper)</button>
-        <button id="btn-modal-close" class="modal-btn" onclick="closeModal()">Fechar</button>
+        <button id="btn-whisper-action" class="modal-btn">Cochichar</button>
+        <button id="btn-modal-close" class="modal-btn" onclick="closePlayerModal()">Fechar</button>
     </div>
 
-    <div id="party-invite">
-        <div id="invite-text">Jogador X convidou você para uma party.</div>
-        <div class="invite-actions">
+    <div id="party-invite-popup">
+        <div id="invite-msg">Jogador convidou você!</div>
+        <div class="invite-btns">
             <button id="btn-accept-invite" class="invite-btn btn-accept">Aceitar</button>
-            <button id="btn-decline-invite" class="invite-btn btn-decline">Recusar</button>
+            <button id="btn-decline-invite" class="invite-btn btn-decline" onclick="closeInvitePopup()">Recusar</button>
         </div>
     </div>
 
@@ -225,11 +236,13 @@
         }
         function toggleRanking() {
             const list = document.getElementById('ranking-list');
-            if(list.style.display === 'block') list.style.display = 'none';
-            else list.style.display = 'block';
+            list.style.display = (list.style.display === 'block') ? 'none' : 'block';
         }
-        function closeModal() {
+        function closePlayerModal() {
             document.getElementById('player-modal').style.display = 'none';
+        }
+        function closeInvitePopup() {
+            document.getElementById('party-invite-popup').style.display = 'none';
         }
     </script>
     <script type="module" src="src/main.js"></script>
