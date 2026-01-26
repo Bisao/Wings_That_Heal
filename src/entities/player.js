@@ -151,6 +151,22 @@ export class Player {
         ctx.strokeText(nameText, sX, nickY); 
         ctx.fillText(nameText, sX, nickY);
 
+        // --- MECÂNICA DE RESGATE ATIVO (VISUAL) ---
+        // Se for um parceiro de party e estiver desmaiado, mostra o aviso de ajuda
+        if (isPartner && isDead) {
+            const pulse = Math.abs(Math.sin(Date.now() / 300));
+            ctx.font = `bold ${14 * zoomScale}px sans-serif`;
+            ctx.fillStyle = `rgba(46, 204, 113, ${0.5 + pulse * 0.5})`; // Verde pulsante
+            
+            const helpY = nickY - (25 * zoomScale);
+            ctx.strokeText("🆘 PRECISA DE RESGATE!", sX, helpY);
+            ctx.fillText("🆘 PRECISA DE RESGATE!", sX, helpY);
+            
+            ctx.font = `bold ${10 * zoomScale}px sans-serif`;
+            ctx.strokeText("(Aproxime-se com 20 pólen)", sX, helpY + (12 * zoomScale));
+            ctx.fillText("(Aproxime-se com 20 pólen)", sX, helpY + (12 * zoomScale));
+        }
+
         // Barra de HP sobre a cabeça (Apenas para outros players)
         if (!this.isLocal) {
             const barW = 30 * zoomScale;
@@ -160,6 +176,7 @@ export class Player {
             ctx.fillStyle = "black";
             ctx.fillRect(sX - barW/2, barY, barW, barH);
             
+            // Vida fica verde para parceiros ou vermelho para outros
             ctx.fillStyle = isPartner ? "#2ecc71" : "#e74c3c";
             const hpWidth = Math.max(0, barW * (this.hp / this.maxHp));
             ctx.fillRect(sX - barW/2, barY, hpWidth, barH);
