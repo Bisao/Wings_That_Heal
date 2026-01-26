@@ -76,7 +76,7 @@ document.getElementById('btn-create').onclick = () => {
             net.hostRoom(id, pass, seed, 
                 () => worldState.getFullState(), 
                 (guestNick) => guestDataDB[guestNick],
-                () => guestDataDB // Sexta callback para o ranking global
+                () => guestDataDB 
             );
             startGame(seed, id, nick);
             if(net.isHost) startHostSimulation();
@@ -157,15 +157,9 @@ window.addEventListener('chatSend', e => {
         net.sendPayload({ type: 'CHAT_MSG', id: localPlayer.id, nick: localPlayer.nickname, text: data.text });
     } else if (data.type === 'WHISPER') {
         const targetId = Object.keys(remotePlayers).find(id => remotePlayers[id].nickname === data.target);
-        
-        // Se o alvo for o Host e nós somos Guest, ou se o alvo for outro Guest
         if (targetId) {
             net.sendPayload({ type: 'WHISPER', fromNick: localPlayer.nickname, text: data.text }, targetId);
-        } else if (net.isHost && data.target === localPlayer.nickname) {
-             // Caso redundante: enviando para si mesmo
         } else {
-            // Se não achou o ID, pode ser que o alvo seja o Host (se somos Guest)
-            // O NetworkManager cuida de enviar ao Host se targetId for null ou específico
             net.sendPayload({ type: 'WHISPER', fromNick: localPlayer.nickname, text: data.text, targetNick: data.target });
         }
     }
@@ -194,9 +188,7 @@ window.addEventListener('peerDisconnected', e => {
 window.addEventListener('netData', e => {
     const d = e.detail;
     
-    // Tratamento Profissional de Chat
     if (d.type === 'WHISPER') {
-        // Se a mensagem é para mim (ou se o Host recebeu um whisper endereçado a ele)
         chat.addMessage('WHISPER', d.fromNick, d.text);
     }
     if (d.type === 'CHAT_MSG') {
@@ -223,18 +215,27 @@ window.addEventListener('netData', e => {
     }
 
     if (d.type === 'SPAWN_INFO') {
-        if (remotePlayers[d.id]) {
-            remotePlayers[d.id].pos = { x: d.x, y: d.y };
-            remotePlayers[d.id].targetPos = { x: d.x, y: d.y };
+        if (!remotePlayers[d.id]) {
+            remotePlayers[d.id] = new Player(d.id, d.nick || "Guest");
         }
+        remotePlayers[d.id].pos = { x: d.x, y: d.y };
+        remotePlayers[d.id].targetPos = { x: d.x, y: d.y };
     }
 
     if (d.type === 'FLOWER_CURE') {
         if (localPlayer && d.ownerId === localPlayer.id) { localPlayer.tilesCured++; gainXp(XP_PASSIVE_CURE); }
         if (remotePlayers[d.ownerId]) remotePlayers[d.ownerId].tilesCured++;
     }
+
     if(d.type === 'MOVE') {
-        if(!remotePlayers[d.id]) { remotePlayers[d.id] = new Player(d.id, d.nick); chat.addMessage('SYSTEM', null, `${d.nick} entrou no mundo.`); }
+        // Trava de Autenticação: Só cria ou move se o Peer estiver na lista de conexões seguras do Host
+        // Ou se somos Guest recebendo dados do Host
+        if (net.isHost && !net.authenticatedPeers.has(d.id)) return;
+
+        if(!remotePlayers[d.id]) { 
+            remotePlayers[d.id] = new Player(d.id, d.nick || "Guest"); 
+            chat.addMessage('SYSTEM', null, `${d.nick || 'Alguém'} entrou no mundo.`); 
+        }
         remotePlayers[d.id].targetPos = { x: d.x, y: d.y };
         remotePlayers[d.id].currentDir = d.dir;
         if (d.stats) remotePlayers[d.id].deserialize({ stats: d.stats });
@@ -258,7 +259,15 @@ function startGame(seed, id, nick) {
         localPlayer.homeBase = { x: hives[spawnIdx].x, y: hives[spawnIdx].y };
         localPlayer.pos = { ...localPlayer.homeBase };
         localPlayer.targetPos = { ...localPlayer.pos };
-        net.sendPayload({ type: 'SPAWN_INFO', id: localPlayer.id, x: localPlayer.pos.x, y: localPlayer.pos.y });
+        
+        // Envia informação completa de spawn para evitar clones em (0,0)
+        net.sendPayload({ 
+            type: 'SPAWN_INFO', 
+            id: localPlayer.id, 
+            nick: localPlayer.nickname, 
+            x: localPlayer.pos.x, 
+            y: localPlayer.pos.y 
+        });
     }
 
     if (net.isHost) {
@@ -270,7 +279,7 @@ function startGame(seed, id, nick) {
         }
     }
     
-    chat.addMessage('SYSTEM', null, `Bem-vindo, ${nick}! Use as abas do chat para cochichar.`);
+    chat.addMessage('SYSTEM', null, `Bem-vindo, ${nick}!`);
     updateUI(); resize(); requestAnimationFrame(loop);
 }
 
@@ -324,7 +333,6 @@ function update() {
     if (localPlayer.pollen > 0 && moving) spawnPollenParticle();
     updateParticles();
 
-    // --- LÓGICA DE RESGATE ATIVO ---
     if (currentPartyPartner && remotePlayers[currentPartyPartner]) {
         const partner = remotePlayers[currentPartyPartner];
         if (partner.hp <= 0 && localPlayer.pollen >= 20) {
