@@ -76,8 +76,18 @@ document.getElementById('btn-create').onclick = () => {
             );
             startGame(seed, id, nick);
             if(net.isHost) startHostSimulation();
-        } else { document.getElementById('status-msg').innerText = "Erro ao criar sala."; }
-    });
+        } else { 
+        // TRATAMENTO DE ERRO DE ID
+        let msg = "Erro ao criar sala.";
+        if (errorType === 'unavailable-id') {
+            msg = "Este ID já está em uso. Escolha outro!";
+        } else if (errorType === 'invalid-id') {
+            msg = "ID inválido. Use apenas letras e números.";
+        }
+        document.getElementById('status-msg').innerText = msg;
+        console.error("PeerJS Erro detalhado:", errorType);
+    }
+});
 };
 
 document.getElementById('btn-join').onclick = () => {
