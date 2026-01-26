@@ -154,12 +154,20 @@ window.addEventListener('chatSend', e => {
     const data = e.detail; 
     if (!localPlayer) return;
     if (data.type === 'GLOBAL') {
-        chat.addMessage('SELF', localPlayer.nickname, data.text);
         net.sendPayload({ type: 'CHAT_MSG', id: localPlayer.id, nick: localPlayer.nickname, text: data.text });
     } else if (data.type === 'WHISPER') {
         const targetId = Object.keys(remotePlayers).find(id => remotePlayers[id].nickname === data.target);
-        if (targetId) net.sendPayload({ type: 'WHISPER', fromNick: localPlayer.nickname, text: data.text }, targetId);
-        else chat.addMessage('SYSTEM', null, `Erro: ${data.target} não encontrado.`);
+        
+        // Se o alvo for o Host e nós somos Guest, ou se o alvo for outro Guest
+        if (targetId) {
+            net.sendPayload({ type: 'WHISPER', fromNick: localPlayer.nickname, text: data.text }, targetId);
+        } else if (net.isHost && data.target === localPlayer.nickname) {
+             // Caso redundante: enviando para si mesmo
+        } else {
+            // Se não achou o ID, pode ser que o alvo seja o Host (se somos Guest)
+            // O NetworkManager cuida de enviar ao Host se targetId for null ou específico
+            net.sendPayload({ type: 'WHISPER', fromNick: localPlayer.nickname, text: data.text, targetNick: data.target });
+        }
     }
 });
 
@@ -167,7 +175,7 @@ window.addEventListener('chatSend', e => {
 window.addEventListener('joined', e => {
     const data = e.detail;
     if (data.worldState) worldState.applyFullState(data.worldState);
-    if (data.guests) guestDataDB = data.guests; // Sincroniza o Ranking ao entrar
+    if (data.guests) guestDataDB = data.guests; 
     startGame(data.seed, net.peer.id, document.getElementById('join-nickname').value || "Guest");
     if (data.playerData) { localPlayer.deserialize(data.playerData); updateUI(); }
 });
@@ -185,7 +193,16 @@ window.addEventListener('peerDisconnected', e => {
 
 window.addEventListener('netData', e => {
     const d = e.detail;
-    if (d.type === 'WHISPER') chat.addMessage('WHISPER', d.fromNick, d.text);
+    
+    // Tratamento Profissional de Chat
+    if (d.type === 'WHISPER') {
+        // Se a mensagem é para mim (ou se o Host recebeu um whisper endereçado a ele)
+        chat.addMessage('WHISPER', d.fromNick, d.text);
+    }
+    if (d.type === 'CHAT_MSG') {
+        chat.addMessage('GLOBAL', d.nick, d.text);
+    }
+
     if (d.type === 'PARTY_INVITE') {
         pendingInviteFrom = d.fromId;
         document.getElementById('invite-msg').innerText = `${d.fromNick} convidou você para uma party!`;
@@ -193,7 +210,6 @@ window.addEventListener('netData', e => {
     }
     if (d.type === 'PARTY_ACCEPT') { currentPartyPartner = d.fromId; chat.addMessage('SYSTEM', null, `${d.fromNick} aceitou seu convite!`); }
     if (d.type === 'PARTY_LEAVE' && currentPartyPartner === d.fromId) { chat.addMessage('SYSTEM', null, `Sua party foi desfeita.`); currentPartyPartner = null; }
-    if (d.type === 'CHAT_MSG') chat.addMessage('GLOBAL', d.nick, d.text);
     
     if (d.type === 'PARTY_RESCUE') {
         if (isFainted) {
@@ -206,7 +222,6 @@ window.addEventListener('netData', e => {
         }
     }
 
-    // Correção de Spawn: Host recebe a posição inicial real do convidado
     if (d.type === 'SPAWN_INFO') {
         if (remotePlayers[d.id]) {
             remotePlayers[d.id].pos = { x: d.x, y: d.y };
@@ -233,10 +248,7 @@ function startGame(seed, id, nick) {
     document.getElementById('rpg-hud').style.display = 'block';
     document.getElementById('chat-toggle-btn').style.display = 'block';
     canvas.style.display = 'block';
-    if (input.isMobile) {
-        document.getElementById('zoom-controls').style.display = 'flex';
-        document.getElementById('mobile-controls').style.display = 'block';
-    }
+    
     world = new WorldGenerator(seed);
     localPlayer = new Player(id, nick, true);
     const hives = world.getHiveLocations();
@@ -246,8 +258,6 @@ function startGame(seed, id, nick) {
         localPlayer.homeBase = { x: hives[spawnIdx].x, y: hives[spawnIdx].y };
         localPlayer.pos = { ...localPlayer.homeBase };
         localPlayer.targetPos = { ...localPlayer.pos };
-        
-        // Sincroniza a posição inicial com todos na rede imediatamente
         net.sendPayload({ type: 'SPAWN_INFO', id: localPlayer.id, x: localPlayer.pos.x, y: localPlayer.pos.y });
     }
 
@@ -259,6 +269,8 @@ function startGame(seed, id, nick) {
             guestDataDB = saved.guests || {};
         }
     }
+    
+    chat.addMessage('SYSTEM', null, `Bem-vindo, ${nick}! Use as abas do chat para cochichar.`);
     updateUI(); resize(); requestAnimationFrame(loop);
 }
 
@@ -312,16 +324,15 @@ function update() {
     if (localPlayer.pollen > 0 && moving) spawnPollenParticle();
     updateParticles();
 
-    // --- LÓGICA DE RESGATE ATIVO COM PRECISÃO DE MUNDO ---
+    // --- LÓGICA DE RESGATE ATIVO ---
     if (currentPartyPartner && remotePlayers[currentPartyPartner]) {
         const partner = remotePlayers[currentPartyPartner];
         if (partner.hp <= 0 && localPlayer.pollen >= 20) {
-            // Calcula a distância real no mundo (não na tela/HUD)
             const d = Math.sqrt(Math.pow(localPlayer.pos.x - partner.pos.x, 2) + Math.pow(localPlayer.pos.y - partner.pos.y, 2));
-            if (d < 1.0) { // Precisa estar realmente em cima do parceiro
+            if (d < 1.0) { 
                 localPlayer.pollen -= 20;
                 net.sendPayload({ type: 'PARTY_RESCUE', fromNick: localPlayer.nickname }, currentPartyPartner);
-                chat.addMessage('SYSTEM', null, `Você resgatou ${partner.nickname} gastando 20 de pólen!`);
+                chat.addMessage('SYSTEM', null, `Você resgatou ${partner.nickname}!`);
                 updateUI();
             }
         }
@@ -375,10 +386,7 @@ function processFaint() {
     isFainted = true;
     const faintScreen = document.getElementById('faint-screen');
     if(faintScreen) faintScreen.style.display = 'flex';
-    
-    if (currentPartyPartner) {
-        net.sendPayload({ type: 'CHAT_MSG', nick: 'SYSTEM', text: `${localPlayer.nickname} desmaiou!` }, currentPartyPartner);
-    }
+    if (currentPartyPartner) net.sendPayload({ type: 'CHAT_MSG', nick: 'SYSTEM', text: `${localPlayer.nickname} desmaiou!` }, currentPartyPartner);
 
     faintTimeout = setTimeout(() => {
         localPlayer.respawn();
