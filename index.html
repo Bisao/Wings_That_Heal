@@ -131,14 +131,14 @@
         /* Notificação na aba específica */
         .chat-tab.tab-notify {
             color: #fff;
-            border-bottom: 2px solid #9b59b6; 
-            background: rgba(155, 89, 182, 0.2);
+            border-bottom: 2px solid #34e7e4; /* Cor de Party/Notificação */
+            background: rgba(52, 231, 228, 0.2);
             animation: tabPulse 1.5s infinite;
         }
         @keyframes tabPulse {
-            0% { background: rgba(155, 89, 182, 0.2); }
-            50% { background: rgba(155, 89, 182, 0.5); }
-            100% { background: rgba(155, 89, 182, 0.2); }
+            0% { background: rgba(52, 231, 228, 0.2); }
+            50% { background: rgba(52, 231, 228, 0.5); }
+            100% { background: rgba(52, 231, 228, 0.2); }
         }
 
         #chat-messages { flex: 1; overflow-y: auto; padding: 8px; font-size: 11px; }
@@ -146,8 +146,10 @@
         .msg-time { color: #555; margin-right: 4px; }
         .msg-system { color: #2ecc71; font-style: italic; }
         .msg-whisper { color: #d484ff; font-style: italic; }
+        .msg-party { color: #34e7e4; }
         .name-self { color: #f1c40f; font-weight: bold; }
         .name-other { color: #3498db; font-weight: bold; cursor: pointer; }
+        .name-party { color: #00d8d6; font-weight: bold; }
         .name-other:hover { text-decoration: underline; }
 
         .chat-input-area { display: flex; padding: 5px; border-top: 1px solid #333; }
