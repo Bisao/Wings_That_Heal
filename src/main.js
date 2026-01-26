@@ -56,8 +56,9 @@ let cureFrameCounter = 0;
 let damageFrameCounter = 0;
 let uiUpdateCounter = 0; 
 
-// Estado de Desmaio
+// Estado de Desmaio local
 let isFainted = false;
+let faintTimeout = null; // Referência para cancelar o resgate das abelhas batedoras
 
 const assets = { flower: new Image() };
 assets.flower.src = 'assets/Flower.png';
@@ -191,6 +192,19 @@ window.addEventListener('netData', e => {
     if (d.type === 'PARTY_ACCEPT') { currentPartyPartner = d.fromId; chat.addMessage('SYSTEM', null, `${d.fromNick} aceitou seu convite!`); }
     if (d.type === 'PARTY_LEAVE' && currentPartyPartner === d.fromId) { chat.addMessage('SYSTEM', null, `Sua party foi desfeita.`); currentPartyPartner = null; }
     if (d.type === 'CHAT_MSG') chat.addMessage('GLOBAL', d.nick, d.text);
+    
+    // Resgate recebido do parceiro
+    if (d.type === 'PARTY_RESCUE') {
+        if (isFainted) {
+            clearTimeout(faintTimeout);
+            isFainted = false;
+            localPlayer.hp = 20; // Reanima com 20 de HP
+            document.getElementById('faint-screen').style.display = 'none';
+            chat.addMessage('SYSTEM', null, `Você foi reanimado por ${d.fromNick}!`);
+            updateUI();
+        }
+    }
+
     if (d.type === 'FLOWER_CURE') {
         if (localPlayer && d.ownerId === localPlayer.id) { localPlayer.tilesCured++; gainXp(XP_PASSIVE_CURE); }
         if (remotePlayers[d.ownerId]) remotePlayers[d.ownerId].tilesCured++;
@@ -284,6 +298,20 @@ function update() {
     if (localPlayer.pollen > 0 && moving) spawnPollenParticle();
     updateParticles();
 
+    // --- LÓGICA DE RESGATE ATIVO ---
+    if (currentPartyPartner && remotePlayers[currentPartyPartner]) {
+        const partner = remotePlayers[currentPartyPartner];
+        if (partner.hp <= 0 && localPlayer.pollen >= 20) {
+            const d = Math.sqrt(Math.pow(localPlayer.pos.x - partner.pos.x, 2) + Math.pow(localPlayer.pos.y - partner.pos.y, 2));
+            if (d < 0.8) { // Colisão de resgate
+                localPlayer.pollen -= 20;
+                net.sendPayload({ type: 'PARTY_RESCUE', fromNick: localPlayer.nickname }, currentPartyPartner);
+                chat.addMessage('SYSTEM', null, `Você usou 20 de pólen para resgatar ${partner.nickname}!`);
+                updateUI();
+            }
+        }
+    }
+
     const tile = worldState.getModifiedTile(gx, gy) || world.getTileAt(gx, gy);
     const isSafe = ['GRAMA', 'GRAMA_SAFE', 'BROTO', 'MUDA', 'FLOR', 'FLOR_COOLDOWN', 'COLMEIA'].includes(tile);
 
@@ -334,8 +362,13 @@ function processFaint() {
     isFainted = true;
     const faintScreen = document.getElementById('faint-screen');
     if(faintScreen) faintScreen.style.display = 'flex';
-    if (currentPartyPartner) net.sendPayload({ type: 'CHAT_MSG', nick: 'SYSTEM', text: `${localPlayer.nickname} desmaiou!` }, currentPartyPartner);
-    setTimeout(() => {
+    
+    if (currentPartyPartner) {
+        net.sendPayload({ type: 'CHAT_MSG', nick: 'SYSTEM', text: `${localPlayer.nickname} desmaiou!` }, currentPartyPartner);
+    }
+
+    // Armazena o timeout para poder cancelar se houver resgate
+    faintTimeout = setTimeout(() => {
         localPlayer.respawn();
         if (localPlayer.homeBase) { localPlayer.pos = {...localPlayer.homeBase}; localPlayer.targetPos = {...localPlayer.pos}; }
         if(faintScreen) faintScreen.style.display = 'none';
@@ -390,7 +423,6 @@ function updateRanking() {
     const listEl = document.getElementById('ranking-list');
     if (!listEl) return;
 
-    // Ranking Global: Une dados salvos com o player local
     let allPlayersData = Object.keys(guestDataDB).map(nick => ({
         nickname: nick,
         tilesCured: guestDataDB[nick].tilesCured || 0
