@@ -1,499 +1,266 @@
-import { NetworkManager } from './core/network.js';
-import { WorldGenerator } from './world/worldGen.js';
-import { WorldState } from './world/worldState.js';
-import { Player } from './entities/player.js';
-import { InputHandler } from './core/input.js';
-import { SaveSystem } from './core/saveSystem.js';
-import { ChatSystem } from './core/chatSystem.js';
-
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-const net = new NetworkManager();
-const input = new InputHandler(); 
-const worldState = new WorldState();
-const saveSystem = new SaveSystem();
-const chat = new ChatSystem();
-
-let world, localPlayer;
-let remotePlayers = {};
-let pollenParticles = [];
-let smokeParticles = []; 
-let camera = { x: 0, y: 0 };
-
-// --- ESTADO SOCIAL (INTEGRADO) ---
-let currentPartyPartner = null; 
-let selectedPlayerId = null;    
-let pendingInviteFrom = null;   
-
-// Variáveis para otimização da UI de coordenadas
-let lastGridX = -9999;
-let lastGridY = -9999;
-
-// Banco de dados em memória para ranking de offline players
-let guestDataDB = {}; 
-
-let zoomLevel = 1.0; 
-const MIN_ZOOM = 0.5;
-const MAX_ZOOM = 1.5;
-
-// --- DIFICULDADE E BALANCEAMENTO ---
-const PLANT_SPAWN_CHANCE = 0.01; 
-const CURE_ATTEMPT_RATE = 20;    
-const FLOWER_COOLDOWN_TIME = 10000;
-const COLLECTION_RATE = 5; 
-
-// --- BALANCEAMENTO ---
-const DAMAGE_RATE = 2; 
-const DAMAGE_AMOUNT = 0.2; 
-const XP_PER_CURE = 15;    
-const XP_PER_POLLEN = 0.2;
-const XP_PASSIVE_CURE = 5; 
-
-const GROWTH_TIMES = { BROTO: 5000, MUDA: 10000, FLOR: 15000 };
-
-let collectionFrameCounter = 0;
-let cureFrameCounter = 0;
-let damageFrameCounter = 0;
-let uiUpdateCounter = 0; 
-
-// Estado de Desmaio local
-let isFainted = false;
-let faintTimeout = null; // Referência para cancelar o resgate das abelhas batedoras
-
-const assets = { flower: new Image() };
-assets.flower.src = 'assets/Flower.png';
-
-// --- UI HANDLERS ---
-document.getElementById('btn-create').onclick = () => {
-    const nick = document.getElementById('host-nickname').value || "Host";
-    const id = document.getElementById('create-id').value;
-    const pass = document.getElementById('create-pass').value;
-    const seed = document.getElementById('world-seed').value || Date.now().toString();
-    if(!id) return alert("ID obrigatório");
-    
-    net.init(id, (ok, errorType) => {
-        if(ok) {
-            net.hostRoom(id, pass, seed, 
-                () => worldState.getFullState(), 
-                (guestNick) => guestDataDB[guestNick] 
-            );
-            startGame(seed, id, nick);
-            if(net.isHost) startHostSimulation();
-        } else { 
-            let msg = "Erro ao criar sala.";
-            if (errorType === 'unavailable-id') msg = "Este ID já está em uso!";
-            document.getElementById('status-msg').innerText = msg;
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Wings That Heal</title>
+    <style>
+        body { 
+            margin: 0; overflow: hidden; background: #0d0d0d; 
+            font-family: 'Segoe UI', sans-serif; touch-action: none; 
+            user-select: none; -webkit-user-select: none; 
         }
-    });
-};
-
-document.getElementById('btn-join').onclick = () => {
-    const nick = document.getElementById('join-nickname').value || "Guest";
-    const id = document.getElementById('join-id').value;
-    const pass = document.getElementById('join-pass').value;
-    if(!id) return alert("ID obrigatório");
-
-    net.init(null, (ok) => { 
-        if(ok) net.joinRoom(id, pass, nick); 
-        else document.getElementById('status-msg').innerText = "Erro ao conectar.";
-    });
-};
-
-// --- LOGICA DE INTERAÇÃO SOCIAL ---
-window.addEventListener('playerClicked', e => {
-    const targetNick = e.detail;
-    const targetId = Object.keys(remotePlayers).find(id => remotePlayers[id].nickname === targetNick);
-    if (targetId) {
-        selectedPlayerId = targetId;
-        const p = remotePlayers[targetId];
-        document.getElementById('modal-player-name').innerText = p.nickname;
-        document.getElementById('modal-player-info').innerText = `Nível: ${p.level || 1}`;
-        const partyBtn = document.getElementById('btn-party-action');
-        if (currentPartyPartner === targetId) {
-            partyBtn.innerText = "Sair da Party";
-            partyBtn.style.background = "#e74c3c";
-        } else {
-            partyBtn.innerText = "Convidar para Party";
-            partyBtn.style.background = "#3498db";
+        
+        /* --- FILTRO DE SUFOCAMENTO --- */
+        #suffocation-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 40%, black 150%);
+            pointer-events: none; z-index: 100;
+            opacity: 0; transition: opacity 0.5s ease;
         }
-        document.getElementById('player-modal').style.display = 'block';
-    }
-});
 
-document.getElementById('btn-party-action').onclick = () => {
-    if (!selectedPlayerId) return;
-    if (currentPartyPartner === selectedPlayerId) {
-        net.sendPayload({ type: 'PARTY_LEAVE', fromId: localPlayer.id }, selectedPlayerId);
-        chat.addMessage('SYSTEM', null, `Você desfez a party com ${remotePlayers[selectedPlayerId].nickname}.`);
-        currentPartyPartner = null;
-    } else {
-        net.sendPayload({ type: 'PARTY_INVITE', fromId: localPlayer.id, fromNick: localPlayer.nickname }, selectedPlayerId);
-        chat.addMessage('SYSTEM', null, `Convite enviado para ${remotePlayers[selectedPlayerId].nickname}.`);
-    }
-    document.getElementById('player-modal').style.display = 'none';
-};
-
-document.getElementById('btn-whisper-action').onclick = () => {
-    if (!selectedPlayerId) return;
-    chat.openPrivateTab(remotePlayers[selectedPlayerId].nickname);
-    document.getElementById('player-modal').style.display = 'none';
-};
-
-document.getElementById('btn-accept-invite').onclick = () => {
-    if (pendingInviteFrom) {
-        currentPartyPartner = pendingInviteFrom;
-        net.sendPayload({ type: 'PARTY_ACCEPT', fromId: localPlayer.id, fromNick: localPlayer.nickname }, pendingInviteFrom);
-        chat.addMessage('SYSTEM', null, `Você entrou na party.`);
-        document.getElementById('party-invite-popup').style.display = 'none';
-        pendingInviteFrom = null;
-    }
-};
-
-window.addEventListener('chatSend', e => {
-    const data = e.detail; 
-    if (!localPlayer) return;
-    if (data.type === 'GLOBAL') {
-        chat.addMessage('SELF', localPlayer.nickname, data.text);
-        net.sendPayload({ type: 'CHAT_MSG', id: localPlayer.id, nick: localPlayer.nickname, text: data.text });
-    } else if (data.type === 'WHISPER') {
-        const targetId = Object.keys(remotePlayers).find(id => remotePlayers[id].nickname === data.target);
-        if (targetId) net.sendPayload({ type: 'WHISPER', fromNick: localPlayer.nickname, text: data.text }, targetId);
-        else chat.addMessage('SYSTEM', null, `Erro: ${data.target} não encontrado.`);
-    }
-});
-
-// --- EVENTOS DE REDE ---
-window.addEventListener('joined', e => {
-    const data = e.detail;
-    if (data.worldState) worldState.applyFullState(data.worldState);
-    startGame(data.seed, net.peer.id, document.getElementById('join-nickname').value || "Guest");
-    if (data.playerData) { localPlayer.deserialize(data.playerData); updateUI(); }
-});
-
-window.addEventListener('peerDisconnected', e => {
-    const peerId = e.detail.peerId;
-    if (remotePlayers[peerId]) {
-        const p = remotePlayers[peerId];
-        chat.addMessage('SYSTEM', null, `${p.nickname || 'Alguém'} saiu.`);
-        if (currentPartyPartner === peerId) currentPartyPartner = null;
-        guestDataDB[p.nickname] = p.serialize().stats;
-        saveProgress(); delete remotePlayers[peerId]; updateRanking();
-    }
-});
-
-window.addEventListener('netData', e => {
-    const d = e.detail;
-    if (d.type === 'WHISPER') chat.addMessage('WHISPER', d.fromNick, d.text);
-    if (d.type === 'PARTY_INVITE') {
-        pendingInviteFrom = d.fromId;
-        document.getElementById('invite-msg').innerText = `${d.fromNick} convidou você para uma party!`;
-        document.getElementById('party-invite-popup').style.display = 'block';
-    }
-    if (d.type === 'PARTY_ACCEPT') { currentPartyPartner = d.fromId; chat.addMessage('SYSTEM', null, `${d.fromNick} aceitou seu convite!`); }
-    if (d.type === 'PARTY_LEAVE' && currentPartyPartner === d.fromId) { chat.addMessage('SYSTEM', null, `Sua party foi desfeita.`); currentPartyPartner = null; }
-    if (d.type === 'CHAT_MSG') chat.addMessage('GLOBAL', d.nick, d.text);
-    
-    // Resgate recebido do parceiro
-    if (d.type === 'PARTY_RESCUE') {
-        if (isFainted) {
-            clearTimeout(faintTimeout);
-            isFainted = false;
-            localPlayer.hp = 20; // Reanima com 20 de HP (vida crítica, mas funcional)
-            document.getElementById('faint-screen').style.display = 'none';
-            chat.addMessage('SYSTEM', null, `Você foi reanimado por ${d.fromNick}!`);
-            updateUI();
+        /* --- TELA DE DESMAIO --- */
+        #faint-screen {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: black; z-index: 500; flex-direction: column;
+            align-items: center; justify-content: center; text-align: center;
+            color: white; animation: fadeInBlack 1s forwards;
         }
-    }
+        .faint-title { font-size: 32px; color: #f1c40f; margin-bottom: 20px; font-weight: 800; text-transform: uppercase; }
+        .faint-msg { font-size: 18px; max-width: 80%; line-height: 1.6; font-style: italic; color: #ccc; }
+        .faint-hint { margin-top: 25px; color: #2ecc71; font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+        
+        @keyframes fadeInBlack { from { opacity: 0; } to { opacity: 1; } }
 
-    if (d.type === 'FLOWER_CURE') {
-        if (localPlayer && d.ownerId === localPlayer.id) { localPlayer.tilesCured++; gainXp(XP_PASSIVE_CURE); }
-        if (remotePlayers[d.ownerId]) remotePlayers[d.ownerId].tilesCured++;
-    }
-    if(d.type === 'MOVE') {
-        if(!remotePlayers[d.id]) { remotePlayers[d.id] = new Player(d.id, d.nick); chat.addMessage('SYSTEM', null, `${d.nick} entrou no mundo.`); }
-        remotePlayers[d.id].targetPos = { x: d.x, y: d.y };
-        remotePlayers[d.id].currentDir = d.dir;
-        if (d.stats) remotePlayers[d.id].deserialize({ stats: d.stats });
-    }
-    if(d.type === 'TILE_CHANGE') changeTile(d.x, d.y, d.tileType, d.ownerId);
-});
-
-// --- LÓGICA DE JOGO ---
-function startGame(seed, id, nick) {
-    document.getElementById('lobby-overlay').style.display = 'none';
-    document.getElementById('rpg-hud').style.display = 'block';
-    document.getElementById('chat-toggle-btn').style.display = 'block';
-    canvas.style.display = 'block';
-    if (input.isMobile) {
-        document.getElementById('zoom-controls').style.display = 'flex';
-        document.getElementById('mobile-controls').style.display = 'block';
-    }
-    world = new WorldGenerator(seed);
-    localPlayer = new Player(id, nick, true);
-    const hives = world.getHiveLocations();
-    let spawnIdx = net.isHost ? 0 : (Math.abs(id.split('').reduce((a,b)=>a+b.charCodeAt(0),0)) % (hives.length-1))+1;
-    if (hives[spawnIdx]) {
-        localPlayer.homeBase = { x: hives[spawnIdx].x, y: hives[spawnIdx].y };
-        localPlayer.pos = { ...localPlayer.homeBase };
-        localPlayer.targetPos = { ...localPlayer.pos };
-    }
-    if (net.isHost) {
-        const saved = saveSystem.load();
-        if (saved) {
-            worldState.applyFullState(saved.world);
-            if (saved.host) localPlayer.deserialize({ stats: saved.host });
-            guestDataDB = saved.guests || {};
+        /* --- LOBBY --- */
+        #lobby-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at center, #1a1a1a 0%, #000000 100%);
+            display: flex; align-items: center; justify-content: center; z-index: 200;
         }
-    }
-    updateUI(); resize(); requestAnimationFrame(loop);
-}
-
-function startHostSimulation() {
-    setInterval(() => {
-        const now = Date.now();
-        let changed = false;
-        for (const [key, plantData] of Object.entries(worldState.growingPlants)) {
-            const startTime = plantData.time || plantData, ownerId = plantData.owner || null;
-            const [x, y] = key.split(',').map(Number), elapsed = now - startTime, currentType = worldState.getModifiedTile(x, y);
-            if (currentType === 'GRAMA' && elapsed > GROWTH_TIMES.BROTO) changeTile(x, y, 'BROTO', ownerId);
-            else if (currentType === 'BROTO' && elapsed > GROWTH_TIMES.MUDA) changeTile(x, y, 'MUDA', ownerId);
-            else if (currentType === 'MUDA' && elapsed > GROWTH_TIMES.FLOR) changeTile(x, y, 'FLOR', ownerId);
-            if (currentType === 'FLOR' && Math.random() < 0.10) {
-                const dx = Math.floor(Math.random() * 3) - 1, dy = Math.floor(Math.random() * 3) - 1;
-                if (dx === 0 && dy === 0) continue;
-                const tx = x + dx, ty = y + dy, target = worldState.getModifiedTile(tx, ty) || world.getTileAt(tx, ty);
-                if (target === 'TERRA_QUEIMADA') { changeTile(tx, ty, 'GRAMA_SAFE'); if (ownerId) net.sendPayload({ type: 'FLOWER_CURE', ownerId: ownerId, x: tx, y: ty }); changed = true; }
-            }
+        .lobby-card { 
+            background: rgba(25, 25, 25, 0.95); border: 1px solid #f1c40f;
+            box-shadow: 0 0 40px rgba(241, 196, 15, 0.15); 
+            width: 90%; max-width: 380px; border-radius: 16px; overflow: hidden;
         }
-        if (changed) saveProgress();
-    }, 1000);
-}
-
-function saveProgress() {
-    if (!net.isHost || !localPlayer) return;
-    Object.values(remotePlayers).forEach(p => { if (p.nickname) guestDataDB[p.nickname] = p.serialize().stats; });
-    saveSystem.save({ seed: world.seed, world: worldState.getFullState(), host: localPlayer.serialize().stats, guests: guestDataDB });
-}
-
-function loop() { update(); draw(); requestAnimationFrame(loop); }
-
-function update() {
-    if(!localPlayer || isFainted) return; 
-
-    const gx = Math.round(localPlayer.pos.x), gy = Math.round(localPlayer.pos.y);
-    if (gx !== lastGridX || gy !== lastGridY) {
-        lastGridX = gx; lastGridY = gy;
-        const el = document.getElementById('hud-coords'); if(el) el.innerText = `${gx}, ${gy}`;
-    }
-    
-    const m = input.getMovement();
-    localPlayer.update(m);
-    const moving = m.x !== 0 || m.y !== 0;
-
-    if(moving || Math.random() < 0.05) {
-        localPlayer.pos.x += m.x * localPlayer.speed; localPlayer.pos.y += m.y * localPlayer.speed;
-        net.sendPayload({ type: 'MOVE', id: localPlayer.id, nick: localPlayer.nickname, x: localPlayer.pos.x, y: localPlayer.pos.y, dir: localPlayer.currentDir, stats: { level: localPlayer.level, hp: localPlayer.hp, maxHp: localPlayer.maxHp, tilesCured: localPlayer.tilesCured } });
-    }
-
-    if (localPlayer.pollen > 0 && moving) spawnPollenParticle();
-    updateParticles();
-
-    // --- LÓGICA DE RESGATE ATIVO (NOVO) ---
-    if (currentPartyPartner && remotePlayers[currentPartyPartner]) {
-        const partner = remotePlayers[currentPartyPartner];
-        // Se o parceiro está com HP 0 (desmaiado) e o player local tem pólen para gastar
-        if (partner.hp <= 0 && localPlayer.pollen >= 20) {
-            const d = Math.sqrt(Math.pow(localPlayer.pos.x - partner.pos.x, 2) + Math.pow(localPlayer.pos.y - partner.pos.y, 2));
-            if (d < 0.8) { // Distância de toque
-                localPlayer.pollen -= 20;
-                net.sendPayload({ type: 'PARTY_RESCUE', fromNick: localPlayer.nickname }, currentPartyPartner);
-                chat.addMessage('SYSTEM', null, `Você usou 20 de pólen para resgatar ${partner.nickname}!`);
-                updateUI();
-            }
+        .lobby-header {
+            background: #f1c40f; color: #000; padding: 20px;
+            text-align: center; font-weight: 800; font-size: 24px;
+            text-transform: uppercase; letter-spacing: 2px;
         }
-    }
-
-    const tile = worldState.getModifiedTile(gx, gy) || world.getTileAt(gx, gy);
-    const isSafe = ['GRAMA', 'GRAMA_SAFE', 'BROTO', 'MUDA', 'FLOR', 'FLOR_COOLDOWN', 'COLMEIA'].includes(tile);
-
-    // --- LÓGICA DE DANO E VINHETA ---
-    if (!isSafe) {
-        damageFrameCounter++;
-        if (damageFrameCounter >= DAMAGE_RATE) {
-            damageFrameCounter = 0; localPlayer.hp -= DAMAGE_AMOUNT; updateUI();
-            if (localPlayer.hp <= 0) processFaint();
+        .tabs { display: flex; background: #111; border-bottom: 1px solid #333; }
+        .tab-btn {
+            flex: 1; padding: 15px; cursor: pointer;
+            background: transparent; color: #777; border: none;
+            font-weight: bold; transition: 0.2s; border-bottom: 3px solid transparent;
         }
-    } 
+        .tab-btn.active { color: #f1c40f; border-bottom: 3px solid #f1c40f; background: rgba(241, 196, 15, 0.05); }
+        .tab-content { display: none; padding: 25px; animation: fadeIn 0.3s; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .input-group { margin-bottom: 15px; }
+        .input-label { display: block; color: #ccc; font-size: 12px; margin-bottom: 5px; font-weight: bold; }
+        input { padding: 12px; border-radius: 8px; border: 1px solid #444; width: 100%; box-sizing: border-box; background: #222; color: white; }
+        .btn-action { padding: 14px; cursor: pointer; background: #f1c40f; color: #1a1a1a; border: none; font-weight: 800; border-radius: 8px; width: 100%; margin-top: 10px; }
 
-    const hpRatio = localPlayer.hp / localPlayer.maxHp;
-    const overlay = document.getElementById('suffocation-overlay');
-    if (overlay) overlay.style.opacity = hpRatio < 0.7 ? (0.7 - hpRatio) * 1.4 : 0;
-
-    // --- CURA POR PROXIMIDADE ---
-    if (localPlayer.homeBase && localPlayer.hp < localPlayer.maxHp) {
-        const dist = Math.sqrt(Math.pow(localPlayer.pos.x - localPlayer.homeBase.x, 2) + Math.pow(localPlayer.pos.y - localPlayer.homeBase.y, 2));
-        let healTickRate = (dist <= 1.5) ? 60 : (dist <= 2.5 ? 120 : (dist <= 3.5 ? 240 : 0));
-        if (healTickRate > 0 && ++cureFrameCounter >= healTickRate) {
-            cureFrameCounter = 0;
-            localPlayer.hp = Math.min(localPlayer.maxHp, localPlayer.hp + 1);
-            updateUI();
+        /* --- HUD COMPACTO --- */
+        #rpg-hud {
+            display: none; position: absolute; top: 15px; left: 15px;
+            width: 170px; 
+            background: rgba(0, 0, 0, 0.6);
+            padding: 8px; border: 1px solid #444; border-radius: 6px;
+            pointer-events: none; z-index: 10;
+            font-family: 'Consolas', 'Courier New', monospace;
+            backdrop-filter: blur(2px);
         }
-    }
 
-    if (tile === 'FLOR' && localPlayer.pollen < localPlayer.maxPollen && ++collectionFrameCounter >= COLLECTION_RATE) {
-        localPlayer.pollen++; collectionFrameCounter = 0; gainXp(XP_PER_POLLEN);
-        if (localPlayer.pollen >= localPlayer.maxPollen) changeTile(gx, gy, 'FLOR_COOLDOWN', localPlayer.id);
-    }
+        .hud-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px solid #333; padding-bottom: 4px; }
+        .player-name { color: #f1c40f; font-weight: bold; font-size: 13px; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70px; }
+        .player-coords { color: #aaa; font-size: 10px; font-weight: normal; margin: 0 5px; }
+        .player-lvl { color: #fff; font-weight: bold; font-size: 12px; }
+        .lvl-number { color: #3498db; }
+        
+        .hud-row { display: flex; align-items: center; margin-bottom: 4px; height: 16px; }
+        .hud-icon { width: 20px; font-size: 14px; text-align: center; margin-right: 4px; line-height: 16px; }
+        .bar-container { flex: 1; position: relative; height: 100%; background: #111; border: 1px solid #222; border-radius: 2px; overflow: hidden; }
+        .bar-fill { height: 100%; width: 100%; transition: width 0.3s ease; }
+        .bar-text { position: absolute; top: 0; left: 0; width: 100%; height: 100%; text-align: center; line-height: 14px; color: rgba(255,255,255,0.9); font-size: 9px; font-weight: bold; text-shadow: 1px 1px 1px black; z-index: 2; }
+        
+        .fill-hp { background: linear-gradient(90deg, #c0392b, #e74c3c); }
+        .fill-xp { background: linear-gradient(90deg, #2980b9, #3498db); }
+        .fill-pollen { background: linear-gradient(90deg, #d4ac0d, #f1c40f); }
 
-    if (tile === 'TERRA_QUEIMADA' && localPlayer.pollen > 0 && moving && ++uiUpdateCounter >= CURE_ATTEMPT_RATE) {
-        uiUpdateCounter = 0; localPlayer.pollen--; 
-        if (Math.random() < PLANT_SPAWN_CHANCE) { 
-            changeTile(gx, gy, 'GRAMA', localPlayer.id); 
-            localPlayer.tilesCured++; gainXp(XP_PER_CURE); 
-            saveProgress(); 
+        /* Animação de Cura */
+        @keyframes healPulse {
+            0% { box-shadow: 0 0 0px #2ecc71; }
+            50% { box-shadow: 0 0 10px #2ecc71; border-color: #2ecc71; }
+            100% { box-shadow: 0 0 0px #2ecc71; }
         }
-        updateUI();
-    }
+        .healing-active { animation: healPulse 1s infinite; }
 
-    if(++damageFrameCounter > 60) { updateRanking(); damageFrameCounter = 0; }
-    camera = { x: localPlayer.pos.x, y: localPlayer.pos.y };
-}
+        /* RANKING PERMANENTE */
+        #ranking-container { margin-top: 8px; border-top: 1px solid #333; padding-top: 5px; pointer-events: auto; }
+        #btn-ranking { background: none; border: none; color: #f1c40f; width: 100%; text-align: left; font-size: 11px; font-weight: bold; display: flex; align-items: center; justify-content: space-between; padding: 0; }
+        #ranking-list { display: block; margin-top: 5px; background: rgba(0,0,0,0.8); border-radius: 4px; padding: 5px; }
+        .rank-item { display: flex; justify-content: space-between; font-size: 10px; color: #ddd; margin-bottom: 2px; border-bottom: 1px solid #222; padding-bottom: 2px; }
+        .rank-item:last-child { border: none; }
+        .rank-val { color: #2ecc71; font-weight: bold; }
 
-function processFaint() {
-    isFainted = true;
-    const faintScreen = document.getElementById('faint-screen');
-    if(faintScreen) faintScreen.style.display = 'flex';
-    
-    if (currentPartyPartner) {
-        net.sendPayload({ type: 'CHAT_MSG', nick: 'SYSTEM', text: `${localPlayer.nickname} desmaiou e precisa de ajuda!` }, currentPartyPartner);
-    }
+        /* CHAT SYSTEM */
+        #chat-toggle-btn { display: none; position: absolute; top: 50%; left: 10px; transform: translateY(-50%); width: 40px; height: 40px; background: rgba(0,0,0,0.6); border: 1px solid #444; border-radius: 50%; color: #fff; font-size: 20px; cursor: pointer; z-index: 150; pointer-events: auto; transition: all 0.3s; }
+        #chat-toggle-btn.open { left: 260px; background: #e74c3c; border-color: #c0392b; font-size: 16px; }
+        @keyframes chatGlow { 0% { box-shadow: 0 0 5px #f1c40f; border-color: #f1c40f; } 50% { box-shadow: 0 0 20px #f1c40f, 0 0 10px #f1c40f; border-color: #fff; } 100% { box-shadow: 0 0 5px #f1c40f; border-color: #f1c40f; } }
+        #chat-toggle-btn.notify { animation: chatGlow 1.5s infinite; }
+        
+        #chat-container { display: none; position: absolute; top: 50%; left: 10px; transform: translateY(-50%); width: 250px; height: 200px; background: rgba(0, 0, 0, 0.9); border: 1px solid #444; border-radius: 8px; z-index: 150; flex-direction: column; backdrop-filter: blur(4px); font-family: 'Segoe UI', sans-serif; pointer-events: auto; }
+        
+        .chat-tabs { 
+            display: flex; background: #1a1a1a; border-radius: 8px 8px 0 0; 
+            overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid #333;
+        }
+        .chat-tabs::-webkit-scrollbar { display: none; }
+        .chat-tab { 
+            padding: 8px 12px; background: transparent; border: none; color: #777; 
+            font-size: 10px; font-weight: bold; cursor: pointer; border-bottom: 2px solid transparent;
+            white-space: nowrap; transition: 0.2s;
+        }
+        .chat-tab.active { color: #f1c40f; border-bottom: 2px solid #f1c40f; background: rgba(241,196,15,0.05); }
 
-    // Armazena o timeout para poder cancelar se houver resgate
-    faintTimeout = setTimeout(() => {
-        localPlayer.respawn();
-        if (localPlayer.homeBase) { localPlayer.pos = {...localPlayer.homeBase}; localPlayer.targetPos = {...localPlayer.pos}; }
-        if(faintScreen) faintScreen.style.display = 'none';
-        isFainted = false; updateUI();
-        net.sendPayload({ type: 'MOVE', id: localPlayer.id, nick: localPlayer.nickname, x: localPlayer.pos.x, y: localPlayer.pos.y, dir: localPlayer.currentDir });
-    }, 4000);
-}
+        #chat-messages { flex: 1; overflow-y: auto; padding: 8px; font-size: 11px; color: #ccc; }
+        .chat-input-area { display: flex; padding: 5px; border-top: 1px solid #333; }
+        #chat-input { padding: 6px; font-size: 11px; border: 1px solid #444; background: #111; color: white; flex: 1; border-radius: 4px; outline: none; }
+        #chat-send-btn { background: #f1c40f; border: none; border-radius: 4px; margin-left: 5px; padding: 0 10px; cursor: pointer; color: black; font-weight: bold; }
 
-function gainXp(amount) {
-    const old = localPlayer.level; localPlayer.xp += amount;
-    if (localPlayer.xp >= localPlayer.maxXp) {
-        localPlayer.xp -= localPlayer.maxXp; localPlayer.level++;
-        localPlayer.maxXp = Math.floor(localPlayer.maxXp * 1.5); localPlayer.maxPollen += 10; localPlayer.hp = localPlayer.maxHp; 
-        chat.addMessage('SYSTEM', null, `Nível ${localPlayer.level}!`);
-    }
-    if (localPlayer.level > old) saveProgress();
-    updateUI();
-}
+        /* MODAIS E POPUPS */
+        #player-modal {
+            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 260px; background: rgba(20, 20, 20, 0.95); border: 1px solid #f1c40f;
+            border-radius: 12px; padding: 20px; z-index: 300; text-align: center;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8); backdrop-filter: blur(5px);
+        }
+        #modal-player-name { color: #f1c40f; font-size: 20px; font-weight: 800; margin-bottom: 5px; }
+        .modal-btn { display: block; width: 100%; padding: 12px; margin-bottom: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        #btn-party-action { background: #3498db; color: white; }
+        #btn-whisper-action { background: #9b59b6; color: white; }
+        #btn-modal-close { background: #444; color: #ccc; }
 
-function changeTile(x, y, newType, ownerId = null) {
-    if(worldState.setTile(x, y, newType)) {
-        if (net.isHost && newType === 'GRAMA') worldState.addGrowingPlant(x, y, ownerId);
-        net.sendPayload({ type: 'TILE_CHANGE', x, y, tileType: newType, ownerId: ownerId });
-    }
-}
+        #party-invite-popup {
+            display: none; position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            width: 280px; background: rgba(30, 30, 30, 0.98); border: 2px solid #2ecc71;
+            border-radius: 10px; padding: 15px; z-index: 400; text-align: center;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.5); animation: slideDown 0.4s;
+        }
+        .invite-btns { display: flex; gap: 10px; margin-top: 10px; }
+        .invite-btn { flex: 1; padding: 10px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
+        .btn-accept { background: #2ecc71; color: white; }
+        .btn-decline { background: #e74c3c; color: white; }
+        
+        @keyframes slideDown { from { top: -100px; } to { top: 20px; } }
+    </style>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body>
 
-function spawnPollenParticle() { pollenParticles.push({ wx: localPlayer.pos.x + (Math.random()*0.4-0.2), wy: localPlayer.pos.y + (Math.random()*0.4-0.2), size: Math.random()*3+2, speedY: Math.random()*0.02+0.01, life: 1.0 }); }
-function spawnSmokeParticle(tx, ty) {
-    const isEmber = Math.random() < 0.15;
-    smokeParticles.push({ wx: tx + Math.random(), wy: ty + Math.random(), isEmber: isEmber, size: isEmber ? (Math.random() * 3 + 1) : (Math.random() * 5 + 2), speedY: -(Math.random()*0.03+0.01), wobbleTick: Math.random()*100, wobbleSpeed: Math.random()*0.05+0.02, wobbleAmp: 0.01, life: Math.random()*0.6+0.4, decay: 0.006, grayVal: Math.floor(Math.random()*60) });
-}
-function updateParticles() {
-    pollenParticles.forEach(p => { p.wy += p.speedY; p.life -= 0.02; }); pollenParticles = pollenParticles.filter(p => p.life > 0);
-    smokeParticles.forEach(p => { p.wy += p.speedY; p.life -= p.decay; p.wobbleTick += p.wobbleSpeed; p.wx += Math.sin(p.wobbleTick)*p.wobbleAmp; if(!p.isEmber) p.size+=0.03; });
-    smokeParticles = smokeParticles.filter(p => p.life > 0);
-}
+    <div id="suffocation-overlay"></div>
 
-function updateUI() {
-    document.getElementById('hud-name').innerText = localPlayer.nickname;
-    document.getElementById('hud-lvl').innerText = localPlayer.level;
-    document.getElementById('bar-hp-fill').style.width = `${(localPlayer.hp/localPlayer.maxHp)*100}%`;
-    document.getElementById('bar-hp-text').innerText = `${Math.ceil(localPlayer.hp)}/${localPlayer.maxHp}`;
-    document.getElementById('bar-xp-fill').style.width = `${(localPlayer.xp/localPlayer.maxXp)*100}%`;
-    document.getElementById('bar-xp-text').innerText = `${Math.floor(localPlayer.xp)}/${localPlayer.maxXp}`;
-    document.getElementById('bar-pollen-fill').style.width = `${(localPlayer.pollen/localPlayer.maxPollen)*100}%`;
-    document.getElementById('bar-pollen-text').innerText = `${localPlayer.pollen}/${localPlayer.maxPollen}`;
-    const dist = Math.sqrt(Math.pow(localPlayer.pos.x - localPlayer.homeBase.x, 2) + Math.pow(localPlayer.pos.y - localPlayer.homeBase.y, 2));
-    document.getElementById('rpg-hud').classList.toggle('healing-active', dist <= 3.5 && localPlayer.hp < localPlayer.maxHp);
-}
+    <div id="faint-screen">
+        <div class="faint-title">Você Desmaiou</div>
+        <div class="faint-msg">
+            O ar tornou-se pesado demais para suas asas... <br><br>
+            Abelhas batedoras foram enviadas para o seu resgate. <br>
+            Aguarde o transporte de volta à Colmeia.
+        </div>
+        <div class="faint-hint">Um parceiro de party pode te reanimar com pólen!</div>
+    </div>
 
-function updateRanking() {
-    const listEl = document.getElementById('ranking-list');
-    if (!listEl) return;
+    <div id="lobby-overlay">
+        <div class="lobby-card">
+            <div class="lobby-header">🐝 Wings That Heal 🌱</div>
+            <div class="tabs">
+                <button class="tab-btn active" onclick="openTab('create')">CRIAR</button>
+                <button class="tab-btn" onclick="openTab('join')">ENTRAR</button>
+            </div>
+            <div id="tab-create" class="tab-content active">
+                <div class="input-group"><label class="input-label">NICKNAME</label><input type="text" id="host-nickname" maxlength="10"></div>
+                <div class="input-group"><label class="input-label">ID DA SALA</label><input type="text" id="create-id"></div>
+                <div class="input-group"><label class="input-label">SENHA</label><input type="password" id="create-pass"></div>
+                <div class="input-group"><label class="input-label">SEED</label><input type="text" id="world-seed" value="12345"></div>
+                <button id="btn-create" class="btn-action">HOSPEDAR</button>
+            </div>
+            <div id="tab-join" class="tab-content">
+                <div class="input-group"><label class="input-label">NICKNAME</label><input type="text" id="join-nickname" maxlength="10"></div>
+                <div class="input-group"><label class="input-label">ID DO HOST</label><input type="text" id="join-id"></div>
+                <div class="input-group"><label class="input-label">SENHA</label><input type="password" id="join-pass"></div>
+                <button id="btn-join" class="btn-action">CONECTAR</button>
+            </div>
+            <div id="status-msg" style="text-align:center; color:#e74c3c; margin:10px 0; font-size:12px;"></div>
+        </div>
+    </div>
 
-    let allPlayersData = Object.keys(guestDataDB).map(nick => ({
-        nickname: nick,
-        tilesCured: guestDataDB[nick].tilesCured || 0
-    }));
+    <div id="rpg-hud">
+        <div class="hud-header">
+            <span class="player-name" id="hud-name">Player</span>
+            <span class="player-coords" id="hud-coords">0, 0</span> <span class="player-lvl">LV <span class="lvl-number" id="hud-lvl">1</span></span>
+        </div>
+        <div class="hud-row">
+            <div class="hud-icon">❤️</div>
+            <div class="bar-container"><div id="bar-hp-fill" class="bar-fill fill-hp"></div><span id="bar-hp-text" class="bar-text">100/100</span></div>
+        </div>
+        <div class="hud-row">
+            <div class="hud-icon">💠</div>
+            <div class="bar-container"><div id="bar-xp-fill" class="bar-fill fill-xp"></div><span id="bar-xp-text" class="bar-text">0/100</span></div>
+        </div>
+        <div class="hud-row">
+            <div class="hud-icon">🌻</div>
+            <div class="bar-container"><div id="bar-pollen-fill" class="bar-fill fill-pollen"></div><span id="bar-pollen-text" class="bar-text">0/100</span></div>
+        </div>
+        <div id="ranking-container">
+            <button id="btn-ranking"><span>🏆 Top Curadores (Global)</span></button>
+            <div id="ranking-list"></div>
+        </div>
+    </div>
 
-    if (!allPlayersData.find(p => p.nickname === localPlayer.nickname)) {
-        allPlayersData.push({ nickname: localPlayer.nickname, tilesCured: localPlayer.tilesCured || 0 });
-    }
+    <button id="chat-toggle-btn">💬</button>
+    <div id="chat-container">
+        <div id="chat-tabs-container" class="chat-tabs"></div>
+        <div id="chat-messages"></div>
+        <div class="chat-input-area">
+            <input type="text" id="chat-input" placeholder="Mensagem..." maxlength="50">
+            <button id="chat-send-btn">➤</button>
+        </div>
+    </div>
 
-    allPlayersData.sort((a, b) => b.tilesCured - a.tilesCured);
-    listEl.innerHTML = '';
-    allPlayersData.slice(0, 5).forEach((p, index) => {
-        const div = document.createElement('div');
-        div.className = 'rank-item';
-        const isOnline = Object.values(remotePlayers).some(rp => rp.nickname === p.nickname) || p.nickname === localPlayer.nickname;
-        div.innerHTML = `<span>${index + 1}. ${p.nickname} ${isOnline ? '●' : ''}</span><span class="rank-val">${p.tilesCured}</span>`;
-        listEl.appendChild(div);
-    });
-}
+    <div id="player-modal">
+        <div id="modal-player-name">---</div>
+        <div id="modal-player-info">Nível: 1</div>
+        <button id="btn-party-action" class="modal-btn">Convidar para Party</button>
+        <button id="btn-whisper-action" class="modal-btn">Cochichar</button>
+        <button id="btn-modal-close" class="modal-btn" onclick="closePlayerModal()">Fechar</button>
+    </div>
 
-function draw() {
-    ctx.fillStyle = "#0d0d0d"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    if(!world) return;
-    const rTileSize = world.tileSize * zoomLevel;
-    const cX = Math.floor(localPlayer.pos.x / world.chunkSize), cY = Math.floor(localPlayer.pos.y / world.chunkSize);
-    const range = zoomLevel < 0.8 ? 2 : 1; 
+    <div id="party-invite-popup">
+        <div id="invite-msg">Jogador convidou você!</div>
+        <div class="invite-btns">
+            <button id="btn-accept-invite" class="invite-btn btn-accept">Aceitar</button>
+            <button id="btn-decline-invite" class="invite-btn btn-decline" onclick="closeInvitePopup()">Recusar</button>
+        </div>
+    </div>
 
-    for(let x=-range; x<=range; x++) for(let y=-range; y<=range; y++) {
-        world.getChunk(cX+x, cY+y).forEach(t => {
-            const sX = (t.x - camera.x)*rTileSize + canvas.width/2, sY = (t.y - camera.y)*rTileSize + canvas.height/2;
-            if(sX > -rTileSize && sX < canvas.width+rTileSize && sY > -rTileSize && sY < canvas.height+rTileSize) {
-                const type = worldState.getModifiedTile(t.x, t.y) || t.type;
-                if (type === 'TERRA_QUEIMADA' && Math.random() < 0.015) spawnSmokeParticle(t.x, t.y);
-                ctx.fillStyle = (type === 'COLMEIA') ? '#f1c40f' : (['GRAMA','GRAMA_SAFE','BROTO','MUDA','FLOR', 'FLOR_COOLDOWN'].includes(type) ? '#2ecc71' : '#34495e');
-                ctx.fillRect(sX, sY, rTileSize, rTileSize);
-                if (type === 'BROTO') { ctx.fillStyle = '#006400'; const sz = 12*zoomLevel; ctx.fillRect(sX+(rTileSize-sz)/2, sY+(rTileSize-sz)/2, sz, sz); }
-                else if (type === 'MUDA') { ctx.fillStyle = '#228B22'; const sz = 20*zoomLevel; ctx.fillRect(sX+(rTileSize-sz)/2, sY+(rTileSize-sz)/2, sz, sz); }
-                else if (['FLOR','FLOR_COOLDOWN'].includes(type) && assets.flower.complete) {
-                    if (type === 'FLOR_COOLDOWN') ctx.globalAlpha = 0.4;
-                    const by = rTileSize * 0.65;
-                    ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.ellipse(sX+rTileSize/2, sY+by, 8*zoomLevel, 3*zoomLevel, 0, 0, Math.PI*2); ctx.fill();
-                    ctx.save(); ctx.translate(sX+rTileSize/2, sY+by);
-                    ctx.rotate(Math.sin(Date.now()/800 + t.x*0.5)*0.1);
-                    ctx.drawImage(assets.flower, -rTileSize/2, -rTileSize, rTileSize, rTileSize);
-                    ctx.restore(); ctx.globalAlpha = 1.0;
-                }
-            }
-        });
-    }
+    <canvas id="gameCanvas" style="display:none;"></canvas>
 
-    smokeParticles.forEach(p => { 
-        const psX = (p.wx - camera.x) * rTileSize + canvas.width / 2, psY = (p.wy - camera.y) * rTileSize + canvas.height / 2; 
-        if (p.isEmber) ctx.fillStyle = `rgba(231, 76, 60, ${p.life})`; else ctx.fillStyle = `rgba(${p.grayVal},${p.grayVal},${p.grayVal},${p.life*0.4})`;
-        ctx.fillRect(psX, psY, p.size * zoomLevel, p.size * zoomLevel); 
-    });
-    pollenParticles.forEach(p => { 
-        const psX = (p.wx - camera.x) * rTileSize + canvas.width / 2, psY = (p.wy - camera.y) * rTileSize + canvas.height / 2; 
-        ctx.fillStyle = `rgba(241,196,15,${p.life})`; ctx.fillRect(psX, psY, p.size * zoomLevel, p.size * zoomLevel); 
-    });
-    if (localPlayer) {
-        Object.values(remotePlayers).forEach(p => p.draw(ctx, camera, canvas, rTileSize, currentPartyPartner));
-        localPlayer.draw(ctx, camera, canvas, rTileSize, currentPartyPartner);
-    }
-    if (localPlayer && localPlayer.homeBase && Math.sqrt(Math.pow(localPlayer.homeBase.x-localPlayer.pos.x,2)+Math.pow(localPlayer.homeBase.y-localPlayer.pos.y,2)) > 30) {
-        const angle = Math.atan2(localPlayer.homeBase.y-localPlayer.pos.y, localPlayer.homeBase.x-localPlayer.pos.x), orbit = 60*zoomLevel;
-        const ax = canvas.width/2 + Math.cos(angle)*orbit, ay = canvas.height/2 + Math.sin(angle)*orbit;
-        ctx.save(); ctx.translate(ax, ay); ctx.rotate(angle); ctx.fillStyle = "#f1c40f"; ctx.strokeStyle = "black"; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-10*zoomLevel, -5*zoomLevel); ctx.lineTo(-10*zoomLevel, 5*zoomLevel); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
-    }
-}
-
-function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-window.onresize = resize;
+    <script>
+        function openTab(t) {
+            document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(e => e.classList.remove('active'));
+            document.getElementById('tab-' + t).classList.add('active');
+            const btns = document.querySelectorAll('.tab-btn');
+            if(t==='create') btns[0].classList.add('active'); else btns[1].classList.add('active');
+        }
+        // Ranking modificado para não alternar via JS, mantendo a visibilidade definida pelo CSS
+        function closePlayerModal() { document.getElementById('player-modal').style.display = 'none'; }
+        function closeInvitePopup() { document.getElementById('party-invite-popup').style.display = 'none'; }
+    </script>
+    <script type="module" src="src/main.js"></script>
+</body>
+</html>
