@@ -2,8 +2,9 @@ export class ChatSystem {
     constructor() {
         this.isVisible = false;
         this.unreadCount = 0;
-        this.activeTab = 'GLOBAL'; // Canal atual
-        this.channels = ['GLOBAL', 'SYSTEM']; // Canais base
+        this.activeTab = 'GLOBAL'; 
+        this.channels = ['GLOBAL', 'SYSTEM']; 
+        this.notifications = {}; // Armazena notificações por canal { 'Nick': true }
         
         this.container = document.getElementById('chat-container');
         this.toggleBtn = document.getElementById('chat-toggle-btn');
@@ -13,7 +14,7 @@ export class ChatSystem {
         this.sendBtn = document.getElementById('chat-send-btn');
 
         this.setupListeners();
-        this.renderTabs(); // Inicializa Global e Sistema
+        this.renderTabs();
     }
 
     setupListeners() {
@@ -24,20 +25,22 @@ export class ChatSystem {
         });
 
         this.sendBtn.onclick = () => this.triggerSend();
+        
+        // Impede que as teclas de movimento do jogo interfiram no chat
         this.input.addEventListener('keydown', (e) => e.stopPropagation());
     }
 
-    // Cria as abas visualmente no container
     renderTabs() {
         this.tabsContainer.innerHTML = '';
         this.channels.forEach(channel => {
             const btn = document.createElement('button');
-            btn.className = `chat-tab ${this.activeTab === channel ? 'active' : ''}`;
+            const hasNotify = this.notifications[channel] && this.activeTab !== channel;
             
-            // Texto legível para a aba
+            btn.className = `chat-tab ${this.activeTab === channel ? 'active' : ''} ${hasNotify ? 'tab-notify' : ''}`;
+            
             let label = channel;
             if (channel !== 'GLOBAL' && channel !== 'SYSTEM') {
-                label = `🔒 ${channel}`; // Indica que é privado
+                label = `👤 ${channel}`; 
             }
 
             btn.innerText = label;
@@ -64,8 +67,8 @@ export class ChatSystem {
 
     switchTab(tab) {
         this.activeTab = tab;
+        this.notifications[tab] = false; // Limpa notificação da aba ao entrar
         
-        // Regras de Input
         if (tab === 'SYSTEM') {
             this.input.disabled = true;
             this.input.placeholder = "Apenas leitura...";
@@ -78,7 +81,6 @@ export class ChatSystem {
         this.filterMessages();
     }
 
-    // Garante que uma aba de cochicho exista e foca nela
     openPrivateTab(targetNick) {
         if (!this.channels.includes(targetNick)) {
             this.channels.push(targetNick);
@@ -87,17 +89,28 @@ export class ChatSystem {
         if (!this.isVisible) this.toggleChat();
     }
 
+    /**
+     * @param {string} type - 'GLOBAL', 'SELF', 'SYSTEM', 'WHISPER', 'WHISPER_SELF'
+     * @param {string} sender - Nickname de quem enviou
+     * @param {string} text - Conteúdo
+     */
     addMessage(type, sender, text) {
-        // Define em qual canal essa mensagem deve morar
         let targetChannel = 'GLOBAL';
+        
         if (type === 'SYSTEM') targetChannel = 'SYSTEM';
+        
         if (type === 'WHISPER' || type === 'WHISPER_SELF') {
-            // Se for cochicho, o canal é o nome da outra pessoa
-            targetChannel = (type === 'WHISPER_SELF') ? sender : sender; 
+            // No cochicho, o canal é sempre o nome do "Outro"
+            targetChannel = sender;
             
-            // Auto-cria aba se não existir
             if (!this.channels.includes(targetChannel)) {
                 this.channels.push(targetChannel);
+                this.renderTabs();
+            }
+
+            // Notifica a aba se não estiver nela
+            if (this.activeTab !== targetChannel) {
+                this.notifications[targetChannel] = true;
                 this.renderTabs();
             }
         }
@@ -109,20 +122,20 @@ export class ChatSystem {
         const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         if (type === 'SYSTEM') {
-            msgDiv.innerHTML = `<span class="msg-time">[${time}]</span> <span class="msg-text">${text}</span>`;
+            msgDiv.innerHTML = `<span class="msg-time">[${time}]</span> <span class="msg-text">💡 ${text}</span>`;
         } else {
             const isSelf = type === 'SELF' || type === 'WHISPER_SELF';
             const senderDisplayName = isSelf ? 'Você' : sender;
             const colorClass = isSelf ? 'name-self' : 'name-other';
-            const prefix = (type === 'WHISPER' || type === 'WHISPER_SELF') ? '🔒 ' : '';
+            const whisperPrefix = (type === 'WHISPER' || type === 'WHISPER_SELF') ? '🔒 ' : '';
 
             msgDiv.innerHTML = `
                 <span class="msg-time">[${time}]</span> 
-                <span class="${colorClass}" data-nick="${sender}">${prefix}${senderDisplayName}:</span> 
-                <span class="msg-text">${text}</span>
+                <span class="${colorClass}" data-nick="${sender}">${whisperPrefix}${senderDisplayName}:</span> 
+                <span class="msg-text">${this.escapeHTML(text)}</span>
             `;
 
-            // Clique no nome para abrir interações (apenas no Global)
+            // Clique no nome para abrir perfil/cochicho (apenas Global)
             if (!isSelf && type === 'GLOBAL') {
                 const nameSpan = msgDiv.querySelector(`.${colorClass}`);
                 nameSpan.onclick = (e) => {
@@ -133,9 +146,8 @@ export class ChatSystem {
         }
 
         this.messagesBox.appendChild(msgDiv);
-        this.scrollToBottom();
+        this.limitMessages(200); // Mantém performance
 
-        // Lógica de Notificação (Ignora SYSTEM)
         if (!this.isVisible && type !== 'SYSTEM') {
             this.unreadCount++;
             this.updateNotification();
@@ -144,10 +156,15 @@ export class ChatSystem {
         this.filterMessages();
     }
 
+    limitMessages(limit) {
+        while (this.messagesBox.children.length > limit) {
+            this.messagesBox.removeChild(this.messagesBox.firstChild);
+        }
+    }
+
     filterMessages() {
         const msgs = this.messagesBox.children;
         for (let msg of msgs) {
-            // Só mostra mensagens que pertencem ao canal (aba) ativa
             msg.style.display = (msg.dataset.channel === this.activeTab) ? 'block' : 'none';
         }
         this.scrollToBottom();
@@ -158,8 +175,13 @@ export class ChatSystem {
     }
 
     updateNotification() {
-        if (this.unreadCount > 0) this.toggleBtn.classList.add('notify');
-        else this.toggleBtn.classList.remove('notify');
+        if (this.unreadCount > 0) {
+            this.toggleBtn.classList.add('notify');
+            this.toggleBtn.innerHTML = `💬 (${this.unreadCount})`;
+        } else {
+            this.toggleBtn.classList.remove('notify');
+            if (!this.isVisible) this.toggleBtn.innerHTML = '💬';
+        }
     }
 
     triggerSend() {
@@ -170,14 +192,21 @@ export class ChatSystem {
 
         if (this.activeTab === 'GLOBAL') {
             window.dispatchEvent(new CustomEvent('chatSend', { detail: { type: 'GLOBAL', text } }));
+            // Adicionamos para nós mesmos
+            this.addMessage('SELF', 'Você', text);
         } else {
-            // Envia como cochicho para o nome da aba ativa
+            // Envia Whisper para o dono da aba
             window.dispatchEvent(new CustomEvent('chatSend', { 
                 detail: { type: 'WHISPER', target: this.activeTab, text } 
             }));
-            // Adiciona visualmente para nós mesmos
             this.addMessage('WHISPER_SELF', this.activeTab, text);
         }
+    }
+
+    escapeHTML(str) {
+        const p = document.createElement('p');
+        p.textContent = str;
+        return p.innerHTML;
     }
 
     isMobile() {
