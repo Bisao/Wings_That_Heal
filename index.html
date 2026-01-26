@@ -20,42 +20,80 @@
     <div id="faint-screen">
         <div class="faint-title">Asas Caídas</div>
         <div class="faint-msg">O equilíbrio da floresta foi quebrado...</div>
+        <div class="faint-hint">Um aliado pode te salvar com pólen!</div>
     </div>
 
     <div id="lobby-overlay">
         <div class="lobby-card">
             <div class="lobby-header">WINGS THAT HEAL</div>
+            
             <div class="tabs">
                 <button class="tab-btn active" id="tab-btn-create">Hospedar</button>
                 <button class="tab-btn" id="tab-btn-join">Entrar</button>
             </div>
+            
             <div id="tab-create" class="tab-content active">
-                <div class="input-group"><label class="input-label">NICKNAME</label><input type="text" id="host-nickname" placeholder="AbelhaRainha"></div>
-                <div class="input-group"><label class="input-label">ID DA SALA</label><input type="text" id="create-id" placeholder="ID único"></div>
-                <div class="input-group"><label class="input-label">SENHA</label><input type="password" id="create-pass"></div>
-                <div class="input-group"><label class="input-label">SEED</label><input type="text" id="world-seed" value="FLORESTA"></div>
+                <div class="input-group">
+                    <label class="input-label">SEU NICKNAME</label>
+                    <input type="text" id="host-nickname" placeholder="Ex: AbelhaRainha" maxlength="12">
+                </div>
+                <div class="input-group">
+                    <label class="input-label">CRIE UM ID DE SALA</label>
+                    <input type="text" id="create-id" placeholder="Ex: Sala123">
+                </div>
+                <div class="input-group">
+                    <label class="input-label">SENHA (OPCIONAL)</label>
+                    <input type="password" id="create-pass">
+                </div>
+                <div class="input-group">
+                    <label class="input-label">SEED DO MUNDO</label>
+                    <input type="text" id="world-seed" value="FLORESTA">
+                </div>
                 <button id="btn-create" class="btn-action">CRIAR MUNDO</button>
             </div>
+
             <div id="tab-join" class="tab-content">
-                <div class="input-group"><label class="input-label">NICKNAME</label><input type="text" id="join-nickname" placeholder="Zangão"></div>
-                <div class="input-group"><label class="input-label">ID DO HOST</label><input type="text" id="join-id" placeholder="ID da sala"></div>
-                <div class="input-group"><label class="input-label">SENHA</label><input type="password" id="join-pass"></div>
+                <div class="input-group">
+                    <label class="input-label">SEU NICKNAME</label>
+                    <input type="text" id="join-nickname" placeholder="Ex: Zangão" maxlength="12">
+                </div>
+                <div class="input-group">
+                    <label class="input-label">ID DA SALA DO AMIGO</label>
+                    <input type="text" id="join-id" placeholder="ID do Host">
+                </div>
+                <div class="input-group">
+                    <label class="input-label">SENHA DA SALA</label>
+                    <input type="password" id="join-pass">
+                </div>
                 <button id="btn-join" class="btn-action">ENTRAR</button>
             </div>
-            <div id="status-msg" style="text-align:center; color:var(--danger); padding:15px; font-weight:bold;"></div>
+            <div id="status-msg"></div>
         </div>
     </div>
 
     <div id="rpg-hud">
         <div class="hud-header">
-            <span class="player-name" id="hud-name">Abelha</span>
+            <span class="player-name" id="hud-name">Jogador</span>
             <span class="player-coords" id="hud-coords">0, 0</span>
-            <span style="color:#aaa; font-weight:900">LV <span id="hud-lvl" style="color:var(--primary)">1</span></span>
+            <span style="font-weight:900; font-size:12px; color:#aaa;">LV <span id="hud-lvl" style="color:#f1c40f">1</span></span>
         </div>
-        <div class="hud-row"><div class="hud-icon">❤️</div><div class="bar-container"><div id="bar-hp-fill" class="bar-fill fill-hp"></div></div></div>
-        <div class="hud-row"><div class="hud-icon">💠</div><div class="bar-container"><div id="bar-xp-fill" class="bar-fill fill-xp"></div></div></div>
-        <div class="hud-row"><div class="hud-icon">🌻</div><div class="bar-container"><div id="bar-pollen-fill" class="bar-fill fill-pollen"></div></div></div>
-        <div id="ranking-container"><div id="ranking-list"></div></div>
+        
+        <div class="hud-row">
+            <div class="hud-icon">❤️</div>
+            <div class="bar-container"><div id="bar-hp-fill" class="bar-fill fill-hp"></div><span id="bar-hp-text" class="bar-text"></span></div>
+        </div>
+        <div class="hud-row">
+            <div class="hud-icon">💠</div>
+            <div class="bar-container"><div id="bar-xp-fill" class="bar-fill fill-xp"></div><span id="bar-xp-text" class="bar-text"></span></div>
+        </div>
+        <div class="hud-row">
+            <div class="hud-icon">🌻</div>
+            <div class="bar-container"><div id="bar-pollen-fill" class="bar-fill fill-pollen"></div><span id="bar-pollen-text" class="bar-text"></span></div>
+        </div>
+
+        <div id="ranking-container">
+            <div id="ranking-list"></div>
+        </div>
     </div>
 
     <button id="chat-toggle-btn">💬</button>
@@ -63,38 +101,29 @@
         <div id="chat-tabs-container" class="chat-tabs"></div>
         <div id="chat-messages"></div>
         <div class="chat-input-area">
-            <input type="text" id="chat-input" placeholder="Zumbir..." maxlength="50">
+            <input type="text" id="chat-input" placeholder="Digite aqui..." maxlength="60">
             <button id="chat-send-btn">➤</button>
         </div>
     </div>
 
     <div id="player-modal">
-        <div id="modal-player-name" style="font-weight:900; font-size:22px; color:var(--primary)">---</div>
+        <div id="modal-player-name">JOGADOR</div>
+        <div id="modal-player-info">Nível 1</div>
         <button id="btn-party-action" class="modal-btn">CONVIDAR</button>
         <button id="btn-whisper-action" class="modal-btn">COCHICHAR</button>
-        <button class="modal-btn" onclick="document.getElementById('player-modal').style.display='none'">FECHAR</button>
+        <button class="modal-btn btn-close" onclick="document.getElementById('player-modal').style.display='none'">FECHAR</button>
     </div>
 
     <div id="party-invite-popup">
-        <div id="invite-msg">CONVITE!</div>
-        <div style="display:flex; gap:10px; margin-top:20px;">
-            <button id="btn-accept-invite" class="modal-btn" style="background:var(--accent-green);">ACEITAR</button>
-            <button class="modal-btn" style="background:var(--danger);" onclick="document.getElementById('party-invite-popup').style.display='none'">RECUSAR</button>
+        <div id="invite-msg">CONVITE DE GRUPO</div>
+        <div style="display:flex; gap:10px; margin-top:15px;">
+            <button id="btn-accept-invite" class="modal-btn btn-accept">ACEITAR</button>
+            <button class="modal-btn btn-deny" onclick="document.getElementById('party-invite-popup').style.display='none'">RECUSAR</button>
         </div>
     </div>
 
-    <canvas id="gameCanvas" style="display:none;"></canvas>
+    <canvas id="gameCanvas"></canvas>
 
-    <script>
-        window.logDebug = function(msg, color) {
-            const el = document.getElementById('debug-console');
-            if (el) { el.innerHTML += `<div style="color:${color||'#0f0'}">> ${msg}</div>`; el.scrollTop=el.scrollHeight; }
-        };
-        window.requestGameFullscreen = function() {
-            const d = document.documentElement;
-            if(d.requestFullscreen) d.requestFullscreen();
-        };
-    </script>
     <script type="module" src="src/main.js"></script>
 </body>
 </html>
