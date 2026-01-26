@@ -23,7 +23,8 @@ export class Player {
         this.tilesCured = 0;
 
         this.sprites = {};
-        ['Up', 'Down', 'Left', 'Right', 'Idle', 'LeftIdle', 'RightIdle'].forEach(d => {
+        // Adicionado o sprite 'Fainted' para a mecânica de desmaio
+        ['Up', 'Down', 'Left', 'Right', 'Idle', 'LeftIdle', 'RightIdle', 'Fainted'].forEach(d => {
             this.sprites[d] = new Image();
             this.sprites[d].src = `assets/Bee${d}.png`;
         });
@@ -103,32 +104,43 @@ export class Player {
     draw(ctx, cam, canvas, tileSize, partyPartnerId = null) {
         const sX = (this.pos.x - cam.x) * tileSize + canvas.width / 2;
         const sY = (this.pos.y - cam.y) * tileSize + canvas.height / 2;
-        const sprite = this.sprites[this.currentDir] || this.sprites['Idle'];
+        
+        // Verifica se a abelha está desmaiada (HP <= 0)
+        const isDead = this.hp <= 0;
+        const sprite = isDead ? (this.sprites['Fainted'] || this.sprites['Idle']) : (this.sprites[this.currentDir] || this.sprites['Idle']);
         const zoomScale = tileSize / 32;
 
         const isPartner = this.id === partyPartnerId;
 
-        // 1. Balanço (Bobbing) - A velocidade do balanço indica vida (opcional, mantido original)
-        const floatY = Math.sin(Date.now() / 200) * (3 * zoomScale); 
+        // 1. Balanço (Bobbing) - Para se a abelha estiver desmaiada
+        const floatY = isDead ? 0 : Math.sin(Date.now() / 200) * (3 * zoomScale); 
         const drawY = sY - (12 * zoomScale) + floatY;
 
-        // 2. Sombra
+        // 2. Sombra - Fica menor se estiver desmaiada (no chão)
         ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
         ctx.beginPath();
-        ctx.ellipse(sX, sY + (8 * zoomScale), 10 * zoomScale, 4 * zoomScale, 0, 0, Math.PI * 2);
+        const shadowW = isDead ? 12 * zoomScale : 10 * zoomScale;
+        ctx.ellipse(sX, sY + (8 * zoomScale), shadowW, 4 * zoomScale, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // 3. Sprite
-        if (sprite.complete && sprite.naturalWidth !== 0) {
-            ctx.drawImage(sprite, sX - tileSize/2, drawY - tileSize/2, tileSize, tileSize);
-        } else {
-            ctx.fillStyle = "yellow";
-            ctx.beginPath(); ctx.arc(sX, drawY, 10 * zoomScale, 0, Math.PI*2); ctx.fill();
+        // 3. Sprite com rotação se estiver desmaiada
+        ctx.save();
+        ctx.translate(sX, drawY);
+        if (isDead) {
+            ctx.rotate(Math.PI / 2); // Tomba a abelha de lado
         }
+        
+        if (sprite.complete && sprite.naturalWidth !== 0) {
+            ctx.drawImage(sprite, -tileSize/2, -tileSize/2, tileSize, tileSize);
+        } else {
+            ctx.fillStyle = isDead ? "gray" : "yellow";
+            ctx.beginPath(); ctx.arc(0, 0, 10 * zoomScale, 0, Math.PI*2); ctx.fill();
+        }
+        ctx.restore();
 
         // 4. Nickname e Level
         const nameText = isPartner ? `[GROUP] ${this.nickname}` : this.nickname;
-        ctx.fillStyle = isPartner ? "#f1c40f" : "white"; 
+        ctx.fillStyle = isPartner ? "#f1c40f" : (isDead ? "#666" : "white"); 
         
         ctx.font = `bold ${12 * zoomScale}px sans-serif`; 
         ctx.textAlign = "center";
@@ -139,7 +151,7 @@ export class Player {
         ctx.strokeText(nameText, sX, nickY); 
         ctx.fillText(nameText, sX, nickY);
 
-        // Barra de HP sobre a cabeça
+        // Barra de HP sobre a cabeça (Apenas para outros players)
         if (!this.isLocal) {
             const barW = 30 * zoomScale;
             const barH = 4 * zoomScale;
@@ -148,7 +160,6 @@ export class Player {
             ctx.fillStyle = "black";
             ctx.fillRect(sX - barW/2, barY, barW, barH);
             
-            // Vida fica verde para parceiros ou vermelho para outros
             ctx.fillStyle = isPartner ? "#2ecc71" : "#e74c3c";
             const hpWidth = Math.max(0, barW * (this.hp / this.maxHp));
             ctx.fillRect(sX - barW/2, barY, hpWidth, barH);
