@@ -1,299 +1,141 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Wings That Heal</title>
-    <style>
-        :root {
-            --primary: #f1c40f;
-            --primary-dark: #d4ac0d;
-            --bg-dark: #0d0d0d;
-            --bg-card: rgba(20, 20, 20, 0.98);
-            --accent-green: #2ecc71;
-            --danger: #e74c3c;
-            --honey-glow: rgba(241, 196, 15, 0.3);
-        }
+import { NetworkManager } from './core/network.js';
+import { WorldState } from './world/worldState.js';
+import { InputHandler } from './core/input.js';
+import { SaveSystem } from './core/saveSystem.js';
+import { ChatSystem } from './core/chatSystem.js';
+import { UIManager } from './managers/UIManager.js';
+import { GameManager } from './managers/GameManager.js';
 
-        body { 
-            margin: 0; overflow: hidden; background: var(--bg-dark); 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            touch-action: none; user-select: none; -webkit-user-select: none;
-            color: white; width: 100vw; height: 100vh;
-        }
+// 1. Instanciação dos Sistemas
+const net = new NetworkManager();
+const input = new InputHandler(); 
+const worldState = new WorldState();
+const saveSystem = new SaveSystem();
+const chat = new ChatSystem();
+const ui = new UIManager();
+
+// 2. Injeção de Dependências (O GameManager precisa de acesso a tudo)
+const gameManager = new GameManager(net, input, worldState, saveSystem, chat, ui);
+
+// 3. Configuração de Travamento de Input (Quando digita no chat, o boneco não anda)
+chat.onChatOpen = () => input.setChatMode(true);
+chat.onChatClose = () => input.setChatMode(false);
+
+// 4. Lógica dos Botões do Menu (Lobby)
+
+// --- Botão HOSPEDAR ---
+const btnCreate = document.getElementById('btn-create');
+if (btnCreate) {
+    btnCreate.onclick = () => {
+        // Tenta ativar tela cheia no mobile
+        if (window.requestGameFullscreen) window.requestGameFullscreen();
+
+        // Coleta dados do HTML
+        const nick = document.getElementById('host-nickname').value.trim() || "Host";
+        const id = document.getElementById('create-id').value.trim();
+        const pass = document.getElementById('create-pass').value.trim();
+        const seed = document.getElementById('world-seed').value.trim() || "FLORESTA";
         
-        /* --- CONSOLE DE DIAGNÓSTICO (FORÇADO PARA MOBILE) --- */
-        #debug-console {
-            position: fixed; bottom: 0; left: 0; width: 100%; height: 100px;
-            background: rgba(0,0,0,0.95); color: #00ff00; font-family: 'Consolas', monospace;
-            font-size: 11px; padding: 10px; z-index: 10000; pointer-events: auto;
-            display: block; /* Forçado para diagnóstico inicial */
-            border-top: 2px solid var(--primary); overflow-y: auto;
-            box-shadow: 0 -5px 20px rgba(0,0,0,0.8);
+        if(!id) {
+            ui.displayStatus("Erro: Crie um ID para a sala!");
+            return;
         }
 
-        /* --- FILTRO DE AMBIENTE --- */
-        #suffocation-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: radial-gradient(circle, transparent 40%, black 150%);
-            pointer-events: none; z-index: 100;
-            opacity: 0; transition: opacity 0.5s ease;
-        }
-
-        /* --- TELA DE DESMAIO --- */
-        #faint-screen {
-            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: black; z-index: 500; flex-direction: column;
-            align-items: center; justify-content: center; text-align: center;
-            animation: fadeInBlack 1s forwards;
-        }
-        .faint-title { font-size: 32px; color: var(--primary); margin-bottom: 20px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; }
-        .faint-msg { font-size: 18px; max-width: 80%; line-height: 1.6; color: #ccc; font-style: italic; }
-        .faint-hint { margin-top: 25px; color: var(--accent-green); font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+        ui.displayStatus(`Criando sala ${id}...`);
         
-        @keyframes fadeInBlack { from { opacity: 0; } to { opacity: 1; } }
+        // Inicializa a Rede como Host
+        net.init(id, (ok, errorType) => {
+            if(ok) {
+                // Configura a sala e callbacks de dados
+                net.hostRoom(id, pass, seed, 
+                    () => worldState.getFullState(), // Callback para enviar estado do mundo
+                    (guestNick) => gameManager.guestDataDB[guestNick], // Callback para enviar dados do guest salvo
+                    () => gameManager.guestDataDB // Callback para sincronizar DB
+                );
+                
+                // Inicia o jogo
+                gameManager.startGame(seed, id, nick, true);
+            } else { 
+                ui.displayStatus(`Erro ao criar: ${errorType}`);
+            }
+        });
+    };
+}
 
-        /* --- LOBBY TEMÁTICO --- */
-        #lobby-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: radial-gradient(circle at center, #1a1a1a 0%, #000000 100%);
-            display: flex; align-items: center; justify-content: center; z-index: 200;
-        }
+// --- Botão ENTRAR ---
+const btnJoin = document.getElementById('btn-join');
+if (btnJoin) {
+    btnJoin.onclick = () => {
+        if (window.requestGameFullscreen) window.requestGameFullscreen();
+
+        const nick = document.getElementById('join-nickname').value.trim() || "Guest";
+        const id = document.getElementById('join-id').value.trim();
+        const pass = document.getElementById('join-pass').value.trim();
         
-        .lobby-card { 
-            background: var(--bg-card); border: 2px solid var(--primary);
-            box-shadow: 0 0 50px var(--honey-glow); 
-            width: 90%; max-width: 420px; border-radius: 24px; overflow: hidden;
-            backdrop-filter: blur(15px);
-            animation: cardPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        if(!id) {
+            ui.displayStatus("Erro: Digite o ID da sala!");
+            return;
         }
 
-        @keyframes cardPop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        ui.displayStatus(`Procurando sala ${id}...`);
 
-        .lobby-header {
-            background: linear-gradient(135deg, var(--primary), #e67e22); 
-            color: #000; padding: 25px 20px;
-            text-align: center; font-weight: 900; font-size: 26px;
-            text-transform: uppercase; letter-spacing: 4px;
-        }
+        // Inicializa a Rede como Guest (ID null, o PeerJS gera um aleatório)
+        net.init(null, (ok, err) => { 
+            if(ok) {
+                net.joinRoom(id, pass, nick); 
+            } else {
+                ui.displayStatus(`Erro de conexão: ${err}`);
+            }
+        });
+    };
+}
 
-        .tabs { display: flex; background: #0a0a0a; padding: 5px; gap: 5px; }
-        .tab-btn {
-            flex: 1; padding: 15px; cursor: pointer;
-            background: transparent; color: #555; border: none;
-            font-weight: 800; transition: all 0.3s; border-radius: 12px;
-            font-size: 13px; text-transform: uppercase;
-        }
-        .tab-btn.active { 
-            color: #000; background: var(--primary);
-            box-shadow: 0 4px 10px var(--honey-glow);
-        }
+// 5. Lógica dos Botões de Interface (Modais)
 
-        .tab-content { display: none; padding: 30px; animation: slideUp 0.4s ease-out; }
-        .tab-content.active { display: block; }
-        
-        @keyframes slideUp { 
-            from { opacity: 0; transform: translateY(20px); } 
-            to { opacity: 1; transform: translateY(0); } 
-        }
-        
-        .input-group { margin-bottom: 20px; }
-        .input-label { display: block; color: var(--primary); font-size: 11px; margin-bottom: 8px; font-weight: 900; letter-spacing: 1.5px; }
-        
-        input { 
-            padding: 16px; border-radius: 14px; border: 1px solid #333; 
-            width: 100%; box-sizing: border-box; background: #121212; color: white; 
-            font-size: 16px; -webkit-appearance: none;
-        }
-        input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 15px rgba(241, 196, 15, 0.15); }
-
-        .btn-action { 
-            padding: 20px; cursor: pointer; background: var(--primary); 
-            color: #000; border: none; font-weight: 900; border-radius: 16px; 
-            width: 100%; margin-top: 10px; font-size: 16px; text-transform: uppercase;
-            letter-spacing: 2px; box-shadow: 0 5px 0 var(--primary-dark);
-            -webkit-tap-highlight-color: transparent;
-        }
-        .btn-action:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--primary-dark); }
-
-        /* --- HUD DE JOGO --- */
-        #rpg-hud {
-            display: none; position: absolute; top: env(safe-area-inset-top, 20px); left: 20px;
-            width: 190px; background: rgba(0, 0, 0, 0.85);
-            padding: 15px; border: 1px solid #333; border-radius: 18px;
-            pointer-events: none; z-index: 10; backdrop-filter: blur(10px);
-        }
-
-        .hud-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-        .player-name { color: var(--primary); font-weight: 900; font-size: 14px; text-transform: uppercase; }
-        .player-coords { color: #666; font-size: 10px; font-family: monospace; }
-        
-        .hud-row { display: flex; align-items: center; margin-bottom: 8px; height: 18px; }
-        .hud-icon { width: 22px; font-size: 14px; text-align: center; margin-right: 8px; }
-        .bar-container { flex: 1; position: relative; height: 100%; background: #0a0a0a; border-radius: 6px; overflow: hidden; border: 1px solid #222; }
-        .bar-fill { height: 100%; width: 100%; transition: width 0.5s ease; }
-        .bar-text { position: absolute; top: 0; left: 0; width: 100%; height: 100%; text-align: center; line-height: 16px; color: white; font-size: 9px; font-weight: 900; z-index: 2; }
-        
-        .fill-hp { background: linear-gradient(90deg, #962115, #e74c3c); }
-        .fill-xp { background: linear-gradient(90deg, #1d5d8a, #3498db); }
-        .fill-pollen { background: linear-gradient(90deg, #b38f00, #f1c40f); }
-
-        /* --- CHAT --- */
-        #chat-toggle-btn { display: none; position: absolute; top: 50%; left: 15px; transform: translateY(-50%); width: 50px; height: 50px; background: rgba(0,0,0,0.85); border: 2px solid var(--primary); border-radius: 18px; color: white; cursor: pointer; z-index: 150; }
-        #chat-container { display: none; position: absolute; top: 50%; left: 15px; transform: translateY(-50%); width: 260px; height: 260px; background: var(--bg-card); border: 1px solid #333; border-radius: 20px; z-index: 150; flex-direction: column; overflow: hidden; }
-
-        /* Modais */
-        #player-modal, #party-invite-popup {
-            display: none; position: absolute; background: var(--bg-card); border: 2px solid var(--primary);
-            border-radius: 24px; padding: 30px; z-index: 400; text-align: center;
-        }
-        #player-modal { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 280px; }
-        #party-invite-popup { top: 40px; left: 50%; transform: translateX(-50%); width: 310px; border-color: var(--accent-green); }
-
-        .modal-btn { display: block; width: 100%; padding: 16px; margin-top: 12px; border: none; border-radius: 14px; font-weight: 900; cursor: pointer; text-transform: uppercase; }
-
-        @media (max-height: 450px) {
-            .lobby-card { transform: scale(0.7); }
-            #debug-console { height: 60px; }
-        }
-    </style>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-</head>
-<body>
-
-    <div id="debug-console">Motor de Diagnóstico Iniciado... Aguardando Scripts.</div>
-    <div id="suffocation-overlay"></div>
-
-    <div id="faint-screen">
-        <div class="faint-title">Asas Caídas</div>
-        <div class="faint-msg">O equilíbrio da floresta foi quebrado... <br>Aguarde o resgate da colmeia.</div>
-        <div class="faint-hint">Um aliado pode te salvar com pólen real!</div>
-    </div>
-
-    <div id="lobby-overlay">
-        <div class="lobby-card">
-            <div class="lobby-header">WINGS THAT HEAL</div>
-            <div class="tabs">
-                <button class="tab-btn active" id="tab-btn-create" onclick="openTab('create')">Hospedar</button>
-                <button class="tab-btn" id="tab-btn-join" onclick="openTab('join')">Entrar</button>
-            </div>
+// Aceitar Convite de Party
+const btnAccept = document.getElementById('btn-accept-invite');
+if (btnAccept) {
+    btnAccept.onclick = () => {
+        if (gameManager.pendingInviteFrom) {
+            gameManager.currentPartyPartner = gameManager.pendingInviteFrom;
             
-            <div id="tab-create" class="tab-content active">
-                <div class="input-group">
-                    <label class="input-label">NICKNAME DO CURADOR</label>
-                    <input type="text" id="host-nickname" placeholder="Ex: AbelhaRainha" maxlength="12">
-                </div>
-                <div class="input-group">
-                    <label class="input-label">CÓDIGO DA COLMEIA (ID)</label>
-                    <input type="text" id="create-id" placeholder="Crie um ID para seus amigos">
-                </div>
-                <div class="input-group">
-                    <label class="input-label">SENHA DA SALA</label>
-                    <input type="password" id="create-pass" placeholder="Opcional">
-                </div>
-                <div class="input-group">
-                    <label class="input-label">BIOMA DO MUNDO (SEED)</label>
-                    <input type="text" id="world-seed" value="FLORESTA_ETERNAL">
-                </div>
-                <button id="btn-create" class="btn-action">INICIAR COLMEIA</button>
-            </div>
-
-            <div id="tab-join" class="tab-content">
-                <div class="input-group">
-                    <label class="input-label">NICKNAME DO CURADOR</label>
-                    <input type="text" id="join-nickname" placeholder="Ex: Zangão" maxlength="12">
-                </div>
-                <div class="input-group">
-                    <label class="input-label">CÓDIGO DA COLMEIA ALVO</label>
-                    <input type="text" id="join-id" placeholder="Digite o ID do Host">
-                </div>
-                <div class="input-group">
-                    <label class="input-label">SENHA DE ACESSO</label>
-                    <input type="password" id="join-pass" placeholder="Se houver">
-                </div>
-                <button id="btn-join" class="btn-action">VOAR PARA O MUNDO</button>
-            </div>
-            <div id="status-msg" style="text-align:center; color:var(--danger); padding: 15px; font-size:12px; font-weight:bold; text-transform:uppercase;"></div>
-        </div>
-    </div>
-
-    <div id="rpg-hud">
-        <div class="hud-header">
-            <span class="player-name" id="hud-name">Abelha</span>
-            <span class="player-coords" id="hud-coords">0, 0</span>
-            <span style="color:#666; font-weight:900">LV <span id="hud-lvl" style="color:var(--primary)">1</span></span>
-        </div>
-        <div class="hud-row"><div class="hud-icon">❤️</div><div class="bar-container"><div id="bar-hp-fill" class="bar-fill fill-hp"></div><span id="bar-hp-text" class="bar-text">100/100</span></div></div>
-        <div class="hud-row"><div class="hud-icon">💠</div><div class="bar-container"><div id="bar-xp-fill" class="bar-fill fill-xp"></div><span id="bar-xp-text" class="bar-text">0/100</span></div></div>
-        <div class="hud-row"><div class="hud-icon">🌻</div><div class="bar-container"><div id="bar-pollen-fill" class="bar-fill fill-pollen"></div><span id="bar-pollen-text" class="bar-text">0/100</span></div></div>
-    </div>
-
-    <button id="chat-toggle-btn">💬</button>
-    <div id="chat-container">
-        <div id="chat-tabs-container" class="chat-tabs"></div>
-        <div id="chat-messages"></div>
-        <div class="chat-input-area">
-            <input type="text" id="chat-input" placeholder="Zumbir..." maxlength="50">
-            <button id="chat-send-btn">➤</button>
-        </div>
-    </div>
-
-    <div id="player-modal">
-        <div id="modal-player-name" style="font-weight:900; font-size:22px; color:var(--primary)">---</div>
-        <div id="modal-player-info" style="color:#888; margin: 10px 0;">Nível: 1</div>
-        <button id="btn-party-action" class="modal-btn" style="background:var(--primary); color:black">CONVIDAR</button>
-        <button class="modal-btn" style="background:transparent; color:#555" onclick="closePlayerModal()">FECHAR</button>
-    </div>
-
-    <div id="party-invite-popup">
-        <div id="invite-msg" style="font-weight:900; color:white; font-size:16px;">GRUPO!</div>
-        <div style="display:flex; gap:10px; margin-top:20px;">
-            <button id="btn-accept-invite" class="modal-btn" style="background:var(--accent-green); color:black; margin:0">ACEITAR</button>
-            <button class="modal-btn" style="background:var(--danger); color:white; margin:0" onclick="closeInvitePopup()">RECUSAR</button>
-        </div>
-    </div>
-
-    <canvas id="gameCanvas" style="display:none;"></canvas>
-
-    <script>
-        // Sistema de Diagnóstico Rápido
-        window.logDebug = function(msg, color) {
-            const consoleEl = document.getElementById('debug-console');
-            if (consoleEl) {
-                const line = document.createElement('div');
-                line.style.color = color || "#00ff00";
-                line.innerText = `[${new Date().toLocaleTimeString()}] > ${msg}`;
-                consoleEl.appendChild(line);
-                consoleEl.scrollTop = consoleEl.scrollHeight;
-            }
-        };
-
-        // Forçar Fullscreen no Toque
-        window.requestGameFullscreen = function() {
-            const doc = window.document;
-            const docEl = doc.documentElement;
-            const requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
-            if (requestFullScreen) {
-                requestFullScreen.call(docEl).catch(e => {
-                    logDebug("Erro de Fullscreen: " + e.message, "#ff4d4d");
-                });
-            }
-        };
-
-        function openTab(t) {
-            document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(e => e.classList.remove('active'));
-            document.getElementById('tab-' + t).classList.add('active');
-            document.getElementById('tab-btn-' + t).classList.add('active');
+            // Avisa o host/outro player que aceitou
+            net.sendPayload({ 
+                type: 'PARTY_ACCEPT', 
+                fromId: gameManager.localPlayer.id, 
+                fromNick: gameManager.localPlayer.nickname 
+            }, gameManager.pendingInviteFrom);
+            
+            chat.addMessage('SYSTEM', null, `Você entrou no grupo.`);
+            chat.openPartyTab();
+            ui.closePartyInvite();
+            gameManager.pendingInviteFrom = null;
         }
-        function closePlayerModal() { document.getElementById('player-modal').style.display = 'none'; }
-        function closeInvitePopup() { document.getElementById('party-invite-popup').style.display = 'none'; }
+    };
+}
 
-        // Bloquear Zoom no Touch
-        document.addEventListener('touchstart', function(e) {
-            if (e.touches.length > 1) e.preventDefault();
-        }, { passive: false });
-    </script>
-    <script type="module" src="src/main.js"></script>
-</body>
-</html>
+// Ação do Modal de Jogador (Convidar/Sair)
+const btnPartyAction = document.getElementById('btn-party-action');
+if (btnPartyAction) {
+    btnPartyAction.onclick = () => {
+        const targetId = gameManager.selectedPlayerId;
+        if (!targetId) return;
+
+        if (gameManager.currentPartyPartner === targetId) {
+            // Se já é parceiro, o botão serve para SAIR
+            net.sendPayload({ type: 'PARTY_LEAVE', fromId: gameManager.localPlayer.id }, targetId);
+            chat.addMessage('SYSTEM', null, `Grupo desfeito.`);
+            gameManager.currentPartyPartner = null;
+            chat.closePartyTab();
+        } else {
+            // Se não é, serve para CONVIDAR
+            net.sendPayload({ 
+                type: 'PARTY_INVITE', 
+                fromId: gameManager.localPlayer.id, 
+                fromNick: gameManager.localPlayer.nickname 
+            }, targetId);
+            chat.addMessage('SYSTEM', null, `Convite enviado.`);
+        }
+        ui.closePlayerModal();
+    };
+}
