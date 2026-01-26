@@ -106,10 +106,9 @@ export class Player {
         const sprite = this.sprites[this.currentDir] || this.sprites['Idle'];
         const zoomScale = tileSize / 32;
 
-        // Identifica se este player é da party
         const isPartner = this.id === partyPartnerId;
 
-        // 1. Balanço (Bobbing)
+        // 1. Balanço (Bobbing) - A velocidade do balanço indica vida (opcional, mantido original)
         const floatY = Math.sin(Date.now() / 200) * (3 * zoomScale); 
         const drawY = sY - (12 * zoomScale) + floatY;
 
@@ -128,7 +127,6 @@ export class Player {
         }
 
         // 4. Nickname e Level
-        // Se for parceiro, usa cor dourada e adiciona ícone
         const nameText = isPartner ? `[GROUP] ${this.nickname}` : this.nickname;
         ctx.fillStyle = isPartner ? "#f1c40f" : "white"; 
         
@@ -141,18 +139,19 @@ export class Player {
         ctx.strokeText(nameText, sX, nickY); 
         ctx.fillText(nameText, sX, nickY);
 
-        // Barra de HP pequena sobre a cabeça (Apenas para outros players)
+        // Barra de HP sobre a cabeça
         if (!this.isLocal) {
             const barW = 30 * zoomScale;
             const barH = 4 * zoomScale;
             const barY = nickY - (12 * zoomScale);
             
-            // Fundo
             ctx.fillStyle = "black";
             ctx.fillRect(sX - barW/2, barY, barW, barH);
-            // Vida
+            
+            // Vida fica verde para parceiros ou vermelho para outros
             ctx.fillStyle = isPartner ? "#2ecc71" : "#e74c3c";
-            ctx.fillRect(sX - barW/2, barY, barW * (this.hp / this.maxHp), barH);
+            const hpWidth = Math.max(0, barW * (this.hp / this.maxHp));
+            ctx.fillRect(sX - barW/2, barY, hpWidth, barH);
         }
     }
 }
