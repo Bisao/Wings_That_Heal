@@ -52,7 +52,7 @@ export class GameManager {
         this._handlePeerDisconnect = this.handlePeerDisconnect.bind(this);
         this._handlePlayerJoin = this.handlePlayerJoin.bind(this);
         this._handlePlayerClick = this.handlePlayerClick.bind(this);
-        this._handleChatSend = this.handleChatSend.bind(this); // NOVO
+        this._handleChatSend = this.handleChatSend.bind(this); // IMPORTANTE
 
         this.initListeners();
     }
@@ -63,16 +63,16 @@ export class GameManager {
         window.addEventListener('peerDisconnected', this._handlePeerDisconnect);
         window.addEventListener('joined', this._handlePlayerJoin);
         window.addEventListener('playerClicked', this._handlePlayerClick);
-        window.addEventListener('chatSend', this._handleChatSend); // CORREÇÃO CRÍTICA AQUI
+        window.addEventListener('chatSend', this._handleChatSend); // LIGANDO O CHAT À REDE
         this.resize();
     }
 
-    // --- NOVO MÉTODO: HANDLER DE ENVIO DE CHAT ---
+    // --- CORREÇÃO DO CHAT ---
     handleChatSend(e) {
         const data = e.detail; 
         if (!this.localPlayer) return;
 
-        // Repassa a intenção do chat para a rede
+        // O GameManager pega o evento do ChatSystem e manda pro NetworkManager
         if (data.type === 'GLOBAL') {
             this.net.sendPayload({ type: 'CHAT_MSG', id: this.localPlayer.id, nick: this.localPlayer.nickname, text: data.text });
         } else if (data.type === 'PARTY') {
@@ -82,8 +82,8 @@ export class GameManager {
                 this.chat.addMessage('SYSTEM', null, "Você não está em um grupo.");
             }
         } else if (data.type === 'WHISPER') {
-            // Busca ID pelo Nick (caso o chat mande o nick como target)
             let targetId = data.target;
+            // Se o chat mandou o Nick, tentamos achar o ID
             const targetPlayer = Object.values(this.remotePlayers).find(p => p.nickname === data.target);
             if (targetPlayer) targetId = targetPlayer.id;
 
@@ -95,7 +95,6 @@ export class GameManager {
         }
     }
 
-    // --- RESTANTE DO CÓDIGO MANTIDO IGUAL ---
     startGame(seed, id, nick, isHost = false) {
         this.ui.showGameInterface();
         this.world = new WorldGenerator(seed);
