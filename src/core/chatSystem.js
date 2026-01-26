@@ -4,7 +4,7 @@ export class ChatSystem {
         this.unreadCount = 0;
         this.activeTab = 'GLOBAL'; 
         this.channels = ['GLOBAL', 'SYSTEM']; 
-        this.notifications = {}; // Armazena notificações por canal { 'Nick': true }
+        this.notifications = {}; // Armazena notificações por canal { 'Canal': true }
         
         this.container = document.getElementById('chat-container');
         this.toggleBtn = document.getElementById('chat-toggle-btn');
@@ -26,7 +26,7 @@ export class ChatSystem {
 
         this.sendBtn.onclick = () => this.triggerSend();
         
-        // Impede que as teclas de movimento do jogo interfiram no chat
+        // Impede que as teclas de movimento do jogo interfiram no chat ao digitar
         this.input.addEventListener('keydown', (e) => e.stopPropagation());
     }
 
@@ -39,7 +39,8 @@ export class ChatSystem {
             btn.className = `chat-tab ${this.activeTab === channel ? 'active' : ''} ${hasNotify ? 'tab-notify' : ''}`;
             
             let label = channel;
-            if (channel !== 'GLOBAL' && channel !== 'SYSTEM') {
+            if (channel === 'PARTY') label = `👥 PARTY`;
+            else if (channel !== 'GLOBAL' && channel !== 'SYSTEM') {
                 label = `👤 ${channel}`; 
             }
 
@@ -67,18 +68,43 @@ export class ChatSystem {
 
     switchTab(tab) {
         this.activeTab = tab;
-        this.notifications[tab] = false; // Limpa notificação da aba ao entrar
+        this.notifications[tab] = false; 
         
         if (tab === 'SYSTEM') {
             this.input.disabled = true;
             this.input.placeholder = "Apenas leitura...";
         } else {
             this.input.disabled = false;
-            this.input.placeholder = tab === 'GLOBAL' ? "Mensagem Global..." : `Cochichar para ${tab}...`;
+            if (tab === 'GLOBAL') this.input.placeholder = "Mensagem Global...";
+            else if (tab === 'PARTY') this.input.placeholder = "Mensagem para a Party...";
+            else this.input.placeholder = `Cochichar para ${tab}...`;
         }
 
         this.renderTabs();
         this.filterMessages();
+    }
+
+    /**
+     * Gerenciamento de Party
+     */
+    openPartyTab() {
+        if (!this.channels.includes('PARTY')) {
+            this.channels.push('PARTY');
+            this.addMessage('SYSTEM', null, 'Você entrou em uma party. Aba de chat de grupo liberada.');
+        }
+        this.renderTabs();
+    }
+
+    closePartyTab() {
+        this.channels = this.channels.filter(c => c !== 'PARTY');
+        if (this.activeTab === 'PARTY') this.switchTab('GLOBAL');
+        
+        // Remove mensagens antigas da party do DOM
+        const msgs = this.messagesBox.querySelectorAll('.chat-msg[data-channel="PARTY"]');
+        msgs.forEach(m => m.remove());
+        
+        this.renderTabs();
+        this.addMessage('SYSTEM', null, 'Você saiu da party. Aba de grupo fechada.');
     }
 
     openPrivateTab(targetNick) {
@@ -90,7 +116,7 @@ export class ChatSystem {
     }
 
     /**
-     * @param {string} type - 'GLOBAL', 'SELF', 'SYSTEM', 'WHISPER', 'WHISPER_SELF'
+     * @param {string} type - 'GLOBAL', 'SELF', 'SYSTEM', 'WHISPER', 'WHISPER_SELF', 'PARTY'
      * @param {string} sender - Nickname de quem enviou
      * @param {string} text - Conteúdo
      */
@@ -98,22 +124,20 @@ export class ChatSystem {
         let targetChannel = 'GLOBAL';
         
         if (type === 'SYSTEM') targetChannel = 'SYSTEM';
-        
-        if (type === 'WHISPER' || type === 'WHISPER_SELF') {
-            // No cochicho, o canal é sempre o nome do "Outro"
+        else if (type === 'PARTY') {
+            targetChannel = 'PARTY';
+            if (!this.channels.includes('PARTY')) this.openPartyTab();
+        }
+        else if (type === 'WHISPER' || type === 'WHISPER_SELF') {
             targetChannel = sender;
-            
             if (!this.channels.includes(targetChannel)) {
                 this.channels.push(targetChannel);
                 this.renderTabs();
             }
-
-            // Notifica a aba se não estiver nela
-            if (this.activeTab !== targetChannel) {
-                this.notifications[targetChannel] = true;
-                this.renderTabs();
-            }
         }
+
+        // Correção: Se for do tipo SELF (nossas mensagens globais), o canal deve ser GLOBAL
+        if (type === 'SELF') targetChannel = 'GLOBAL';
 
         const msgDiv = document.createElement('div');
         msgDiv.className = `chat-msg msg-${type.toLowerCase().replace('_self', '')}`;
@@ -124,18 +148,24 @@ export class ChatSystem {
         if (type === 'SYSTEM') {
             msgDiv.innerHTML = `<span class="msg-time">[${time}]</span> <span class="msg-text">💡 ${text}</span>`;
         } else {
-            const isSelf = type === 'SELF' || type === 'WHISPER_SELF';
+            const isSelf = type === 'SELF' || type === 'WHISPER_SELF' || (type === 'PARTY' && sender === 'Você');
             const senderDisplayName = isSelf ? 'Você' : sender;
-            const colorClass = isSelf ? 'name-self' : 'name-other';
-            const whisperPrefix = (type === 'WHISPER' || type === 'WHISPER_SELF') ? '🔒 ' : '';
+            
+            let colorClass = 'name-other';
+            if (isSelf) colorClass = 'name-self';
+            if (type === 'PARTY') colorClass = 'name-party';
+
+            let prefix = '';
+            if (type === 'WHISPER' || type === 'WHISPER_SELF') prefix = '🔒 ';
+            if (type === 'PARTY') prefix = '🛡️ ';
 
             msgDiv.innerHTML = `
                 <span class="msg-time">[${time}]</span> 
-                <span class="${colorClass}" data-nick="${sender}">${whisperPrefix}${senderDisplayName}:</span> 
+                <span class="${colorClass}" data-nick="${sender}">${prefix}${senderDisplayName}:</span> 
                 <span class="msg-text">${this.escapeHTML(text)}</span>
             `;
 
-            // Clique no nome para abrir perfil/cochicho (apenas Global)
+            // Clique no nome para ações (apenas no Global)
             if (!isSelf && type === 'GLOBAL') {
                 const nameSpan = msgDiv.querySelector(`.${colorClass}`);
                 nameSpan.onclick = (e) => {
@@ -146,7 +176,13 @@ export class ChatSystem {
         }
 
         this.messagesBox.appendChild(msgDiv);
-        this.limitMessages(200); // Mantém performance
+        this.limitMessages(200);
+
+        // Notificações visuais
+        if (this.activeTab !== targetChannel) {
+            this.notifications[targetChannel] = true;
+            this.renderTabs();
+        }
 
         if (!this.isVisible && type !== 'SYSTEM') {
             this.unreadCount++;
@@ -192,10 +228,11 @@ export class ChatSystem {
 
         if (this.activeTab === 'GLOBAL') {
             window.dispatchEvent(new CustomEvent('chatSend', { detail: { type: 'GLOBAL', text } }));
-            // Adicionamos para nós mesmos
             this.addMessage('SELF', 'Você', text);
+        } else if (this.activeTab === 'PARTY') {
+            window.dispatchEvent(new CustomEvent('chatSend', { detail: { type: 'PARTY', text } }));
+            this.addMessage('PARTY', 'Você', text);
         } else {
-            // Envia Whisper para o dono da aba
             window.dispatchEvent(new CustomEvent('chatSend', { 
                 detail: { type: 'WHISPER', target: this.activeTab, text } 
             }));
