@@ -75,7 +75,8 @@ document.getElementById('btn-create').onclick = () => {
         if(ok) {
             net.hostRoom(id, pass, seed, 
                 () => worldState.getFullState(), 
-                (guestNick) => guestDataDB[guestNick] 
+                (guestNick) => guestDataDB[guestNick],
+                () => guestDataDB // Sexta callback para o ranking global
             );
             startGame(seed, id, nick);
             if(net.isHost) startHostSimulation();
@@ -166,7 +167,7 @@ window.addEventListener('chatSend', e => {
 window.addEventListener('joined', e => {
     const data = e.detail;
     if (data.worldState) worldState.applyFullState(data.worldState);
-    if (data.guests) guestDataDB = data.guests; // Sincroniza DB de curadores ao entrar
+    if (data.guests) guestDataDB = data.guests; // Sincroniza o Ranking ao entrar
     startGame(data.seed, net.peer.id, document.getElementById('join-nickname').value || "Guest");
     if (data.playerData) { localPlayer.deserialize(data.playerData); updateUI(); }
 });
@@ -198,14 +199,14 @@ window.addEventListener('netData', e => {
         if (isFainted) {
             clearTimeout(faintTimeout);
             isFainted = false;
-            localPlayer.hp = 20; 
+            localPlayer.hp = 25; 
             document.getElementById('faint-screen').style.display = 'none';
             chat.addMessage('SYSTEM', null, `Você foi reanimado por ${d.fromNick}!`);
             updateUI();
         }
     }
 
-    // Sincronização de Spawn Inicial
+    // Correção de Spawn: Host recebe a posição inicial real do convidado
     if (d.type === 'SPAWN_INFO') {
         if (remotePlayers[d.id]) {
             remotePlayers[d.id].pos = { x: d.x, y: d.y };
@@ -245,7 +246,8 @@ function startGame(seed, id, nick) {
         localPlayer.homeBase = { x: hives[spawnIdx].x, y: hives[spawnIdx].y };
         localPlayer.pos = { ...localPlayer.homeBase };
         localPlayer.targetPos = { ...localPlayer.pos };
-        // Avisa a rede sobre a posição inicial correta
+        
+        // Sincroniza a posição inicial com todos na rede imediatamente
         net.sendPayload({ type: 'SPAWN_INFO', id: localPlayer.id, x: localPlayer.pos.x, y: localPlayer.pos.y });
     }
 
@@ -310,17 +312,16 @@ function update() {
     if (localPlayer.pollen > 0 && moving) spawnPollenParticle();
     updateParticles();
 
-    // --- LÓGICA DE RESGATE ATIVO COM DISTÂNCIA REAL ---
+    // --- LÓGICA DE RESGATE ATIVO COM PRECISÃO DE MUNDO ---
     if (currentPartyPartner && remotePlayers[currentPartyPartner]) {
         const partner = remotePlayers[currentPartyPartner];
-        // Verifica se o parceiro está com HP 0 (desmaiado)
         if (partner.hp <= 0 && localPlayer.pollen >= 20) {
-            // Calcula distância real de mundo (não HUD)
+            // Calcula a distância real no mundo (não na tela/HUD)
             const d = Math.sqrt(Math.pow(localPlayer.pos.x - partner.pos.x, 2) + Math.pow(localPlayer.pos.y - partner.pos.y, 2));
-            if (d < 0.8) { 
+            if (d < 1.0) { // Precisa estar realmente em cima do parceiro
                 localPlayer.pollen -= 20;
                 net.sendPayload({ type: 'PARTY_RESCUE', fromNick: localPlayer.nickname }, currentPartyPartner);
-                chat.addMessage('SYSTEM', null, `Você reanimou ${partner.nickname}!`);
+                chat.addMessage('SYSTEM', null, `Você resgatou ${partner.nickname} gastando 20 de pólen!`);
                 updateUI();
             }
         }
