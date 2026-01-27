@@ -43,6 +43,22 @@
         
         @keyframes fadeInBlack { from { opacity: 0; } to { opacity: 1; } }
 
+        /* --- NOTIFICAÇÕES (TOAST) --- */
+        #toast-msg {
+            position: fixed; top: 10%; left: 50%; transform: translateX(-50%);
+            background: rgba(231, 76, 60, 0.95); color: white;
+            padding: 15px 25px; border-radius: 50px;
+            font-weight: 900; z-index: 9999;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+            opacity: 0; transition: opacity 0.3s;
+            text-transform: uppercase; font-size: 12px; letter-spacing: 1px;
+            pointer-events: none;
+        }
+
+        /* --- JOYSTICK MOBILE (SAFETY) --- */
+        /* Garante que o joystick comece invisível até o JS ativá-lo */
+        #mobile-controls { display: none; }
+
         /* --- LOBBY TEMÁTICO --- */
         #lobby-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -261,6 +277,8 @@
 <body>
 
     <div id="suffocation-overlay"></div>
+
+    <div id="toast-msg"></div>
 
     <div id="faint-screen">
         <div class="faint-title">Asas Caídas</div>
