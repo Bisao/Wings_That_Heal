@@ -502,20 +502,24 @@ function startHostSimulation() {
             const elapsedSinceHeal = now - lastHeal;
             const currentType = worldState.getModifiedTile(x, y);
 
+            // Crescimento
             if (currentType === 'GRAMA' && elapsedSinceStart > GROWTH_TIMES.BROTO) changeTile(x, y, 'BROTO', ownerId);
             else if (currentType === 'BROTO' && elapsedSinceStart > GROWTH_TIMES.MUDA) changeTile(x, y, 'MUDA', ownerId);
             else if (currentType === 'MUDA' && elapsedSinceStart > GROWTH_TIMES.FLOR) changeTile(x, y, 'FLOR', ownerId);
             else if (currentType === 'FLOR_COOLDOWN' && elapsedSinceStart > FLOWER_COOLDOWN_TIME) changeTile(x, y, 'FLOR', ownerId);
 
+            // Cura em área 3x3 a cada 3 segundos
             if (currentType === 'FLOR' && elapsedSinceHeal >= 3000) {
                 plantData.lastHealTime = now;
                 for (let dx = -1; dx <= 1; dx++) {
                     for (let dy = -1; dy <= 1; dy++) {
+                        if (dx === 0 && dy === 0) continue; 
                         const tx = x + dx;
                         const ty = y + dy;
                         const target = worldState.getModifiedTile(tx, ty) || world.getTileAt(tx, ty);
+                        
                         if (target === 'TERRA_QUEIMADA') {
-                            changeTile(tx, ty, 'GRAMA_SAFE');
+                            changeTile(tx, ty, 'GRAMA_SAFE', ownerId);
                             if (ownerId) {
                                 net.sendPayload({ type: 'FLOWER_CURE', ownerId: ownerId, x: tx, y: ty });
                                 if (localPlayer && ownerId === localPlayer.id) {
@@ -606,18 +610,14 @@ function update() {
     const overlay = document.getElementById('suffocation-overlay');
     if (overlay) overlay.style.opacity = hpRatio < 0.7 ? (0.7 - hpRatio) * 1.4 : 0;
 
-    // --- LÓGICA DE CURA GLOBAL EM QUALQUER COLMEIA ---
+    // Cura global em qualquer colmeia
     if (localPlayer.hp < localPlayer.maxHp) {
         const hives = world.getHiveLocations();
         let closestHiveDist = Infinity;
-
-        // Encontra a colmeia mais próxima
         for (const hive of hives) {
             const dist = Math.sqrt(Math.pow(localPlayer.pos.x - hive.x, 2) + Math.pow(localPlayer.pos.y - hive.y, 2));
             if (dist < closestHiveDist) closestHiveDist = dist;
         }
-
-        // Aplica cura baseada na colmeia mais próxima encontrada
         let healTickRate = (closestHiveDist <= 1.5) ? 60 : (closestHiveDist <= 2.5 ? 120 : (closestHiveDist <= 3.5 ? 240 : 0));
         if (healTickRate > 0 && ++cureFrameCounter >= healTickRate) {
             cureFrameCounter = 0;
@@ -642,7 +642,6 @@ function update() {
     camera = { x: localPlayer.pos.x, y: localPlayer.pos.y };
 }
 
-// Função auxiliar para executar o renascimento
 function performRespawn() {
     if (faintTimeout) clearTimeout(faintTimeout);
     localPlayer.respawn();
