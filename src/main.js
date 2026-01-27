@@ -231,7 +231,6 @@ document.getElementById('btn-accept-invite').onclick = () => {
     if (pendingInviteFrom && pendingInviteData) {
         if (!partyMembers.includes(pendingInviteFrom)) partyMembers.push(pendingInviteFrom);
         
-        // Sincroniza dados da party imediatamente ao aceitar
         localPartyName = pendingInviteData.pName || "ALFA";
         localPartyIcon = pendingInviteData.pIcon || "🛡️";
 
@@ -314,8 +313,6 @@ window.addEventListener('netData', e => {
     
     if (d.type === 'PARTY_ACCEPT') { 
         if (!partyMembers.includes(d.fromId)) partyMembers.push(d.fromId);
-        
-        // Se eu convidei e ele aceitou, eu re-sincronizo meus metadados com ele
         chat.addMessage('SYSTEM', null, `${d.fromNick} aceitou o convite.`); 
         chat.openPartyTab(localPartyName, localPartyIcon);
         
@@ -620,17 +617,50 @@ function update() {
     camera = { x: localPlayer.pos.x, y: localPlayer.pos.y };
 }
 
+// Função auxiliar para executar o renascimento
+function performRespawn() {
+    if (faintTimeout) clearTimeout(faintTimeout);
+    
+    localPlayer.respawn();
+    if (localPlayer.homeBase) { 
+        localPlayer.pos = {...localPlayer.homeBase}; 
+        localPlayer.targetPos = {...localPlayer.pos}; 
+    }
+    
+    const faintScreen = document.getElementById('faint-screen');
+    if(faintScreen) faintScreen.style.display = 'none';
+    
+    isFainted = false; 
+    updateUI();
+    
+    // Sincroniza nova posição na rede
+    net.sendPayload({ 
+        type: 'MOVE', 
+        id: localPlayer.id, 
+        nick: localPlayer.nickname, 
+        x: localPlayer.pos.x, 
+        y: localPlayer.pos.y, 
+        dir: localPlayer.currentDir 
+    });
+}
+
+// Configura o botão de respawn imediato
+document.getElementById('btn-immediate-respawn').onclick = (e) => {
+    e.preventDefault();
+    if (isFainted) performRespawn();
+};
+
 function processFaint() {
     isFainted = true;
     const faintScreen = document.getElementById('faint-screen');
     if(faintScreen) faintScreen.style.display = 'flex';
-    if (partyMembers.length > 0) { net.sendPayload({ type: 'PARTY_MSG', fromNick: 'SINAL', text: `ESTOU CAÍDO!` }, partyMembers); }
+    if (partyMembers.length > 0) { 
+        net.sendPayload({ type: 'PARTY_MSG', fromNick: 'SINAL', text: `ESTOU CAÍDO!` }, partyMembers); 
+    }
+    
+    // Define o renascimento automático para 1 minuto (60000ms)
     faintTimeout = setTimeout(() => {
-        localPlayer.respawn();
-        if (localPlayer.homeBase) { localPlayer.pos = {...localPlayer.homeBase}; localPlayer.targetPos = {...localPlayer.pos}; }
-        if(faintScreen) faintScreen.style.display = 'none';
-        isFainted = false; updateUI();
-        net.sendPayload({ type: 'MOVE', id: localPlayer.id, nick: localPlayer.nickname, x: localPlayer.pos.x, y: localPlayer.pos.y, dir: localPlayer.currentDir });
+        performRespawn();
     }, 60000);
 }
 
