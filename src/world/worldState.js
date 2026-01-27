@@ -5,7 +5,7 @@ export class WorldState {
         
         // NOVO: Define o tempo inicial (01 de Janeiro de 2074, 12:00:00)
         // Usamos timestamp para facilitar o cálculo
-        this.worldTime = new Date('2074-01-01T12:00:00').getTime();
+        this.worldTime = new Date('2074-02-09T06:00:00').getTime();
     }
 
     setTile(x, y, type) {
