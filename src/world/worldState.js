@@ -31,6 +31,7 @@ export class WorldState {
         if (!this.growingPlants[key]) {
             this.growingPlants[key] = {
                 time: Date.now(),
+                lastHealTime: Date.now(), // NOVO: Controla o intervalo de cura de 3s
                 owner: ownerId // Salva o ID do player dono para pontuação futura
             };
         }
@@ -44,6 +45,7 @@ export class WorldState {
         const key = `${x},${y}`;
         if (this.growingPlants[key]) {
             this.growingPlants[key].time = Date.now();
+            this.growingPlants[key].lastHealTime = Date.now(); // Reseta cura também
         } else {
             // Se por acaso a planta não estiver na lista (ex: bug de sync), adiciona agora
             this.addGrowingPlant(x, y);
@@ -79,10 +81,17 @@ export class WorldState {
             for (const [key, val] of Object.entries(rawPlants)) {
                 if (typeof val === 'number') {
                     // Save Antigo (era só timestamp): Converte para novo formato sem dono
-                    this.growingPlants[key] = { time: val, owner: null };
+                    this.growingPlants[key] = { 
+                        time: val, 
+                        lastHealTime: Date.now(), 
+                        owner: null 
+                    };
                 } else {
-                    // Save Novo (já é objeto): Mantém
+                    // Save Novo (já é objeto): Mantém, mas garante que lastHealTime existe
                     this.growingPlants[key] = val;
+                    if (!this.growingPlants[key].lastHealTime) {
+                        this.growingPlants[key].lastHealTime = Date.now();
+                    }
                 }
             }
 
