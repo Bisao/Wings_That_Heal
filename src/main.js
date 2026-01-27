@@ -230,18 +230,23 @@ document.getElementById('btn-confirm-party-create').onclick = () => {
 document.getElementById('btn-accept-invite').onclick = () => {
     if (pendingInviteFrom && pendingInviteData) {
         if (!partyMembers.includes(pendingInviteFrom)) partyMembers.push(pendingInviteFrom);
+        
+        // Sincroniza dados da party imediatamente ao aceitar
         localPartyName = pendingInviteData.pName || "ALFA";
         localPartyIcon = pendingInviteData.pIcon || "🛡️";
 
         net.sendPayload({ 
             type: 'PARTY_ACCEPT', 
             fromId: localPlayer.id, 
-            fromNick: localPlayer.nickname 
+            fromNick: localPlayer.nickname,
+            pName: localPartyName,
+            pIcon: localPartyIcon
         }, pendingInviteFrom);
 
         chat.addMessage('SYSTEM', null, `Você entrou no grupo ${localPartyIcon} ${localPartyName}.`);
         chat.openPartyTab(localPartyName, localPartyIcon);
         document.getElementById('party-invite-popup').style.display = 'none';
+        
         pendingInviteFrom = null;
         pendingInviteData = null;
     }
@@ -309,8 +314,11 @@ window.addEventListener('netData', e => {
     
     if (d.type === 'PARTY_ACCEPT') { 
         if (!partyMembers.includes(d.fromId)) partyMembers.push(d.fromId);
+        
+        // Se eu convidei e ele aceitou, eu re-sincronizo meus metadados com ele
         chat.addMessage('SYSTEM', null, `${d.fromNick} aceitou o convite.`); 
         chat.openPartyTab(localPartyName, localPartyIcon);
+        
         if (partyMembers.length > 1) {
              net.sendPayload({ 
                  type: 'PARTY_SYNC', 
@@ -373,7 +381,7 @@ window.addEventListener('netData', e => {
     if(d.type === 'TILE_CHANGE') changeTile(d.x, d.y, d.tileType, d.ownerId);
 });
 
-// --- SISTEMA DE RANKING ATUALIZADO (TOP 3 + FULL MODAL) ---
+// --- SISTEMA DE RANKING ATUALIZADO ---
 function updateRanking() {
     let rankingData = Object.entries(guestDataDB).map(([nick, stats]) => ({
         nick: nick,
@@ -400,7 +408,6 @@ function updateRanking() {
 
     rankingData.sort((a, b) => b.score - a.score);
     
-    // 1. Atualiza Mini-Ranking (Top 3)
     const rankingList = document.getElementById('ranking-list');
     if (rankingList) {
         if (rankingData.length === 0) {
@@ -418,7 +425,6 @@ function updateRanking() {
         }
     }
 
-    // 2. Atualiza Modal de Ranking Completo
     const fullList = document.getElementById('ranking-full-list');
     if (fullList) {
         fullList.innerHTML = rankingData.map((player, index) => {
