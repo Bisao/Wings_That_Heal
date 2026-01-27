@@ -27,7 +27,6 @@ export class ChatSystem {
             this.tabsContainer.style.background = '#000';
             this.tabsContainer.style.minHeight = '35px';
             this.tabsContainer.style.borderBottom = '1px solid #222';
-            // Esconde a barra de rolagem das abas para um visual limpo
             this.tabsContainer.style.scrollbarWidth = 'none'; 
         }
     }
@@ -40,8 +39,6 @@ export class ChatSystem {
         });
 
         this.sendBtn.onclick = () => this.triggerSend();
-        
-        // Impede que as teclas de movimento interfiram no jogo ao digitar
         this.input.addEventListener('keydown', (e) => e.stopPropagation());
     }
 
@@ -53,8 +50,6 @@ export class ChatSystem {
             const hasNotify = this.notifications[channel] && this.activeTab !== channel;
             
             btn.className = `chat-tab ${this.activeTab === channel ? 'active' : ''}`;
-            
-            // Estilo dinâmico para abas
             btn.style.flex = "1";
             btn.style.minWidth = "60px";
             btn.style.padding = "10px 5px";
@@ -63,14 +58,12 @@ export class ChatSystem {
             btn.style.cursor = "pointer";
             btn.style.transition = "all 0.2s";
             
-            // CORREÇÃO: Alerta visual forte para mensagens não lidas
             if (this.activeTab === channel) {
                 btn.style.background = "var(--primary)";
                 btn.style.color = "#000";
             } else if (hasNotify) {
                 btn.style.background = "var(--danger)";
                 btn.style.color = "#fff";
-                btn.style.animation = "pulseNotify 1s infinite alternate";
             } else {
                 btn.style.background = "#1a1a1a";
                 btn.style.color = "#666";
@@ -91,25 +84,32 @@ export class ChatSystem {
         });
     }
 
+    // CORREÇÃO: Lógica de Toggle com manipulação de classes CSS para movimento lateral
     toggleChat() {
         this.isVisible = !this.isVisible;
+        
         if (this.isVisible) {
-            this.container.style.display = 'flex';
+            // Adiciona as classes que disparam o 'left' no CSS
+            this.container.classList.add('open');
+            this.toggleBtn.classList.add('open');
             this.toggleBtn.innerHTML = '◀'; 
+            
             this.unreadCount = 0;
             this.updateNotification();
             
             if (this.isMobile()) {
                 setTimeout(() => {
                     this.input.focus();
-                    this.scrollToBottom(); // Garante visão da última mensagem após abrir teclado
+                    this.scrollToBottom();
                 }, 300);
             } else {
                 this.input.focus();
                 this.scrollToBottom();
             }
         } else {
-            this.container.style.display = 'none';
+            // Remove as classes para recolher o chat à esquerda
+            this.container.classList.remove('open');
+            this.toggleBtn.classList.remove('open');
             this.toggleBtn.innerHTML = '💬'; 
         }
     }
@@ -196,7 +196,6 @@ export class ChatSystem {
                 <span style="color:#eee">${this.escapeHTML(text)}</span>
             `;
 
-            // CORREÇÃO: Clique universal para abrir o modal do player
             if (!isSelf && type !== 'SYSTEM') {
                 const nickSpan = msgDiv.querySelector('.chat-nick');
                 nickSpan.onclick = (e) => {
@@ -209,13 +208,11 @@ export class ChatSystem {
         this.messagesBox.appendChild(msgDiv);
         this.limitMessages(this.isMobile() ? 60 : 150);
 
-        // Gerenciar notificações de abas
         if (this.activeTab !== targetChannel) {
             this.notifications[targetChannel] = true;
             this.renderTabs();
         }
 
-        // Notificação no botão de abrir chat
         if (!this.isVisible && type !== 'SYSTEM') {
             this.unreadCount++;
             this.updateNotification();
@@ -239,7 +236,6 @@ export class ChatSystem {
     }
 
     scrollToBottom() {
-        // CORREÇÃO: Scroll suave e preciso para a base do container fixo
         this.messagesBox.scrollTop = this.messagesBox.scrollHeight;
     }
 
