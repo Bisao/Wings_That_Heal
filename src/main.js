@@ -64,6 +64,8 @@ let uiUpdateCounter = 0;
 // Estado de Desmaio local
 let isFainted = false;
 let faintTimeout = null; 
+let faintStartTime = 0;
+const TOTAL_FAINT_TIME = 60000; // 1 minuto em ms
 
 const assets = { flower: new Image() };
 assets.flower.src = 'assets/Flower.png';
@@ -350,6 +352,11 @@ window.addEventListener('netData', e => {
         isFainted = false;
         localPlayer.hp = 25; 
         document.getElementById('faint-screen').style.display = 'none';
+        
+        // Reset da barra de progresso no resgate
+        const barFill = document.getElementById('faint-progress-fill');
+        if (barFill) barFill.style.width = "0%";
+        
         chat.addMessage('SYSTEM', null, `Reanimado por ${d.fromNick}!`);
         updateUI();
     }
@@ -551,8 +558,27 @@ function updateEnvironment() {
     if (overlay) overlay.style.opacity = overlayOpacity;
 }
 
+// Nova função para atualizar a barra de progresso do desmaio
+function updateFaintProgressBar() {
+    if (!isFainted || !faintStartTime) return;
+    
+    const elapsed = Date.now() - faintStartTime;
+    const progress = Math.min(100, (elapsed / TOTAL_FAINT_TIME) * 100);
+    
+    const barFill = document.getElementById('faint-progress-fill');
+    if (barFill) {
+        barFill.style.width = `${progress}%`;
+    }
+}
+
 function update() {
-    if(!localPlayer || isFainted) return; 
+    if(!localPlayer) return; 
+    
+    // Atualiza barra de progresso se estiver desmaiado
+    if (isFainted) updateFaintProgressBar();
+    
+    if (isFainted) return; // Trava o resto do update se estiver caído
+
     updateEnvironment();
     const gx = Math.round(localPlayer.pos.x), gy = Math.round(localPlayer.pos.y);
     if (gx !== lastGridX || gy !== lastGridY) {
@@ -630,7 +656,12 @@ function performRespawn() {
     const faintScreen = document.getElementById('faint-screen');
     if(faintScreen) faintScreen.style.display = 'none';
     
+    // Reset da barra de progresso
+    const barFill = document.getElementById('faint-progress-fill');
+    if (barFill) barFill.style.width = "0%";
+    
     isFainted = false; 
+    faintStartTime = 0;
     updateUI();
     
     // Sincroniza nova posição na rede
@@ -652,6 +683,7 @@ document.getElementById('btn-immediate-respawn').onclick = (e) => {
 
 function processFaint() {
     isFainted = true;
+    faintStartTime = Date.now();
     const faintScreen = document.getElementById('faint-screen');
     if(faintScreen) faintScreen.style.display = 'flex';
     if (partyMembers.length > 0) { 
@@ -661,7 +693,7 @@ function processFaint() {
     // Define o renascimento automático para 1 minuto (60000ms)
     faintTimeout = setTimeout(() => {
         performRespawn();
-    }, 60000);
+    }, TOTAL_FAINT_TIME);
 }
 
 function gainXp(amount) {
