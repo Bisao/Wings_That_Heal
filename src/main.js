@@ -605,15 +605,42 @@ function update() {
         lastGridX = gx; lastGridY = gy;
         const el = document.getElementById('hud-coords'); if(el) el.innerText = `${gx}, ${gy}`;
     }
+    
+    // Captura movimento do joystick da esquerda (ou teclado)
     const m = input.getMovement();
+    
+    // Captura direção do olhar do joystick da direita
+    const lookVector = input.getLookVector();
+    if (lookVector) {
+        // Se o joystick da direita estiver em uso, forçamos a direção do olhar
+        localPlayer.currentDir = Math.atan2(lookVector.y, lookVector.x);
+    }
+    
     localPlayer.update(m);
     const moving = m.x !== 0 || m.y !== 0;
-    if(moving || Math.random() < 0.05) {
-        localPlayer.pos.x += m.x * localPlayer.speed; localPlayer.pos.y += m.y * localPlayer.speed;
-        net.sendPayload({ type: 'MOVE', id: localPlayer.id, nick: localPlayer.nickname, x: localPlayer.pos.x, y: localPlayer.pos.y, dir: localPlayer.currentDir, stats: { level: localPlayer.level, hp: localPlayer.hp, maxHp: localPlayer.maxHp, tilesCured: localPlayer.tilesCured } });
+    if(moving || lookVector || Math.random() < 0.05) {
+        localPlayer.pos.x += m.x * localPlayer.speed; 
+        localPlayer.pos.y += m.y * localPlayer.speed;
+        
+        net.sendPayload({ 
+            type: 'MOVE', 
+            id: localPlayer.id, 
+            nick: localPlayer.nickname, 
+            x: localPlayer.pos.x, 
+            y: localPlayer.pos.y, 
+            dir: localPlayer.currentDir, 
+            stats: { 
+                level: localPlayer.level, 
+                hp: localPlayer.hp, 
+                maxHp: localPlayer.maxHp, 
+                tilesCured: localPlayer.tilesCured 
+            } 
+        });
     }
+    
     if (localPlayer.pollen > 0 && moving) spawnPollenParticle();
     updateParticles();
+    
     partyMembers.forEach(memberId => {
         const partner = remotePlayers[memberId];
         if (partner && partner.hp <= 0 && localPlayer.pollen >= 20) {
@@ -626,6 +653,7 @@ function update() {
             }
         }
     });
+    
     const tile = worldState.getModifiedTile(gx, gy) || world.getTileAt(gx, gy);
     const isSafe = ['GRAMA', 'GRAMA_SAFE', 'BROTO', 'MUDA', 'FLOR', 'FLOR_COOLDOWN', 'COLMEIA'].includes(tile);
     if (!isSafe) {
@@ -635,9 +663,11 @@ function update() {
             if (localPlayer.hp <= 0) processFaint();
         }
     } 
+    
     const hpRatio = localPlayer.hp / localPlayer.maxHp;
     const overlay = document.getElementById('suffocation-overlay');
     if (overlay) overlay.style.opacity = hpRatio < 0.7 ? (0.7 - hpRatio) * 1.4 : 0;
+    
     if (localPlayer.homeBase && localPlayer.hp < localPlayer.maxHp) {
         const dist = Math.sqrt(Math.pow(localPlayer.pos.x - localPlayer.homeBase.x, 2) + Math.pow(localPlayer.pos.y - localPlayer.homeBase.y, 2));
         let healTickRate = (dist <= 1.5) ? 60 : (dist <= 2.5 ? 120 : (dist <= 3.5 ? 240 : 0));
@@ -647,10 +677,12 @@ function update() {
             updateUI();
         }
     }
+    
     if (tile === 'FLOR' && localPlayer.pollen < localPlayer.maxPollen && ++collectionFrameCounter >= COLLECTION_RATE) {
         localPlayer.pollen++; collectionFrameCounter = 0; gainXp(XP_PER_POLLEN);
         if (localPlayer.pollen >= localPlayer.maxPollen) changeTile(gx, gy, 'FLOR_COOLDOWN', localPlayer.id);
     }
+    
     if (tile === 'TERRA_QUEIMADA' && localPlayer.pollen > 0 && moving && ++uiUpdateCounter >= CURE_ATTEMPT_RATE) {
         uiUpdateCounter = 0; localPlayer.pollen--; 
         if (Math.random() < PLANT_SPAWN_CHANCE) { 
