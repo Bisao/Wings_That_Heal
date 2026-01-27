@@ -8,9 +8,9 @@ export class Player {
         this.targetPos = { x: 0, y: 0 };
         this.homeBase = { x: 0, y: 0 }; 
         this.speed = 0.06; 
-        this.currentDir = 'Down';
+        this.currentDir = 'Idle';
         
-        // --- SISTEMA DE RPG ---
+        // --- STATUS RPG ---
         this.hp = 100;
         this.maxHp = 100;
         this.pollen = 0;
@@ -19,11 +19,6 @@ export class Player {
         this.xp = 0;
         this.maxXp = 100; 
         this.tilesCured = 0;
-
-        // Controle de latência e limpeza
-        this.lastUpdate = Date.now();
-
-        // COR ÚNICA: Gera uma cor baseada no nome do jogador
         this.color = this.generateColor(nickname);
 
         this.sprites = {};
@@ -43,7 +38,6 @@ export class Player {
 
     update(moveVector) {
         if (this.isLocal) {
-            // Lógica Local: Define a direção baseada no vetor de entrada
             const isMoving = moveVector.x !== 0 || moveVector.y !== 0;
             if (isMoving) {
                 if (Math.abs(moveVector.x) > Math.abs(moveVector.y)) {
@@ -57,34 +51,25 @@ export class Player {
                 else if(this.currentDir === 'Up' || this.currentDir === 'Down') this.currentDir = 'Idle';
             }
         } else {
-            // LÓGICA REMOTA: Move this.pos em direção a this.targetPos continuamente
+            // INTERPOLAÇÃO PARA PLAYERS REMOTOS
             const dx = this.targetPos.x - this.pos.x;
             const dy = this.targetPos.y - this.pos.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
-            // Se a distância for muito grande (teleporte/lag pesado), pula direto
-            if (dist > 5) {
+            if (dist > 5) { // Teleporte se o lag for muito alto
                 this.pos.x = this.targetPos.x;
                 this.pos.y = this.targetPos.y;
-            } else if (dist > 0.001) {
-                // Interpolação Linear (Lerp) para movimento suave
-                // O valor 0.15 garante que a abelha "deslize" suavemente
-                this.pos.x += dx * 0.15;
+            } else if (dist > 0.01) {
+                this.pos.x += dx * 0.15; // Desliza 15% da distância por frame
                 this.pos.y += dy * 0.15;
-            }
-
-            // Define a direção visual do player remoto baseado no movimento
-            if (dist > 0.01) {
-                if (Math.abs(dx) > Math.abs(dy)) {
-                    this.currentDir = dx > 0 ? 'Right' : 'Left';
-                } else {
-                    this.currentDir = dy > 0 ? 'Down' : 'Up';
-                }
+                
+                // Atualiza direção visual remota
+                if (Math.abs(dx) > Math.abs(dy)) this.currentDir = dx > 0 ? 'Right' : 'Left';
+                else this.currentDir = dy > 0 ? 'Down' : 'Up';
             } else {
-                // Estado de espera para remotos
-                if(this.currentDir === 'Left') this.currentDir = 'LeftIdle';
-                else if(this.currentDir === 'Right') this.currentDir = 'RightIdle';
-                else if(['Up', 'Down', 'Left', 'Right'].includes(this.currentDir)) this.currentDir = 'Idle';
+                if(['Left', 'LeftIdle'].includes(this.currentDir)) this.currentDir = 'LeftIdle';
+                else if(['Right', 'RightIdle'].includes(this.currentDir)) this.currentDir = 'RightIdle';
+                else this.currentDir = 'Idle';
             }
         }
     }
@@ -102,38 +87,19 @@ export class Player {
 
     serialize() {
         return {
-            id: this.id,
-            nickname: this.nickname,
-            x: this.pos.x,
-            y: this.pos.y,
-            dir: this.currentDir,
-            stats: {
-                level: this.level,
-                hp: this.hp,
-                maxHp: this.maxHp,
-                pollen: this.pollen,
-                maxPollen: this.maxPollen,
-                tilesCured: this.tilesCured 
-            }
+            id: this.id, nickname: this.nickname,
+            x: this.pos.x, y: this.pos.y, dir: this.currentDir,
+            stats: { level: this.level, hp: this.hp, maxHp: this.maxHp, pollen: this.pollen, maxPollen: this.maxPollen, tilesCured: this.tilesCured }
         };
     }
 
     deserialize(data) {
         if (!data) return;
-        this.lastUpdate = Date.now(); // Marca que recebemos dados novos
-
-        if (data.x !== undefined) this.targetPos.x = data.x;
-        if (data.y !== undefined) this.targetPos.y = data.y;
-        
-        // Se for o player local, a posição é absoluta (teclado/joystick manda)
-        if (this.isLocal) {
-            this.pos.x = data.x;
-            this.pos.y = data.y;
-            this.targetPos = { ...this.pos }; 
+        if (!this.isLocal) {
+            if (data.x !== undefined) this.targetPos.x = data.x;
+            if (data.y !== undefined) this.targetPos.y = data.y;
+            if (data.dir) this.currentDir = data.dir;
         }
-
-        if (data.dir) this.currentDir = data.dir;
-
         if (data.stats) {
             this.level = data.stats.level || this.level;
             this.hp = data.stats.hp !== undefined ? data.stats.hp : this.hp;
@@ -147,97 +113,53 @@ export class Player {
     draw(ctx, cam, canvas, tileSize, remotePlayers = {}, partyMemberIds = [], partyIcon = "") {
         const sX = (this.pos.x - cam.x) * tileSize + canvas.width / 2;
         const sY = (this.pos.y - cam.y) * tileSize + canvas.height / 2;
-        
         const isDead = this.hp <= 0;
         const sprite = isDead ? (this.sprites['Fainted'] || this.sprites['Idle']) : (this.sprites[this.currentDir] || this.sprites['Idle']);
         const zoomScale = tileSize / 32;
-        
-        const isPartner = Array.isArray(partyMemberIds) ? partyMemberIds.includes(this.id) : this.id === partyMemberIds;
+        const isPartner = partyMemberIds.includes(this.id);
 
-        // BÚSSOLA DE MULTI-PARTY
-        if (this.isLocal && Array.isArray(partyMemberIds) && partyMemberIds.length > 0) {
-            partyMemberIds.forEach(memberId => {
-                const partner = remotePlayers[memberId];
-                if (partner && partner.id !== this.id) {
-                    const dx = partner.pos.x - this.pos.x;
-                    const dy = partner.pos.y - this.pos.y;
-                    const dist = Math.sqrt(dx*dx + dy*dy);
-
-                    if (dist > 5) {
+        // BÚSSOLA DE PARCEIROS
+        if (this.isLocal && partyMemberIds.length > 0) {
+            partyMemberIds.forEach(mId => {
+                const p = remotePlayers[mId];
+                if (p && p.id !== this.id) {
+                    const dx = p.pos.x - this.pos.x, dy = p.pos.y - this.pos.y;
+                    if (Math.sqrt(dx*dx + dy*dy) > 6) {
                         const angle = Math.atan2(dy, dx);
-                        const orbitRadius = 45 * zoomScale; 
-                        const arrowX = sX + Math.cos(angle) * orbitRadius;
-                        const arrowY = sY + Math.sin(angle) * orbitRadius;
-
                         ctx.save();
-                        ctx.translate(arrowX, arrowY);
+                        ctx.translate(sX + Math.cos(angle) * 50 * zoomScale, sY + Math.sin(angle) * 50 * zoomScale);
                         ctx.rotate(angle);
-                        ctx.fillStyle = partner.color; 
-                        ctx.shadowBlur = 10;
-                        ctx.shadowColor = partner.color;
-                        
-                        ctx.beginPath();
-                        ctx.moveTo(8 * zoomScale, 0);
-                        ctx.lineTo(-6 * zoomScale, -6 * zoomScale);
-                        ctx.lineTo(-3 * zoomScale, 0);
-                        ctx.lineTo(-6 * zoomScale, 6 * zoomScale);
-                        ctx.closePath();
-                        ctx.fill();
+                        ctx.fillStyle = p.color;
+                        ctx.beginPath(); ctx.moveTo(10*zoomScale, 0); ctx.lineTo(-5*zoomScale, -5*zoomScale); ctx.lineTo(-5*zoomScale, 5*zoomScale); ctx.fill();
                         ctx.restore();
                     }
                 }
             });
         }
 
-        const floatY = isDead ? 0 : Math.sin(Date.now() / 200) * (3 * zoomScale); 
-        const drawY = sY - (12 * zoomScale) + floatY;
+        // SOMBRA E BOBBING
+        const floatY = isDead ? 0 : Math.sin(Date.now() / 200) * (3 * zoomScale);
+        ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+        ctx.beginPath(); ctx.ellipse(sX, sY + 8 * zoomScale, 10 * zoomScale, 4 * zoomScale, 0, 0, Math.PI * 2); ctx.fill();
 
-        ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
-        ctx.beginPath();
-        ctx.ellipse(sX, sY + (8 * zoomScale), (isDead ? 12 : 10) * zoomScale, 4 * zoomScale, 0, 0, Math.PI * 2);
-        ctx.fill();
-
+        // SPRITE
         ctx.save();
-        ctx.translate(sX, drawY);
+        ctx.translate(sX, sY - 12 * zoomScale + floatY);
         if (isDead) ctx.rotate(Math.PI / 2);
-        
-        if (sprite.complete && sprite.naturalWidth !== 0) {
-            ctx.drawImage(sprite, -tileSize/2, -tileSize/2, tileSize, tileSize);
-        } else {
-            ctx.fillStyle = isDead ? "gray" : (this.color || "yellow");
-            ctx.beginPath(); ctx.arc(0, 0, 10 * zoomScale, 0, Math.PI*2); ctx.fill();
-        }
+        if (sprite.complete) ctx.drawImage(sprite, -tileSize/2, -tileSize/2, tileSize, tileSize);
         ctx.restore();
 
-        const iconDisplay = (isPartner && partyIcon) ? partyIcon : (isPartner ? "🛡️" : "");
-        const nameText = isPartner ? `${iconDisplay} ${this.nickname}` : this.nickname;
-
-        ctx.fillStyle = isDead ? "#666" : this.color; 
-        ctx.font = `bold ${12 * zoomScale}px sans-serif`; 
-        ctx.textAlign = "center";
-        ctx.strokeStyle = "black"; 
-        ctx.lineWidth = 3; 
-        
-        const nickY = drawY - (20 * zoomScale);
-        ctx.strokeText(nameText, sX, nickY); 
-        ctx.fillText(nameText, sX, nickY);
+        // UI SOBRE A CABEÇA
+        ctx.textAlign = "center"; ctx.font = `bold ${12 * zoomScale}px sans-serif`;
+        ctx.strokeStyle = "black"; ctx.lineWidth = 3; ctx.fillStyle = isDead ? "#666" : this.color;
+        const nameLabel = isPartner ? `${partyIcon || '🛡️'} ${this.nickname}` : this.nickname;
+        ctx.strokeText(nameLabel, sX, sY - 35 * zoomScale);
+        ctx.fillText(nameLabel, sX, sY - 35 * zoomScale);
 
         if (!this.isLocal) {
-            const barW = 30 * zoomScale;
-            const barH = 4 * zoomScale;
-            const barY = nickY - (12 * zoomScale);
-            ctx.fillStyle = "black";
-            ctx.fillRect(sX - barW/2, barY, barW, barH);
+            ctx.fillStyle = "black"; ctx.fillRect(sX - 15 * zoomScale, sY - 30 * zoomScale, 30 * zoomScale, 4 * zoomScale);
             ctx.fillStyle = isPartner ? "#2ecc71" : "#e74c3c";
-            ctx.fillRect(sX - barW/2, barY, Math.max(0, barW * (this.hp / this.maxHp)), barH);
-        }
-
-        if (isPartner && isDead) {
-            const pulse = Math.abs(Math.sin(Date.now() / 300));
-            ctx.font = `bold ${11 * zoomScale}px sans-serif`;
-            ctx.fillStyle = `rgba(46, 204, 113, ${0.5 + pulse * 0.5})`;
-            ctx.strokeText("🆘 RESGATE!", sX, nickY - (25 * zoomScale));
-            ctx.fillText("🆘 RESGATE!", sX, nickY - (25 * zoomScale));
+            ctx.fillRect(sX - 15 * zoomScale, sY - 30 * zoomScale, (30 * zoomScale) * (this.hp / this.maxHp), 4 * zoomScale);
         }
     }
 }
