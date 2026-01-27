@@ -84,12 +84,10 @@ export class ChatSystem {
         });
     }
 
-    // CORREÇÃO: Lógica de Toggle com manipulação de classes CSS para movimento lateral
     toggleChat() {
         this.isVisible = !this.isVisible;
         
         if (this.isVisible) {
-            // Adiciona as classes que disparam o 'left' no CSS
             this.container.classList.add('open');
             this.toggleBtn.classList.add('open');
             this.toggleBtn.innerHTML = '◀'; 
@@ -107,7 +105,6 @@ export class ChatSystem {
                 this.scrollToBottom();
             }
         } else {
-            // Remove as classes para recolher o chat à esquerda
             this.container.classList.remove('open');
             this.toggleBtn.classList.remove('open');
             this.toggleBtn.innerHTML = '💬'; 
@@ -256,6 +253,12 @@ export class ChatSystem {
         const text = this.input.value.trim();
         if (!text) return;
         this.input.value = '';
+
+        // Comandos rápidos de chat
+        if (text === '/sair' && this.channels.includes('PARTY')) {
+            window.dispatchEvent(new CustomEvent('chatSend', { detail: { type: 'LEAVE_PARTY_CMD' } }));
+            return;
+        }
 
         const detail = { text };
         if (this.activeTab === 'GLOBAL') {
