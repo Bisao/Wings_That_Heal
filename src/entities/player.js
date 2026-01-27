@@ -109,48 +109,54 @@ export class Player {
         }
     }
 
-    // --- RENDERIZAÇÃO ---
-    draw(ctx, cam, canvas, tileSize, remotePlayers = {}, partyPartnerId = null) {
+    // --- RENDERIZAÇÃO ATUALIZADA PARA MULTI-PARTY ---
+    draw(ctx, cam, canvas, tileSize, remotePlayers = {}, partyMemberIds = []) {
         const sX = (this.pos.x - cam.x) * tileSize + canvas.width / 2;
         const sY = (this.pos.y - cam.y) * tileSize + canvas.height / 2;
         
         const isDead = this.hp <= 0;
         const sprite = isDead ? (this.sprites['Fainted'] || this.sprites['Idle']) : (this.sprites[this.currentDir] || this.sprites['Idle']);
         const zoomScale = tileSize / 32;
-        const isPartner = this.id === partyPartnerId;
+        
+        // Verifica se este player específico faz parte da sua party
+        const isPartner = Array.isArray(partyMemberIds) ? partyMemberIds.includes(this.id) : this.id === partyMemberIds;
 
-        // BÚSSOLA DE PARTY (Apenas para o player local apontando para o parceiro)
-        if (this.isLocal && partyPartnerId && remotePlayers[partyPartnerId]) {
-            const partner = remotePlayers[partyPartnerId];
-            const dx = partner.pos.x - this.pos.x;
-            const dy = partner.pos.y - this.pos.y;
-            const dist = Math.sqrt(dx*dx + dy*dy);
+        // BÚSSOLA DE MULTI-PARTY (Apenas para o player local apontando para os aliados)
+        if (this.isLocal && Array.isArray(partyMemberIds) && partyMemberIds.length > 0) {
+            partyMemberIds.forEach(memberId => {
+                const partner = remotePlayers[memberId];
+                if (partner) {
+                    const dx = partner.pos.x - this.pos.x;
+                    const dy = partner.pos.y - this.pos.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
 
-            // Só mostra se o parceiro estiver longe (fora da visão imediata)
-            if (dist > 2) {
-                const angle = Math.atan2(dy, dx);
-                const orbitRadius = 45 * zoomScale; // Raio da rotação em volta da abelha
-                const arrowX = sX + Math.cos(angle) * orbitRadius;
-                const arrowY = sY + Math.sin(angle) * orbitRadius;
+                    // Só mostra se o aliado estiver fora da visão imediata
+                    if (dist > 2) {
+                        const angle = Math.atan2(dy, dx);
+                        const orbitRadius = 45 * zoomScale; 
+                        const arrowX = sX + Math.cos(angle) * orbitRadius;
+                        const arrowY = sY + Math.sin(angle) * orbitRadius;
 
-                ctx.save();
-                ctx.translate(arrowX, arrowY);
-                ctx.rotate(angle);
-                
-                // Desenha a Seta Colorida
-                ctx.fillStyle = partner.color; // Cor do parceiro
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = partner.color;
-                
-                ctx.beginPath();
-                ctx.moveTo(8 * zoomScale, 0);
-                ctx.lineTo(-6 * zoomScale, -6 * zoomScale);
-                ctx.lineTo(-3 * zoomScale, 0);
-                ctx.lineTo(-6 * zoomScale, 6 * zoomScale);
-                ctx.closePath();
-                ctx.fill();
-                ctx.restore();
-            }
+                        ctx.save();
+                        ctx.translate(arrowX, arrowY);
+                        ctx.rotate(angle);
+                        
+                        // Desenha a Seta com a cor específica do aliado
+                        ctx.fillStyle = partner.color; 
+                        ctx.shadowBlur = 10;
+                        ctx.shadowColor = partner.color;
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(8 * zoomScale, 0);
+                        ctx.lineTo(-6 * zoomScale, -6 * zoomScale);
+                        ctx.lineTo(-3 * zoomScale, 0);
+                        ctx.lineTo(-6 * zoomScale, 6 * zoomScale);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.restore();
+                    }
+                }
+            });
         }
 
         // 1. Balanço (Bobbing)
@@ -176,7 +182,7 @@ export class Player {
         }
         ctx.restore();
 
-        // 4. Nickname e Level (Com cor dinâmica)
+        // 4. Nickname e Level (Com cor dinâmica e tag [GP])
         const nameText = isPartner ? `[GP] ${this.nickname}` : this.nickname;
         ctx.fillStyle = isDead ? "#666" : this.color; 
         
@@ -189,7 +195,7 @@ export class Player {
         ctx.strokeText(nameText, sX, nickY); 
         ctx.fillText(nameText, sX, nickY);
 
-        // Barra de HP (Apenas para outros players ou parceiro)
+        // Barra de HP
         if (!this.isLocal) {
             const barW = 30 * zoomScale;
             const barH = 4 * zoomScale;
@@ -200,7 +206,7 @@ export class Player {
             ctx.fillRect(sX - barW/2, barY, Math.max(0, barW * (this.hp / this.maxHp)), barH);
         }
 
-        // Resgate Ativo
+        // Alerta de Resgate Ativo (Somente parceiros)
         if (isPartner && isDead) {
             const pulse = Math.abs(Math.sin(Date.now() / 300));
             ctx.font = `bold ${11 * zoomScale}px sans-serif`;
