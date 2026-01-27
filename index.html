@@ -46,9 +46,26 @@
         .faint-msg { font-size: 18px; max-width: 80%; line-height: 1.6; color: #ccc; font-style: italic; }
         .faint-hint { margin-top: 25px; color: var(--accent-green); font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
         
-        /* BOTÃO DE RESPAWN IMEDIATO */
+        /* BARRA DE PROGRESSO DE RESPAWN */
+        #faint-progress-container {
+            width: 250px;
+            height: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            margin-top: 20px;
+            overflow: hidden;
+            border: 1px solid #333;
+        }
+        #faint-progress-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-dark), var(--primary));
+            box-shadow: 0 0 10px var(--primary);
+            transition: width 0.1s linear;
+        }
+
         .btn-respawn {
-            margin-top: 40px;
+            margin-top: 30px;
             padding: 18px 35px;
             background: transparent;
             border: 2px solid var(--primary);
@@ -311,6 +328,10 @@
         <div class="faint-title">Asas Caídas</div>
         <div class="faint-msg">O equilíbrio da floresta foi quebrado... <br>Aguarde o resgate da colmeia.</div>
         <div class="faint-hint">Um aliado pode te salvar com pólen real!</div>
+        
+        <div id="faint-progress-container">
+            <div id="faint-progress-fill"></div>
+        </div>
         
         <button id="btn-immediate-respawn" class="btn-respawn">Reascender na Colmeia</button>
     </div>
