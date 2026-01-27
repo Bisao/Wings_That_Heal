@@ -19,14 +19,12 @@ class VirtualJoystick {
     }
 
     onTouchStart(e) {
-        // Se já houver um toque neste joystick, ignora novos toques
         if (this.touchId !== null) return;
 
         for (let i = 0; i < e.changedTouches.length; i++) {
             const touch = e.changedTouches[i];
             const rect = this.zone.getBoundingClientRect();
             
-            // Verifica se o toque começou dentro da zona circular
             const centerX = rect.left + rect.width / 2;
             const centerY = rect.top + rect.height / 2;
             const dist = Math.sqrt(Math.pow(touch.clientX - centerX, 2) + Math.pow(touch.clientY - centerY, 2));
@@ -95,6 +93,14 @@ export class InputHandler {
         this.isMobile = this.detectMobile();
         this.leftStick = null;
 
+        // Estado do Zoom
+        this.currentZoom = 2.0; 
+        this.minZoom = 0.5;
+        this.maxZoom = 3.0;
+
+        // Suporte a Pinch Zoom (Mobile)
+        this.lastTouchDist = 0;
+
         // Listener Teclado
         window.addEventListener('keydown', e => { if(e.key) this.keys[e.key.toLowerCase()] = true; });
         window.addEventListener('keyup', e => { if(e.key) this.keys[e.key.toLowerCase()] = false; });
@@ -103,6 +109,7 @@ export class InputHandler {
             this.injectMobileStyles();
             this.injectMobileHTML();
             this.leftStick = new VirtualJoystick('stick-left-zone', 'stick-left-knob');
+            this.initMobileZoomEvents();
         }
     }
 
@@ -110,16 +117,19 @@ export class InputHandler {
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     }
 
-    // Cria o visual do joystick se não houver no HTML
     injectMobileStyles() {
         if (document.getElementById('joystick-styles')) return;
         const style = document.createElement('style');
         style.id = 'joystick-styles';
         style.innerHTML = `
+            #mobile-ui-container {
+                display: none;
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                z-index: 1000; pointer-events: none;
+            }
             #mobile-controls {
-                display: none; /* Começa oculto por padrão */
-                position: fixed; bottom: 30px; left: 30px; 
-                width: 120px; height: 120px; z-index: 1000;
+                position: absolute; bottom: 40px; left: 40px; 
+                width: 120px; height: 120px;
                 pointer-events: none;
             }
             .joystick-zone {
@@ -133,28 +143,90 @@ export class InputHandler {
                 border-radius: 50%; transform: translate(-50%, -50%);
                 box-shadow: 0 0 15px var(--honey-glow); pointer-events: none;
             }
+            /* SLIDER DE ZOOM VERTICAL */
+            #zoom-slider-container {
+                position: absolute; right: 25px; top: 50%; transform: translateY(-50%);
+                width: 40px; height: 200px; background: rgba(0,0,0,0.5);
+                border-radius: 20px; border: 1px solid rgba(241,196,15,0.4);
+                display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+                padding: 15px 0; pointer-events: auto;
+            }
+            #zoom-range {
+                writing-mode: bt-lr; /* Vertical para browsers que suportam */
+                -webkit-appearance: slider-vertical;
+                width: 8px; height: 150px;
+                background: #333;
+                outline: none;
+            }
+            .zoom-label { color: var(--primary); font-size: 16px; font-weight: bold; font-family: sans-serif; }
         `;
         document.head.appendChild(style);
     }
 
     injectMobileHTML() {
-        if (document.getElementById('mobile-controls')) return;
-        const div = document.createElement('div');
-        div.id = 'mobile-controls';
-        div.innerHTML = `
-            <div id="stick-left-zone" class="joystick-zone">
-                <div id="stick-left-knob" class="joystick-knob"></div>
+        if (document.getElementById('mobile-ui-container')) return;
+        const container = document.createElement('div');
+        container.id = 'mobile-ui-container';
+        container.innerHTML = `
+            <div id="mobile-controls">
+                <div id="stick-left-zone" class="joystick-zone">
+                    <div id="stick-left-knob" class="joystick-knob"></div>
+                </div>
+            </div>
+            <div id="zoom-slider-container">
+                <span class="zoom-label">+</span>
+                <input type="range" id="zoom-range" min="50" max="300" value="200">
+                <span class="zoom-label">-</span>
             </div>
         `;
-        document.body.appendChild(div);
+        document.body.appendChild(container);
+
+        // Listener do Slider
+        const slider = document.getElementById('zoom-range');
+        slider.addEventListener('input', (e) => {
+            this.currentZoom = e.target.value / 100;
+        });
     }
 
-    // Método para mostrar o joystick (chamado no startGame)
+    initMobileZoomEvents() {
+        // Pinch to Zoom (Pinça)
+        window.addEventListener('touchstart', e => {
+            if (e.touches.length === 2) {
+                this.lastTouchDist = this.getTouchDist(e.touches);
+            }
+        }, {passive: false});
+
+        window.addEventListener('touchmove', e => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                const dist = this.getTouchDist(e.touches);
+                const delta = (dist - this.lastTouchDist) * 0.01;
+                
+                this.currentZoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.currentZoom + delta));
+                this.lastTouchDist = dist;
+
+                // Atualiza o slider visualmente se ele existir
+                const slider = document.getElementById('zoom-range');
+                if (slider) slider.value = this.currentZoom * 100;
+            }
+        }, {passive: false});
+    }
+
+    getTouchDist(touches) {
+        return Math.sqrt(
+            Math.pow(touches[0].clientX - touches[1].clientX, 2) +
+            Math.pow(touches[0].clientY - touches[1].clientY, 2)
+        );
+    }
+
     showJoystick() {
-        if (this.isMobile) {
-            const el = document.getElementById('mobile-controls');
-            if (el) el.style.display = 'block';
-        }
+        const el = document.getElementById('mobile-ui-container');
+        if (el) el.style.display = 'block';
+    }
+
+    // Método para o main.js pegar o zoom atualizado
+    getZoom() {
+        return this.currentZoom;
     }
 
     getMovement() {
