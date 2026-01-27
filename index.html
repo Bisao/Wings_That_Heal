@@ -129,39 +129,61 @@
         .fill-xp { background: linear-gradient(90deg, #1d5d8a, #3498db); }
         .fill-pollen { background: linear-gradient(90deg, #b38f00, #f1c40f); }
 
-        /* --- RANKING TOP 5 (DIREITA) --- */
+        /* --- RANKING DE CURADORES (ABAIXO DO HUD, COM SCROLL) --- */
         #ranking-container {
-            display: none; /* Mostra via JS quando o jogo começa (igual ao HUD) */
-            position: absolute; top: env(safe-area-inset-top, 20px); right: 20px;
-            width: 180px; background: rgba(0, 0, 0, 0.85);
-            padding: 15px; border: 1px solid #333; border-radius: 18px;
-            pointer-events: none; z-index: 10; backdrop-filter: blur(10px);
+            display: none; 
+            position: absolute; 
+            /* Posicionado logo abaixo do HUD */
+            top: calc(env(safe-area-inset-top, 20px) + 140px); 
+            left: 20px;
+            width: 190px; 
+            /* Altura fixa para permitir scroll */
+            max-height: 150px; 
+            background: rgba(0, 0, 0, 0.85);
+            padding: 10px 15px; 
+            border: 1px solid #333; border-radius: 18px;
+            /* Habilita interação (scroll) e pointer events */
+            pointer-events: auto; 
+            z-index: 10; 
+            backdrop-filter: blur(10px);
+            overflow-y: auto; /* Scroll vertical */
+            scrollbar-width: thin; /* Firefox */
+            scrollbar-color: var(--primary) #111;
         }
+        
+        /* Estilo da barra de rolagem (Webkit/Chrome) */
+        #ranking-container::-webkit-scrollbar { width: 6px; }
+        #ranking-container::-webkit-scrollbar-track { background: #111; border-radius: 3px; }
+        #ranking-container::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 3px; }
+
         .ranking-header {
-            color: var(--primary); font-weight: 900; font-size: 12px;
+            color: var(--primary); font-weight: 900; font-size: 11px;
             text-transform: uppercase; letter-spacing: 1px;
-            border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 8px;
+            border-bottom: 1px solid #333; padding-bottom: 6px; margin-bottom: 6px;
             text-align: center;
+            /* Mantém o header fixo enquanto rola a lista */
+            position: sticky; top: 0; background: rgba(0,0,0,0.9); z-index: 2;
         }
+
         .rank-item {
             display: flex; justify-content: space-between; align-items: center;
-            font-size: 11px; margin-bottom: 6px; color: #ddd;
+            font-size: 11px; margin-bottom: 6px; color: #ddd; padding-right: 4px;
         }
-        .rank-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 110px; }
+        .rank-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px; }
         .rank-item b { color: var(--accent-green); }
 
-        /* --- CHAT ATUALIZADO (ESQUERDA CENTRAL) --- */
+        /* --- CHAT ATUALIZADO (ESQUERDA CENTRAL - NÃO SOBREPÕE) --- */
+        /* Ajuste: O chat fica mais abaixo ou recolhido por padrão */
         #chat-toggle-btn { 
             display: none; 
             position: absolute; 
-            top: 50%; 
+            bottom: 120px; /* Movido para baixo */
             left: 0; 
-            transform: translateY(-50%); 
             width: 40px; 
             height: 60px; 
             background: rgba(0,0,0,0.85); 
             border: 2px solid var(--primary); 
-            border-left: none; /* Grudado na borda esquerda */
+            border-left: none; 
             border-radius: 0 15px 15px 0; 
             color: white; 
             cursor: pointer; 
@@ -172,11 +194,10 @@
         #chat-container { 
             display: none; 
             position: absolute; 
-            top: 50%; 
-            left: -300px; /* Escondido fora da tela à esquerda */
-            transform: translateY(-50%); 
+            bottom: 120px; /* Alinhado com o botão */
+            left: -300px; 
             width: 280px; 
-            height: 350px; 
+            height: 300px; 
             background: var(--bg-card); 
             border: 1px solid #333; 
             border-radius: 0 20px 20px 0; 
@@ -187,7 +208,6 @@
             transition: left 0.3s ease;
         }
 
-        /* Classe de ativação para o container e o botão */
         #chat-container.open { left: 0; display: flex; }
         #chat-toggle-btn.open { left: 280px; }
 
@@ -229,8 +249,9 @@
 
         @media (max-height: 450px) {
             .lobby-card { transform: scale(0.7); }
-            #chat-container { height: 220px; width: 250px; }
-            #chat-toggle-btn.open { left: 250px; }
+            #chat-container { height: 200px; width: 250px; bottom: 20px; }
+            #chat-toggle-btn { bottom: 20px; }
+            #ranking-container { max-height: 100px; }
         }
     </style>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
