@@ -27,7 +27,7 @@ export class WorldState {
         if (!this.growingPlants[key]) {
             this.growingPlants[key] = {
                 time: Date.now(),
-                owner: ownerId // Salva o ID do player dono
+                owner: ownerId // Salva o ID do player dono para pontuação futura
             };
         }
     }
@@ -41,7 +41,7 @@ export class WorldState {
         if (this.growingPlants[key]) {
             this.growingPlants[key].time = Date.now();
         } else {
-            // Se por acaso a planta não estiver na lista, adiciona agora
+            // Se por acaso a planta não estiver na lista (ex: bug de sync), adiciona agora
             this.addGrowingPlant(x, y);
         }
     }
