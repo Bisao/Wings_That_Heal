@@ -314,15 +314,13 @@ window.addEventListener('netData', e => {
     if(d.type === 'TILE_CHANGE') changeTile(d.x, d.y, d.tileType, d.ownerId);
 });
 
-// --- SISTEMA DE RANKING TOP 5 ---
+// --- SISTEMA DE RANKING COMPLETO (COM SCROLL) ---
 function updateRanking() {
-    // 1. Coleta todos os nicks e scores (Curas) do banco offline
     let rankingData = Object.entries(guestDataDB).map(([nick, stats]) => ({
         nick: nick,
         score: stats.tilesCured || 0
     }));
 
-    // 2. Adiciona o player local ao cálculo
     if (localPlayer) {
         const existingLocal = rankingData.find(r => r.nick === localPlayer.nickname);
         if (existingLocal) {
@@ -332,7 +330,6 @@ function updateRanking() {
         }
     }
 
-    // 3. Adiciona jogadores remotos online que talvez não estejam no DB ainda
     Object.values(remotePlayers).forEach(p => {
         const existing = rankingData.find(r => r.nick === p.nickname);
         if (existing) {
@@ -342,20 +339,24 @@ function updateRanking() {
         }
     });
 
-    // 4. Ordena do maior para o menor e pega o Top 5
     rankingData.sort((a, b) => b.score - a.score);
-    const top5 = rankingData.slice(0, 5);
-
-    // 5. Renderiza na UI
+    // REMOVIDO: .slice(0, 5) -> Agora exibe todos, e o CSS faz o scroll
+    
     const rankingList = document.getElementById('ranking-list');
     if (rankingList) {
-        rankingList.innerHTML = top5.map((player, index) => {
-            const medal = index === 0 ? '🥇' : (index === 1 ? '🥈' : (index === 2 ? '🥉' : `${index + 1}º`));
-            return `<div class="rank-item">
-                        <span>${medal} ${player.nick}</span>
-                        <b>${player.score}</b>
-                    </div>`;
-        }).join('');
+        if (rankingData.length === 0) {
+            rankingList.innerHTML = '<div class="rank-item" style="justify-content:center; color:#555">Nenhum dado</div>';
+        } else {
+            rankingList.innerHTML = rankingData.map((player, index) => {
+                const medal = index === 0 ? '🥇' : (index === 1 ? '🥈' : (index === 2 ? '🥉' : `${index + 1}º`));
+                // Destaca o player local
+                const isMe = localPlayer && player.nick === localPlayer.nickname ? 'color:white; font-weight:bold' : '';
+                return `<div class="rank-item" style="${isMe}">
+                            <span>${medal} ${player.nick}</span>
+                            <b>${player.score}</b>
+                        </div>`;
+            }).join('');
+        }
     }
 }
 
