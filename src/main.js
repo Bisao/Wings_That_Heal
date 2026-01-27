@@ -138,10 +138,8 @@ document.getElementById('btn-create').onpointerdown = (e) => {
 
 // --- LOGICA DE INTERAÇÃO SOCIAL ---
 
-// CORREÇÃO: Abre o modal do jogador vindo de qualquer aba do chat
 window.addEventListener('playerClicked', e => {
     const targetNick = e.detail;
-    // Tenta encontrar nos jogadores online primeiro
     let targetId = Object.keys(remotePlayers).find(id => remotePlayers[id].nickname === targetNick);
     
     if (targetId) {
@@ -150,7 +148,6 @@ window.addEventListener('playerClicked', e => {
         document.getElementById('modal-player-name').innerText = p.nickname;
         document.getElementById('modal-player-info').innerText = `Nível: ${p.level || 1}`;
         
-        // CORREÇÃO: Injeta o botão de Cochicho se ele não existir (ou garante que está visível)
         let whisperBtn = document.getElementById('btn-whisper-action');
         if (!whisperBtn) {
             whisperBtn = document.createElement('button');
@@ -159,7 +156,6 @@ window.addEventListener('playerClicked', e => {
             whisperBtn.style.background = '#3498db';
             whisperBtn.style.color = 'white';
             whisperBtn.innerText = 'COCHICHAR';
-            // Insere antes do botão de fechar (último botão)
             const modal = document.getElementById('player-modal');
             modal.insertBefore(whisperBtn, modal.lastElementChild);
         }
@@ -223,7 +219,6 @@ window.addEventListener('chatSend', e => {
         if (targetId) {
             net.sendPayload({ type: 'WHISPER', fromNick: localPlayer.nickname, text: data.text }, targetId);
         } else {
-            // Se o alvo não estiver online
             chat.addMessage('SYSTEM', null, `${data.target} não está mais na colmeia.`);
         }
     }
@@ -255,11 +250,9 @@ window.addEventListener('peerDisconnected', e => {
 window.addEventListener('netData', e => {
     const d = e.detail;
     
-    // CORREÇÃO: Encaminhamento correto de pacotes para o chatSystem
     if (d.type === 'WHISPER') chat.addMessage('WHISPER', d.fromNick, d.text);
     if (d.type === 'CHAT_MSG') chat.addMessage('GLOBAL', d.nick, d.text);
     if (d.type === 'PARTY_MSG') {
-        // CORREÇÃO: Garante que o chat trate como mensagem de PARTY para notificar a aba GP
         chat.addMessage('PARTY', d.fromNick, d.text);
     }
 
@@ -565,9 +558,11 @@ function draw() {
         const psX = (p.wx - camera.x) * rTileSize + canvas.width / 2, psY = (p.wy - camera.y) * rTileSize + canvas.height / 2; 
         ctx.fillStyle = `rgba(241,196,15,${p.life})`; ctx.fillRect(psX, psY, p.size * zoomLevel, p.size * zoomLevel); 
     });
+
+    // CORREÇÃO: Passando remotePlayers para habilitar o cálculo da bússola no player local
     if (localPlayer) {
-        Object.values(remotePlayers).forEach(p => p.draw(ctx, camera, canvas, rTileSize, currentPartyPartner));
-        localPlayer.draw(ctx, camera, canvas, rTileSize, currentPartyPartner);
+        Object.values(remotePlayers).forEach(p => p.draw(ctx, camera, canvas, rTileSize, remotePlayers, currentPartyPartner));
+        localPlayer.draw(ctx, camera, canvas, rTileSize, remotePlayers, currentPartyPartner);
     }
     
     if (localPlayer && localPlayer.homeBase && Math.sqrt(Math.pow(localPlayer.homeBase.x-localPlayer.pos.x,2)+Math.pow(localPlayer.homeBase.y-localPlayer.pos.y,2)) > 30) {
