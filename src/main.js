@@ -516,15 +516,16 @@ function updateEnvironment() {
     const timeEl = document.getElementById('hud-time');
     if (timeEl) timeEl.innerText = `${day} ${month} ${year} - ${hours}:${minutes}`;
 
-    // Lógica de Ciclo Dia/Noite (Simples e Eficiente)
-    // 0 = Claro (Meio dia), 0.85 = Escuro (Meia noite)
-    // Pico de luz: 12h. Pico de escuridão: 00h.
-    // Usamos seno para uma transição suave.
+    // Lógica de Ciclo Dia/Noite (CORRIGIDA)
+    // 0 = Claro (Meio dia, 12h)
+    // 1 = Escuro (Meia noite, 0h/24h)
+    
     const h = date.getHours() + date.getMinutes() / 60;
     
-    // Fórmula que cria uma onda onde 12h = 0 e 00h = 1 (aproximadamente)
-    // Cos((h + 12) / 24 * 2PI) oscila de -1 a 1. Normalizamos para 0 a 1.
-    const darknessIntensity = (Math.cos((h + 12) / 24 * Math.PI * 2) + 1) / 2;
+    // Removemos o deslocamento +12. Agora:
+    // h=0  -> cos(0) = 1 -> (1+1)/2 = 1 (Escuro)
+    // h=12 -> cos(pi) = -1 -> (-1+1)/2 = 0 (Claro)
+    const darknessIntensity = (Math.cos(h / 24 * Math.PI * 2) + 1) / 2;
     
     // Aplicamos um teto de escuridão para não ficar impossível de ver (max 0.85)
     const overlayOpacity = darknessIntensity * 0.85;
@@ -532,9 +533,6 @@ function updateEnvironment() {
     const overlay = document.getElementById('day-night-overlay');
     if (overlay) {
         overlay.style.opacity = overlayOpacity;
-        
-        // Opcional: Mudar cor do texto do HUD se estiver muito escuro para contraste?
-        // Por enquanto, o HUD tem fundo escuro, então está ok.
     }
 }
 
