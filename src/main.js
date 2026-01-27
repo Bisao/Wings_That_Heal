@@ -36,7 +36,7 @@ let lastGridY = -9999;
 // Banco de dados em memória para ranking de offline players
 let guestDataDB = {}; 
 
-let zoomLevel = 1.0; 
+let zoomLevel = 2.0; 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 1.5;
 
