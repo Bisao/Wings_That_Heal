@@ -107,7 +107,7 @@
         }
         .btn-action:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--primary-dark); }
 
-        /* --- HUD DE JOGO --- */
+        /* --- HUD DE JOGO (ESQUERDA) --- */
         #rpg-hud {
             display: none; position: absolute; top: env(safe-area-inset-top, 20px); left: 20px;
             width: 190px; background: rgba(0, 0, 0, 0.85);
@@ -128,6 +128,27 @@
         .fill-hp { background: linear-gradient(90deg, #962115, #e74c3c); }
         .fill-xp { background: linear-gradient(90deg, #1d5d8a, #3498db); }
         .fill-pollen { background: linear-gradient(90deg, #b38f00, #f1c40f); }
+
+        /* --- RANKING TOP 5 (DIREITA) --- */
+        #ranking-container {
+            display: none; /* Mostra via JS quando o jogo começa (igual ao HUD) */
+            position: absolute; top: env(safe-area-inset-top, 20px); right: 20px;
+            width: 180px; background: rgba(0, 0, 0, 0.85);
+            padding: 15px; border: 1px solid #333; border-radius: 18px;
+            pointer-events: none; z-index: 10; backdrop-filter: blur(10px);
+        }
+        .ranking-header {
+            color: var(--primary); font-weight: 900; font-size: 12px;
+            text-transform: uppercase; letter-spacing: 1px;
+            border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 8px;
+            text-align: center;
+        }
+        .rank-item {
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 11px; margin-bottom: 6px; color: #ddd;
+        }
+        .rank-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 110px; }
+        .rank-item b { color: var(--accent-green); }
 
         /* --- CHAT ATUALIZADO (ESQUERDA CENTRAL) --- */
         #chat-toggle-btn { 
@@ -282,6 +303,13 @@
         <div class="hud-row"><div class="hud-icon">🌻</div><div class="bar-container"><div id="bar-pollen-fill" class="bar-fill fill-pollen"></div><span id="bar-pollen-text" class="bar-text">0/100</span></div></div>
     </div>
 
+    <div id="ranking-container">
+        <div class="ranking-header">🏆 TOP CURADORES</div>
+        <div id="ranking-list">
+            <div class="rank-item" style="justify-content:center; color:#666">Carregando...</div>
+        </div>
+    </div>
+
     <button id="chat-toggle-btn">💬</button>
     <div id="chat-container">
         <div id="chat-tabs-container"></div>
@@ -327,6 +355,20 @@
         }
         function closePlayerModal() { document.getElementById('player-modal').style.display = 'none'; }
         function closeInvitePopup() { document.getElementById('party-invite-popup').style.display = 'none'; }
+        
+        // Exibe o Ranking quando o jogo começa (monitorando o HUD)
+        const hudObserver = new MutationObserver(mutations => {
+            mutations.forEach(mutation => {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                    const hud = document.getElementById('rpg-hud');
+                    const rank = document.getElementById('ranking-container');
+                    if (hud.style.display === 'block') {
+                        rank.style.display = 'block';
+                    }
+                }
+            });
+        });
+        hudObserver.observe(document.getElementById('rpg-hud'), { attributes: true });
 
         document.addEventListener('touchstart', function(e) {
             if (e.touches.length > 1) e.preventDefault();
