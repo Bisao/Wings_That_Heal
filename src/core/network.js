@@ -25,7 +25,6 @@ export class NetworkManager {
         
         const cleanID = customID ? customID.trim().toLowerCase() : null;
 
-        // Configuração otimizada para Mobile (STUN redundante)
         this.peer = new Peer(cleanID, { 
             debug: 1,
             config: {
@@ -61,14 +60,12 @@ export class NetworkManager {
 
             conn.on('close', () => {
                 this._log(`Peer desconectado: ${conn.peer}`, "#e67e22");
-                // Correção: Remove a conexão específica do array
                 this.connections = this.connections.filter(c => c.peer !== conn.peer);
                 this.authenticatedPeers.delete(conn.peer);
                 window.dispatchEvent(new CustomEvent('peerDisconnected', { detail: { peerId: conn.peer } }));
             });
 
             conn.on('data', (data) => {
-                // Roteamento de Handshake
                 if (data.type === 'AUTH_REQUEST') {
                     if (!this.roomData.pass || data.password === this.roomData.pass) {
                         this._log(`Autenticando: ${data.nickname}`);
@@ -94,14 +91,21 @@ export class NetworkManager {
                     return;
                 }
 
-                // Segurança: Bloqueia dados de não-autenticados
                 if (!this.authenticatedPeers.has(conn.peer)) return;
 
-                // Garante que o ID de quem enviou esteja no pacote
                 data.fromId = conn.peer;
 
-                // Roteamento
-                if (data.targetId) {
+                // Roteamento para múltiplos alvos (Suporte a Party Multi-membro)
+                if (data.targetIds && Array.isArray(data.targetIds)) {
+                    data.targetIds.forEach(tId => {
+                        if (tId === this.peer.id) {
+                            window.dispatchEvent(new CustomEvent('netData', { detail: data }));
+                        } else {
+                            this.sendToId(tId, data);
+                        }
+                    });
+                } 
+                else if (data.targetId) {
                     if (data.targetId === this.peer.id) {
                         window.dispatchEvent(new CustomEvent('netData', { detail: data }));
                     } else {
@@ -144,22 +148,26 @@ export class NetworkManager {
         });
     }
 
-    sendPayload(payload, targetId = null) {
+    // ATUALIZAÇÃO: Agora suporta envio para múltiplos IDs (Party)
+    sendPayload(payload, targetIdOrIds = null) {
         if (!this.peer) return;
-        payload.fromId = this.peer.id; // Sempre identifica a origem
+        payload.fromId = this.peer.id;
 
         if (this.isHost) {
-            if (targetId) {
-                if (targetId === this.peer.id) {
-                    window.dispatchEvent(new CustomEvent('netData', { detail: payload }));
-                } else {
-                    this.sendToId(targetId, payload);
-                }
+            if (Array.isArray(targetIdOrIds)) {
+                targetIdOrIds.forEach(id => {
+                    if (id === this.peer.id) window.dispatchEvent(new CustomEvent('netData', { detail: payload }));
+                    else this.sendToId(id, payload);
+                });
+            } else if (targetIdOrIds) {
+                if (targetIdOrIds === this.peer.id) window.dispatchEvent(new CustomEvent('netData', { detail: payload }));
+                else this.sendToId(targetIdOrIds, payload);
             } else {
                 this.broadcast(payload);
             }
         } else if (this.conn && this.conn.open) {
-            if (targetId) payload.targetId = targetId;
+            if (Array.isArray(targetIdOrIds)) payload.targetIds = targetIdOrIds;
+            else if (targetIdOrIds) payload.targetId = targetIdOrIds;
             this.conn.send(payload);
         }
     }
