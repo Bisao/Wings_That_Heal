@@ -10,13 +10,9 @@ export class NetworkManager {
         this.getGuestDataCallback = null; 
         this.getFullGuestDBStatsCallback = null; 
 
-        // Rastreia quem passou pelo handshake de autenticação
         this.authenticatedPeers = new Set();
     }
 
-    /**
-     * Auxiliar para enviar mensagens de diagnóstico ao HUD
-     */
     _log(msg, color = "#00ff00") {
         if (window.logDebug) {
             window.logDebug(msg, color);
@@ -24,23 +20,19 @@ export class NetworkManager {
         console.log(`[Network] ${msg}`);
     }
 
-    /**
-     * Inicializa o objeto Peer.
-     * @param {string} customID - ID opcional para o Peer (usado pelo Host).
-     * @param {Function} callback - Retorno de sucesso ou erro.
-     */
     init(customID, callback) {
         this._log(`Inicializando Peer... ${customID || 'ID Aleatório'}`);
         
-        // No mobile, IDs costumam falhar se tiverem caracteres especiais ou espaços
         const cleanID = customID ? customID.trim().toLowerCase() : null;
 
+        // Configuração otimizada para Mobile (STUN redundante)
         this.peer = new Peer(cleanID, { 
             debug: 1,
             config: {
                 'iceServers': [
-                    { url: 'stun:stun.l.google.com:19302' },
-                    { url: 'stun:stun1.l.google.com:19302' }
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' }
                 ]
             }
         });
@@ -56,9 +48,6 @@ export class NetworkManager {
         });
     }
 
-    /**
-     * Configura o Peer como Host da sala.
-     */
     hostRoom(id, pass, seed, getStateFn, getGuestDataFn, getFullDBFn) {
         this._log("Configurando como HOST da colmeia...");
         this.isHost = true;
@@ -68,34 +57,28 @@ export class NetworkManager {
         this.getFullGuestDBStatsCallback = getFullDBFn;
 
         this.peer.on('connection', (conn) => {
-            this._log(`Tentativa de conexão recebida de: ${conn.peer}`);
+            this._log(`Tentativa de conexão: ${conn.peer}`);
 
             conn.on('close', () => {
                 this._log(`Peer desconectado: ${conn.peer}`, "#e67e22");
-                this.connections = this.connections.filter(c => c !== conn);
+                // Correção: Remove a conexão específica do array
+                this.connections = this.connections.filter(c => c.peer !== conn.peer);
                 this.authenticatedPeers.delete(conn.peer);
                 window.dispatchEvent(new CustomEvent('peerDisconnected', { detail: { peerId: conn.peer } }));
             });
 
             conn.on('data', (data) => {
-                // FASE 1: Autenticação
+                // Roteamento de Handshake
                 if (data.type === 'AUTH_REQUEST') {
                     if (!this.roomData.pass || data.password === this.roomData.pass) {
-                        this._log(`Autenticando abelha: ${data.nickname} (${conn.peer})`);
+                        this._log(`Autenticando: ${data.nickname}`);
                         
                         const currentState = this.getStateCallback ? this.getStateCallback() : {};
-                        
-                        let savedPlayerData = null;
-                        if (this.getGuestDataCallback && data.nickname) {
-                            savedPlayerData = this.getGuestDataCallback(data.nickname);
-                        }
-
-                        let fullGuestsDB = {};
-                        if (this.getFullGuestDBStatsCallback) {
-                            fullGuestsDB = this.getFullGuestDBStatsCallback();
-                        }
+                        const savedPlayerData = (this.getGuestDataCallback && data.nickname) ? this.getGuestDataCallback(data.nickname) : null;
+                        const fullGuestsDB = this.getFullGuestDBStatsCallback ? this.getFullGuestDBStatsCallback() : {};
 
                         this.authenticatedPeers.add(conn.peer);
+                        this.connections.push(conn);
 
                         conn.send({ 
                             type: 'AUTH_SUCCESS', 
@@ -104,85 +87,66 @@ export class NetworkManager {
                             playerData: savedPlayerData,
                             guests: fullGuestsDB 
                         });
-                        
-                        this.connections.push(conn);
                     } else {
-                        this._log(`Falha de autenticação para ${conn.peer}: Senha Incorreta`, "#ff4d4d");
                         conn.send({ type: 'AUTH_FAIL', reason: 'Senha incorreta' });
                         setTimeout(() => conn.close(), 500);
                     }
-                } else {
-                    // FASE 2: Roteamento de Dados (Apenas para autenticados)
-                    if (!this.authenticatedPeers.has(conn.peer)) {
-                        this._log(`Pacote bloqueado: Peer ${conn.peer} não autenticado`, "#ff4d4d");
-                        return;
-                    }
+                    return;
+                }
 
-                    if (data.targetId) {
-                        if (data.targetId === this.peer.id) {
-                            window.dispatchEvent(new CustomEvent('netData', { detail: data }));
-                        } else {
-                            this.sendToId(data.targetId, data);
-                        }
-                    } else {
+                // Segurança: Bloqueia dados de não-autenticados
+                if (!this.authenticatedPeers.has(conn.peer)) return;
+
+                // Garante que o ID de quem enviou esteja no pacote
+                data.fromId = conn.peer;
+
+                // Roteamento
+                if (data.targetId) {
+                    if (data.targetId === this.peer.id) {
                         window.dispatchEvent(new CustomEvent('netData', { detail: data }));
-                        this.broadcast(data, conn.peer);
+                    } else {
+                        this.sendToId(data.targetId, data);
                     }
+                } else {
+                    window.dispatchEvent(new CustomEvent('netData', { detail: data }));
+                    this.broadcast(data, conn.peer);
                 }
             });
         });
     }
 
-    /**
-     * Conecta a uma sala existente como Guest.
-     */
     joinRoom(targetID, password, nickname) {
         const cleanTarget = targetID.trim().toLowerCase();
         this._log(`Conectando ao Host: ${cleanTarget}...`);
         
-        this.conn = this.peer.connect(cleanTarget, {
-            reliable: true
-        });
+        this.conn = this.peer.connect(cleanTarget, { reliable: true });
         
         this.conn.on('open', () => {
-            this._log("Conexão estável estabelecida. Enviando pedido de autenticação...");
+            this._log("Handshake iniciado...");
             this.conn.send({ type: 'AUTH_REQUEST', password, nickname });
         });
 
         this.conn.on('data', (data) => {
             if (data.type === 'AUTH_SUCCESS') {
-                this._log("Autenticação aceita! Entrando no mundo...");
+                this._log("Autenticação aceita!");
                 window.dispatchEvent(new CustomEvent('joined', { detail: data }));
-            }
-            else if (data.type === 'AUTH_FAIL') {
-                this._log(`Falha ao entrar: ${data.reason}`, "#ff4d4d");
+            } else if (data.type === 'AUTH_FAIL') {
                 alert(data.reason);
                 this.conn.close();
-            }
-            else {
+            } else {
                 window.dispatchEvent(new CustomEvent('netData', { detail: data }));
             }
         });
         
         this.conn.on('close', () => {
-            this._log("A conexão com o Host foi fechada.", "#ff4d4d");
-            alert("Sua conexão com o Host foi encerrada.");
+            alert("Desconectado do Host.");
             location.reload();
         });
-
-        // Timeout de segurança para mobile
-        setTimeout(() => {
-            if (this.conn && !this.conn.open) {
-                this._log("A conexão está demorando muito. Verifique sua rede.", "#f1c40f");
-            }
-        }, 5000);
     }
 
-    /**
-     * Envia um payload de dados para a rede.
-     */
     sendPayload(payload, targetId = null) {
-        if (targetId) payload.targetId = targetId; 
+        if (!this.peer) return;
+        payload.fromId = this.peer.id; // Sempre identifica a origem
 
         if (this.isHost) {
             if (targetId) {
@@ -194,10 +158,9 @@ export class NetworkManager {
             } else {
                 this.broadcast(payload);
             }
-        } else {
-            if (this.conn && this.conn.open) {
-                this.conn.send(payload);
-            }
+        } else if (this.conn && this.conn.open) {
+            if (targetId) payload.targetId = targetId;
+            this.conn.send(payload);
         }
     }
 
