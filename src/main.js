@@ -50,6 +50,7 @@ const XP_PER_POLLEN = 0.2;
 const XP_PASSIVE_CURE = 5; 
 
 const GROWTH_TIMES = { BROTO: 5000, MUDA: 10000, FLOR: 15000 };
+const MONTHS = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
 
 let collectionFrameCounter = 0;
 let cureFrameCounter = 0;
@@ -272,6 +273,12 @@ window.addEventListener('peerDisconnected', e => {
 window.addEventListener('netData', e => {
     const d = e.detail;
     
+    // --- NOVO: Sincronização de Tempo ---
+    if (d.type === 'TIME_SYNC') {
+        worldState.worldTime = d.time;
+    }
+    // ------------------------------------
+
     if (d.type === 'WHISPER') chat.addMessage('WHISPER', d.fromNick, d.text);
     if (d.type === 'CHAT_MSG') chat.addMessage('GLOBAL', d.nick, d.text);
     if (d.type === 'PARTY_MSG') {
@@ -437,6 +444,14 @@ function startGame(seed, id, nick) {
 
 function startHostSimulation() {
     setInterval(() => {
+        // --- ATUALIZAÇÃO DO TEMPO (Host Only) ---
+        // 1 Segundo Real = 1 Minuto no Jogo (60000ms)
+        worldState.worldTime += 60000;
+        
+        // Envia sync a cada segundo (pode otimizar se quiser, mas assim garante suavidade)
+        net.sendPayload({ type: 'TIME_SYNC', time: worldState.worldTime });
+        // -----------------------------------------
+
         const now = Date.now();
         let changed = false;
         for (const [key, plantData] of Object.entries(worldState.growingPlants)) {
@@ -455,18 +470,14 @@ function startHostSimulation() {
                 if (target === 'TERRA_QUEIMADA') { 
                     changeTile(tx, ty, 'GRAMA_SAFE'); 
                     
-                    // --- CORREÇÃO: Lógica de Pontuação Passiva ---
                     if (ownerId) {
                         net.sendPayload({ type: 'FLOWER_CURE', ownerId: ownerId, x: tx, y: ty }); 
                         
-                        // O Host precisa se dar os pontos ou atualizar o remoto
                         if (localPlayer && ownerId === localPlayer.id) {
                             localPlayer.tilesCured++;
                             gainXp(XP_PASSIVE_CURE);
                         } else if (remotePlayers[ownerId]) {
-                            // Atualiza os stats do jogador remoto
                             remotePlayers[ownerId].tilesCured++;
-                            // Atualiza o ranking para jogadores remotos também
                             const pName = remotePlayers[ownerId].nickname;
                             if (pName) {
                                 if (!guestDataDB[pName]) guestDataDB[pName] = {};
@@ -474,8 +485,6 @@ function startHostSimulation() {
                             }
                         }
                     }
-                    // ---------------------------------------------
-
                     changed = true; 
                 }
             }
@@ -492,8 +501,48 @@ function saveProgress() {
 
 function loop() { update(); draw(); requestAnimationFrame(loop); }
 
+// --- FUNÇÃO PARA CALCULAR AMBIENTE (DIA/NOITE) ---
+function updateEnvironment() {
+    if (!worldState.worldTime) return;
+
+    const date = new Date(worldState.worldTime);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = MONTHS[date.getMonth()];
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+
+    // Atualiza HUD
+    const timeEl = document.getElementById('hud-time');
+    if (timeEl) timeEl.innerText = `${day} ${month} ${year} - ${hours}:${minutes}`;
+
+    // Lógica de Ciclo Dia/Noite (Simples e Eficiente)
+    // 0 = Claro (Meio dia), 0.85 = Escuro (Meia noite)
+    // Pico de luz: 12h. Pico de escuridão: 00h.
+    // Usamos seno para uma transição suave.
+    const h = date.getHours() + date.getMinutes() / 60;
+    
+    // Fórmula que cria uma onda onde 12h = 0 e 00h = 1 (aproximadamente)
+    // Cos((h + 12) / 24 * 2PI) oscila de -1 a 1. Normalizamos para 0 a 1.
+    const darknessIntensity = (Math.cos((h + 12) / 24 * Math.PI * 2) + 1) / 2;
+    
+    // Aplicamos um teto de escuridão para não ficar impossível de ver (max 0.85)
+    const overlayOpacity = darknessIntensity * 0.85;
+
+    const overlay = document.getElementById('day-night-overlay');
+    if (overlay) {
+        overlay.style.opacity = overlayOpacity;
+        
+        // Opcional: Mudar cor do texto do HUD se estiver muito escuro para contraste?
+        // Por enquanto, o HUD tem fundo escuro, então está ok.
+    }
+}
+
 function update() {
     if(!localPlayer || isFainted) return; 
+
+    // Atualiza o ambiente a cada frame
+    updateEnvironment();
 
     const gx = Math.round(localPlayer.pos.x), gy = Math.round(localPlayer.pos.y);
     if (gx !== lastGridX || gy !== lastGridY) {
