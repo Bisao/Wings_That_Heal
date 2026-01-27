@@ -117,6 +117,7 @@ export class InputHandler {
         style.id = 'joystick-styles';
         style.innerHTML = `
             #mobile-controls {
+                display: none; /* Começa oculto por padrão */
                 position: fixed; bottom: 30px; left: 30px; 
                 width: 120px; height: 120px; z-index: 1000;
                 pointer-events: none;
@@ -146,6 +147,14 @@ export class InputHandler {
             </div>
         `;
         document.body.appendChild(div);
+    }
+
+    // Método para mostrar o joystick (chamado no startGame)
+    showJoystick() {
+        if (this.isMobile) {
+            const el = document.getElementById('mobile-controls');
+            if (el) el.style.display = 'block';
+        }
     }
 
     getMovement() {
