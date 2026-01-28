@@ -32,7 +32,7 @@ let lastGridX = -9999;
 let lastGridY = -9999;
 
 let guestDataDB = {}; 
-let hiveRegistry = {}; // NOVO: Mapeamento permanente { "Nickname": indexDaColmeia }
+let hiveRegistry = {}; 
 
 let zoomLevel = 1.5; 
 const MIN_ZOOM = 0.5;
@@ -287,8 +287,8 @@ window.addEventListener('peerDisconnected', e => {
         }
         if (p.nickname) {
             const stats = p.serialize().stats;
-            stats.x = p.pos.x; // NOVO: Salva X na saída
-            stats.y = p.pos.y; // NOVO: Salva Y na saída
+            stats.x = p.pos.x; 
+            stats.y = p.pos.y; 
             guestDataDB[p.nickname] = stats;
         }
         saveProgress(true); 
@@ -464,20 +464,16 @@ function startGame(seed, id, nick) {
     localPlayer = new Player(id, nick, true);
     const hives = world.getHiveLocations();
 
-    // --- LOGICA DE VINCULO DE COLMEIA ---
     if (net.isHost) {
         const saved = saveSystem.load();
         if (saved) {
             hiveRegistry = saved.hiveRegistry || {};
-            // Host se vincula
             if (hiveRegistry[nick] === undefined) hiveRegistry[nick] = 0;
         } else {
             hiveRegistry[nick] = 0;
         }
     }
 
-    // Se sou Guest, o spawnIdx será ajustado quando o Host restaurar meus stats
-    // Mas por padrão, tentamos encontrar no hiveRegistry local se houver
     let spawnIdx = hiveRegistry[nick] !== undefined ? hiveRegistry[nick] : (Math.abs(id.split('').reduce((a,b)=>a+b.charCodeAt(0),0)) % (hives.length-1))+1;
 
     if (hives[spawnIdx]) {
@@ -530,10 +526,8 @@ function startHostSimulation() {
         let changed = false;
         const now = Date.now();
 
-        // NOVO: Registro de novos Guests para vinculação de colmeia
         Object.values(remotePlayers).forEach(p => {
             if (p.nickname && hiveRegistry[p.nickname] === undefined) {
-                // Encontrar o próximo índice de colmeia disponível (max 7)
                 const usedIndices = Object.values(hiveRegistry);
                 for(let i=1; i<8; i++) {
                     if (!usedIndices.includes(i)) {
@@ -558,7 +552,8 @@ function startHostSimulation() {
             else if (currentType === 'MUDA' && elapsedSinceStart > GROWTH_TIMES.FLOR) { changeTile(x, y, 'FLOR', ownerId); changed = true; }
             else if (currentType === 'FLOR_COOLDOWN' && elapsedSinceStart > FLOWER_COOLDOWN_TIME) { changeTile(x, y, 'FLOR', ownerId); changed = true; }
 
-            if (currentType === 'FLOR' && elapsedSinceHeal >= 3000) {
+            // NOVO: A cura só ocorre se plantData.isReadyToHeal for true (Sinal do WorldState)
+            if (currentType === 'FLOR' && plantData.isReadyToHeal && elapsedSinceHeal >= 3000) {
                 plantData.lastHealTime = now;
                 for (let dx = -1; dx <= 1; dx++) {
                     for (let dy = -1; dy <= 1; dy++) {
@@ -603,8 +598,8 @@ function saveProgress(force = false) {
     Object.values(remotePlayers).forEach(p => { 
         if (p.nickname) {
             const stats = p.serialize().stats;
-            stats.x = p.pos.x; // NOVO: Salva X explorado
-            stats.y = p.pos.y; // NOVO: Salva Y explorado
+            stats.x = p.pos.x; 
+            stats.y = p.pos.y; 
             guestDataDB[p.nickname] = stats; 
         }
     });
@@ -618,7 +613,7 @@ function saveProgress(force = false) {
         world: worldState.getFullState(), 
         host: hostStats, 
         guests: guestDataDB,
-        hiveRegistry: hiveRegistry // NOVO: Salva o registro de colmeias
+        hiveRegistry: hiveRegistry 
     });
 }
 
@@ -701,7 +696,8 @@ function update() {
         for (const [key, plantData] of Object.entries(worldState.growingPlants)) {
             const [fx, fy] = key.split(',').map(Number);
             const type = worldState.getModifiedTile(fx, fy);
-            if (type === 'FLOR') {
+            // Agora verifica se a flor já está em estado de prontidão no WorldState
+            if (type === 'FLOR' && plantData.isReadyToHeal) {
                 const dist = Math.sqrt(Math.pow(localPlayer.pos.x - fx, 2) + Math.pow(localPlayer.pos.y - fy, 2));
                 if (dist <= 1.5) {
                     if (++flowerCureFrameCounter >= 45) {
