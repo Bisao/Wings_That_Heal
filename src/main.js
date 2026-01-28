@@ -313,6 +313,11 @@ window.addEventListener('netData', e => {
     
     if (d.type === 'PARTY_ACCEPT') { 
         if (!partyMembers.includes(d.fromId)) partyMembers.push(d.fromId);
+        
+        // CORREÇÃO: Host atualiza o ícone para si mesmo
+        localPartyName = d.pName;
+        localPartyIcon = d.pIcon;
+
         chat.addMessage('SYSTEM', null, `${d.fromNick} aceitou o convite.`); 
         chat.openPartyTab(localPartyName, localPartyIcon);
         
@@ -327,12 +332,15 @@ window.addEventListener('netData', e => {
     }
     
     if (d.type === 'PARTY_SYNC') {
+        // CORREÇÃO: Guest recebe e aplica o ícone do grupo
         localPartyName = d.pName;
         localPartyIcon = d.pIcon;
+        
         d.members.forEach(id => {
             if (id !== localPlayer.id && !partyMembers.includes(id)) partyMembers.push(id);
         });
         chat.openPartyTab(localPartyName, localPartyIcon);
+        updateUI();
     }
     
     if (d.type === 'PARTY_LEAVE') { 
@@ -552,7 +560,6 @@ function startHostSimulation() {
             else if (currentType === 'MUDA' && elapsedSinceStart > GROWTH_TIMES.FLOR) { changeTile(x, y, 'FLOR', ownerId); changed = true; }
             else if (currentType === 'FLOR_COOLDOWN' && elapsedSinceStart > FLOWER_COOLDOWN_TIME) { changeTile(x, y, 'FLOR', ownerId); changed = true; }
 
-            // NOVO: A cura só ocorre se plantData.isReadyToHeal for true (Sinal do WorldState)
             if (currentType === 'FLOR' && plantData.isReadyToHeal && elapsedSinceHeal >= 3000) {
                 plantData.lastHealTime = now;
                 for (let dx = -1; dx <= 1; dx++) {
@@ -696,7 +703,6 @@ function update() {
         for (const [key, plantData] of Object.entries(worldState.growingPlants)) {
             const [fx, fy] = key.split(',').map(Number);
             const type = worldState.getModifiedTile(fx, fy);
-            // Agora verifica se a flor já está em estado de prontidão no WorldState
             if (type === 'FLOR' && plantData.isReadyToHeal) {
                 const dist = Math.sqrt(Math.pow(localPlayer.pos.x - fx, 2) + Math.pow(localPlayer.pos.y - fy, 2));
                 if (dist <= 1.5) {
