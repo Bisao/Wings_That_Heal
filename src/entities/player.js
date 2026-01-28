@@ -74,11 +74,14 @@ export class Player {
                 else if(this.currentDir === 'Up' || this.currentDir === 'Down') this.currentDir = 'Idle';
             }
         } else {
+            // Lógica de interpolação para jogadores remotos (evita travamentos)
             const dist = Math.sqrt(Math.pow(this.targetPos.x - this.pos.x, 2) + Math.pow(this.targetPos.y - this.pos.y, 2));
             if (dist > 5) {
+                // Se estiver muito longe, teletransporta (correção de lag extremo)
                 this.pos.x = this.targetPos.x;
                 this.pos.y = this.targetPos.y;
             } else {
+                // Movimento suave (Lerp)
                 this.pos.x += (this.targetPos.x - this.pos.x) * 0.2;
                 this.pos.y += (this.targetPos.y - this.pos.y) * 0.2;
             }
@@ -138,9 +141,10 @@ export class Player {
         const sprite = isDead ? (this.sprites['Fainted'] || this.sprites['Idle']) : (this.sprites[this.currentDir] || this.sprites['Idle']);
         const zoomScale = tileSize / 32;
         
+        // Verifica se este player é membro da party (Funciona para Local e Remoto)
         const isPartner = Array.isArray(partyMemberIds) ? partyMemberIds.includes(this.id) : this.id === partyMemberIds;
 
-        // BÚSSOLA DE MULTI-PARTY
+        // BÚSSOLA DE MULTI-PARTY (Só desenha se for o player local e tiver parceiros)
         if (this.isLocal && Array.isArray(partyMemberIds) && partyMemberIds.length > 0) {
             partyMemberIds.forEach(memberId => {
                 const partner = remotePlayers[memberId];
@@ -210,6 +214,7 @@ export class Player {
         ctx.restore();
 
         // 4. Nickname e Party Icon
+        // Se for parceiro e tiver ícone definido, usa o ícone. Senão, usa o escudo padrão.
         const iconDisplay = (isPartner && partyIcon) ? partyIcon : (isPartner ? "🛡️" : "");
         const nameText = isPartner ? `${iconDisplay} ${this.nickname}` : this.nickname;
 
