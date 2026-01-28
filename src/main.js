@@ -20,33 +20,28 @@ let pollenParticles = [];
 let smokeParticles = []; 
 let camera = { x: 0, y: 0 };
 
-// --- ESTADO SOCIAL ATUALIZADO (MULTI-PARTY COM ÍCONES) ---
 let partyMembers = []; 
-let localPartyName = ""; // Armazena o nome do esquadrão
-let localPartyIcon = ""; // Armazena o ícone do esquadrão
+let localPartyName = "";
+let localPartyIcon = "";
 
 let selectedPlayerId = null;    
 let pendingInviteFrom = null;   
-let pendingInviteData = null; // Armazena dados do convite recebido (nome/icone)
+let pendingInviteData = null;
 
-// Variáveis para otimização da UI de coordenadas
 let lastGridX = -9999;
 let lastGridY = -9999;
 
-// Banco de dados em memória para ranking de offline players
 let guestDataDB = {}; 
 
 let zoomLevel = 1.5; 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2.0;
 
-// --- DIFICULDADE E BALANCEAMENTO ---
 const PLANT_SPAWN_CHANCE = 0.01; 
 const CURE_ATTEMPT_RATE = 20;    
 const FLOWER_COOLDOWN_TIME = 10000;
 const COLLECTION_RATE = 5; 
 
-// --- BALANCEAMENTO ---
 const DAMAGE_RATE = 2; 
 const DAMAGE_AMOUNT = 0.2; 
 const XP_PER_CURE = 15;    
@@ -58,23 +53,24 @@ const MONTHS = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "
 
 let collectionFrameCounter = 0;
 let cureFrameCounter = 0;
-let flowerCureFrameCounter = 0; // Novo: contador separado para cura das flores
+let flowerCureFrameCounter = 0;
 let damageFrameCounter = 0;
 let uiUpdateCounter = 0; 
 
-// Estado de Desmaio local
 let isFainted = false;
 let faintTimeout = null; 
+
+// --- Controle de Fluxo de Save (Otimização) ---
+let lastManualSaveTime = 0;
+const SAVE_COOLDOWN = 15000; // Salva no máximo a cada 15 seg durante a simulação
 
 const assets = { flower: new Image() };
 assets.flower.src = 'assets/Flower.png';
 
-// --- SISTEMA DE LOGS (LIMPO) ---
 function logDebug(msg, color = "#00ff00") {
     console.log(`%c[Wings] ${msg}`, `color: ${color}`);
 }
 
-// --- SISTEMA DE NOTIFICAÇÃO VISUAL (TOAST) ---
 function showError(msg) {
     let toast = document.getElementById('toast-msg');
     if (!toast) {
@@ -92,7 +88,6 @@ function showError(msg) {
     }, 3000);
 }
 
-// Carregar Nickname salvo
 window.addEventListener('load', () => {
     const savedNick = localStorage.getItem('wings_nick');
     if (savedNick) {
@@ -101,13 +96,10 @@ window.addEventListener('load', () => {
     }
 });
 
-// --- CONTROLE DE ZOOM (ADICIONADO) ---
 window.addEventListener('wheel', (e) => {
     if (e.deltaY < 0) zoomLevel = Math.min(MAX_ZOOM, zoomLevel + 0.1);
     else zoomLevel = Math.max(MIN_ZOOM, zoomLevel - 0.1);
 }, { passive: true });
-
-// --- UI HANDLERS ---
 
 document.getElementById('btn-join').onpointerdown = (e) => {
     e.preventDefault();
@@ -139,8 +131,6 @@ document.getElementById('btn-create').onpointerdown = (e) => {
         }
     });
 };
-
-// --- LOGICA DE INTERAÇÃO SOCIAL ---
 
 window.addEventListener('playerClicked', e => {
     const targetNick = e.detail;
@@ -179,8 +169,6 @@ window.addEventListener('playerClicked', e => {
         document.getElementById('player-modal').style.display = 'block';
     }
 });
-
-// --- LÓGICA DE PARTY ---
 
 document.getElementById('btn-party-action').onclick = () => {
     if (!selectedPlayerId) return;
@@ -280,7 +268,6 @@ window.addEventListener('chatSend', e => {
     }
 });
 
-// --- EVENTOS DE REDE ---
 window.addEventListener('joined', e => {
     const data = e.detail;
     if (data.worldState) worldState.applyFullState(data.worldState);
@@ -298,8 +285,13 @@ window.addEventListener('peerDisconnected', e => {
             partyMembers = partyMembers.filter(id => id !== peerId);
             if (partyMembers.length === 0) chat.closePartyTab();
         }
-        guestDataDB[p.nickname] = p.serialize().stats;
-        saveProgress(); delete remotePlayers[peerId];
+        // Persistir no DB de convidados
+        if (p.nickname) {
+            guestDataDB[p.nickname] = p.serialize().stats;
+        }
+        // Forçar save no disco quando alguém sai
+        saveProgress(true); 
+        delete remotePlayers[peerId];
     }
 });
 
@@ -365,6 +357,22 @@ window.addEventListener('netData', e => {
         if (!remotePlayers[d.id]) remotePlayers[d.id] = new Player(d.id, d.nick || "Guest");
         remotePlayers[d.id].pos = { x: d.x, y: d.y };
         remotePlayers[d.id].targetPos = { x: d.x, y: d.y };
+        
+        // Host: Restaurar dados do Guest se ele já tiver um save por Nickname
+        if (net.isHost && d.nick && guestDataDB[d.nick]) {
+            const savedStats = guestDataDB[d.nick];
+            remotePlayers[d.id].deserialize({ stats: savedStats });
+            // Enviar os dados restaurados de volta para o Guest
+            net.sendPayload({ type: 'RESTORE_STATS', stats: savedStats }, d.id);
+        }
+    }
+
+    if (d.type === 'RESTORE_STATS') {
+        if (localPlayer) {
+            localPlayer.deserialize({ stats: d.stats });
+            updateUI();
+            chat.addMessage('SYSTEM', null, "Progresso recuperado!");
+        }
     }
 
     if (d.type === 'FLOWER_CURE') {
@@ -385,7 +393,6 @@ window.addEventListener('netData', e => {
     if(d.type === 'TILE_CHANGE') changeTile(d.x, d.y, d.tileType, d.ownerId);
 });
 
-// --- SISTEMA DE RANKING ATUALIZADO ---
 function updateRanking() {
     let rankingData = Object.entries(guestDataDB).map(([nick, stats]) => ({
         nick: nick,
@@ -442,7 +449,6 @@ function updateRanking() {
     }
 }
 
-// --- LÓGICA DE JOGO ---
 function startGame(seed, id, nick) {
     document.getElementById('lobby-overlay').style.display = 'none';
     document.getElementById('rpg-hud').style.display = 'block';
@@ -460,34 +466,42 @@ function startGame(seed, id, nick) {
         localPlayer.homeBase = { x: hives[spawnIdx].x, y: hives[spawnIdx].y };
         localPlayer.pos = { x: hives[spawnIdx].x, y: hives[spawnIdx].y };
         localPlayer.targetPos = { ...localPlayer.pos };
-        
-        if (net.isHost) {
-            const fx = Math.round(localPlayer.pos.x + 2);
-            const fy = Math.round(localPlayer.pos.y + 2);
-            changeTile(fx, fy, 'GRAMA');
-            setTimeout(() => changeTile(fx, fy, 'FLOR'), 1000);
-        }
-
-        net.sendPayload({ 
-            type: 'SPAWN_INFO', 
-            id: localPlayer.id, 
-            nick: localPlayer.nickname, 
-            x: localPlayer.pos.x, 
-            y: localPlayer.pos.y 
-        });
     }
 
     if (net.isHost) {
         const saved = saveSystem.load();
         if (saved) {
             worldState.applyFullState(saved.world);
-            if (saved.host) localPlayer.deserialize({ stats: saved.host });
+            if (saved.host) {
+                localPlayer.deserialize({ stats: saved.host });
+                // Restaurar posição salva se existir
+                if (saved.host.x !== undefined) {
+                    localPlayer.pos.x = saved.host.x;
+                    localPlayer.pos.y = saved.host.y;
+                    localPlayer.targetPos = { ...localPlayer.pos };
+                }
+            }
             guestDataDB = saved.guests || {};
         } else {
             worldState.worldTime = new Date('2074-02-09T06:00:00').getTime();
+            // Primeiro spawn do Host na colmeia
+            if (hives[0]) {
+                const fx = Math.round(hives[0].x + 2);
+                const fy = Math.round(hives[0].y + 2);
+                changeTile(fx, fy, 'GRAMA');
+                setTimeout(() => changeTile(fx, fy, 'FLOR'), 1000);
+            }
         }
     }
     
+    net.sendPayload({ 
+        type: 'SPAWN_INFO', 
+        id: localPlayer.id, 
+        nick: localPlayer.nickname, 
+        x: localPlayer.pos.x, 
+        y: localPlayer.pos.y 
+    });
+
     chat.addMessage('SYSTEM', null, `Abelha ${nick} pronta para o voo!`);
     updateUI(); resize(); requestAnimationFrame(loop);
     setInterval(updateRanking, 5000);
@@ -497,8 +511,8 @@ function startHostSimulation() {
     setInterval(() => {
         worldState.worldTime += 60000;
         net.sendPayload({ type: 'TIME_SYNC', time: worldState.worldTime });
-        const now = Date.now();
         let changed = false;
+        const now = Date.now();
 
         for (const [key, plantData] of Object.entries(worldState.growingPlants)) {
             const startTime = plantData.time || plantData;
@@ -509,13 +523,11 @@ function startHostSimulation() {
             const elapsedSinceHeal = now - lastHeal;
             const currentType = worldState.getModifiedTile(x, y);
 
-            // Crescimento
-            if (currentType === 'GRAMA' && elapsedSinceStart > GROWTH_TIMES.BROTO) changeTile(x, y, 'BROTO', ownerId);
-            else if (currentType === 'BROTO' && elapsedSinceStart > GROWTH_TIMES.MUDA) changeTile(x, y, 'MUDA', ownerId);
-            else if (currentType === 'MUDA' && elapsedSinceStart > GROWTH_TIMES.FLOR) changeTile(x, y, 'FLOR', ownerId);
-            else if (currentType === 'FLOR_COOLDOWN' && elapsedSinceStart > FLOWER_COOLDOWN_TIME) changeTile(x, y, 'FLOR', ownerId);
+            if (currentType === 'GRAMA' && elapsedSinceStart > GROWTH_TIMES.BROTO) { changeTile(x, y, 'BROTO', ownerId); changed = true; }
+            else if (currentType === 'BROTO' && elapsedSinceStart > GROWTH_TIMES.MUDA) { changeTile(x, y, 'MUDA', ownerId); changed = true; }
+            else if (currentType === 'MUDA' && elapsedSinceStart > GROWTH_TIMES.FLOR) { changeTile(x, y, 'FLOR', ownerId); changed = true; }
+            else if (currentType === 'FLOR_COOLDOWN' && elapsedSinceStart > FLOWER_COOLDOWN_TIME) { changeTile(x, y, 'FLOR', ownerId); changed = true; }
 
-            // Cura em área 3x3 a cada 3 segundos
             if (currentType === 'FLOR' && elapsedSinceHeal >= 3000) {
                 plantData.lastHealTime = now;
                 for (let dx = -1; dx <= 1; dx++) {
@@ -546,14 +558,37 @@ function startHostSimulation() {
                 }
             }
         }
-        if (changed) saveProgress();
+        // Save automático controlado por tempo para evitar lag
+        if (changed) saveProgress(); 
     }, 1000);
 }
 
-function saveProgress() {
+function saveProgress(force = false) {
     if (!net.isHost || !localPlayer) return;
-    Object.values(remotePlayers).forEach(p => { if (p.nickname) guestDataDB[p.nickname] = p.serialize().stats; });
-    saveSystem.save({ seed: world.seed, world: worldState.getFullState(), host: localPlayer.serialize().stats, guests: guestDataDB });
+    
+    const now = Date.now();
+    if (!force && (now - lastManualSaveTime < SAVE_COOLDOWN)) return;
+
+    lastManualSaveTime = now;
+
+    // Sincronizar dados dos peers ativos antes de salvar
+    Object.values(remotePlayers).forEach(p => { 
+        if (p.nickname) {
+            guestDataDB[p.nickname] = p.serialize().stats; 
+        }
+    });
+
+    // Incluir posição do Host no save
+    const hostStats = localPlayer.serialize().stats;
+    hostStats.x = localPlayer.pos.x;
+    hostStats.y = localPlayer.pos.y;
+
+    saveSystem.save({ 
+        seed: world.seed, 
+        world: worldState.getFullState(), 
+        host: hostStats, 
+        guests: guestDataDB 
+    });
 }
 
 function loop() { update(); draw(); requestAnimationFrame(loop); }
@@ -617,9 +652,7 @@ function update() {
     const overlay = document.getElementById('suffocation-overlay');
     if (overlay) overlay.style.opacity = hpRatio < 0.7 ? (0.7 - hpRatio) * 1.4 : 0;
 
-    // --- CURA POR PROXIMIDADE (COLMEIAS E FLORES) ---
     if (localPlayer.hp < localPlayer.maxHp) {
-        // 1. Verificar Colmeias
         const hives = world.getHiveLocations();
         let closestHiveDist = Infinity;
         for (const hive of hives) {
@@ -634,14 +667,13 @@ function update() {
             updateUI();
         }
 
-        // 2. Verificar Flores do WorldState (ADICIONADO)
         for (const [key, plantData] of Object.entries(worldState.growingPlants)) {
             const [fx, fy] = key.split(',').map(Number);
             const type = worldState.getModifiedTile(fx, fy);
             if (type === 'FLOR') {
                 const dist = Math.sqrt(Math.pow(localPlayer.pos.x - fx, 2) + Math.pow(localPlayer.pos.y - fy, 2));
                 if (dist <= 1.5) {
-                    if (++flowerCureFrameCounter >= 45) { // Velocidade da cura pela flor
+                    if (++flowerCureFrameCounter >= 45) {
                         flowerCureFrameCounter = 0;
                         localPlayer.hp = Math.min(localPlayer.maxHp, localPlayer.hp + 1);
                         updateUI();
@@ -712,7 +744,7 @@ function gainXp(amount) {
         localPlayer.maxXp = Math.floor(localPlayer.maxXp * 1.5); localPlayer.maxPollen += 10; localPlayer.hp = localPlayer.maxHp; 
         chat.addMessage('SYSTEM', null, `Nível ${localPlayer.level}!`);
     }
-    if (localPlayer.level > old) saveProgress();
+    if (localPlayer.level > old) saveProgress(true); // Forçar save em level up
     updateUI();
 }
 
