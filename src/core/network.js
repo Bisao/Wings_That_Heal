@@ -188,6 +188,10 @@ export class NetworkManager {
         }
     }
 
+    /**
+     * [NOVO] Função utilitária para enviar cura específica para uma lista de IDs.
+     * Garante que o efeito visual e sonoro ocorra na posição correta para todos.
+     */
     sendHealToPlayers(playerIds, flowerX, flowerY, ownerId) {
         if (!this.isHost) return;
         
@@ -196,7 +200,7 @@ export class NetworkManager {
             x: flowerX,
             y: flowerY,
             ownerId: ownerId,
-            amount: 10
+            amount: 10 // Valor de cura opcional, pode ser dinâmico
         };
 
         playerIds.forEach(id => {
