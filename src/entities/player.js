@@ -20,6 +20,9 @@ export class Player {
         this.maxXp = 100; 
         this.tilesCured = 0;
 
+        // [NOVO] Controle de efeitos visuais de cura
+        this.healEffectTimer = 0;
+
         // COR ÚNICA: Gera uma cor baseada no nome do jogador
         this.color = this.generateColor(nickname);
 
@@ -39,7 +42,24 @@ export class Player {
         return `hsl(${Math.abs(hash) % 360}, 85%, 65%)`;
     }
 
+    /**
+     * [NOVO] Método para aplicar cura recebida via Network.
+     * Isso garante que convidados processem a cura localmente.
+     */
+    applyHeal(amount) {
+        if (this.hp <= 0) return; // Não cura se estiver desmaiado (opcional)
+        
+        this.hp = Math.min(this.maxHp, this.hp + amount);
+        this.healEffectTimer = 30; // Ativa efeito visual por 30 frames
+        
+        // Se houver um sistema de som global, você pode disparar aqui
+        // if (window.playSound) window.playSound('heal');
+    }
+
     update(moveVector) {
+        // Reduz timer de efeito visual
+        if (this.healEffectTimer > 0) this.healEffectTimer--;
+
         if (this.isLocal) {
             const isMoving = moveVector.x !== 0 || moveVector.y !== 0;
             if (isMoving) {
@@ -110,7 +130,6 @@ export class Player {
     }
 
     // --- RENDERIZAÇÃO ATUALIZADA PARA MULTI-PARTY ---
-    // Agora recebe partyIcon como último argumento
     draw(ctx, cam, canvas, tileSize, remotePlayers = {}, partyMemberIds = [], partyIcon = "") {
         const sX = (this.pos.x - cam.x) * tileSize + canvas.width / 2;
         const sY = (this.pos.y - cam.y) * tileSize + canvas.height / 2;
@@ -119,10 +138,9 @@ export class Player {
         const sprite = isDead ? (this.sprites['Fainted'] || this.sprites['Idle']) : (this.sprites[this.currentDir] || this.sprites['Idle']);
         const zoomScale = tileSize / 32;
         
-        // Verifica se este player específico faz parte da sua party
         const isPartner = Array.isArray(partyMemberIds) ? partyMemberIds.includes(this.id) : this.id === partyMemberIds;
 
-        // BÚSSOLA DE MULTI-PARTY (Apenas para o player local apontando para os aliados)
+        // BÚSSOLA DE MULTI-PARTY
         if (this.isLocal && Array.isArray(partyMemberIds) && partyMemberIds.length > 0) {
             partyMemberIds.forEach(memberId => {
                 const partner = remotePlayers[memberId];
@@ -131,7 +149,6 @@ export class Player {
                     const dy = partner.pos.y - this.pos.y;
                     const dist = Math.sqrt(dx*dx + dy*dy);
 
-                    // Só mostra se o aliado estiver fora da visão imediata
                     if (dist > 2) {
                         const angle = Math.atan2(dy, dx);
                         const orbitRadius = 45 * zoomScale; 
@@ -142,7 +159,6 @@ export class Player {
                         ctx.translate(arrowX, arrowY);
                         ctx.rotate(angle);
                         
-                        // Desenha a Seta com a cor específica do aliado
                         ctx.fillStyle = partner.color; 
                         ctx.shadowBlur = 10;
                         ctx.shadowColor = partner.color;
@@ -158,6 +174,16 @@ export class Player {
                     }
                 }
             });
+        }
+
+        // [NOVO] Efeito Visual de Cura (Partículas de Cruz ou Brilho)
+        if (this.healEffectTimer > 0) {
+            ctx.save();
+            ctx.fillStyle = "#2ecc71";
+            ctx.font = `${14 * zoomScale}px Arial`;
+            ctx.globalAlpha = this.healEffectTimer / 30;
+            ctx.fillText("✚", sX + (Math.sin(Date.now()/50)*10), sY - (30 * zoomScale) - (30 - this.healEffectTimer));
+            ctx.restore();
         }
 
         // 1. Balanço (Bobbing)
@@ -183,8 +209,7 @@ export class Player {
         }
         ctx.restore();
 
-        // 4. Nickname e Party Icon (ATUALIZADO)
-        // Se for parceiro, usa o ícone da party. Se não tiver ícone definido, usa escudo.
+        // 4. Nickname e Party Icon
         const iconDisplay = (isPartner && partyIcon) ? partyIcon : (isPartner ? "🛡️" : "");
         const nameText = isPartner ? `${iconDisplay} ${this.nickname}` : this.nickname;
 
@@ -200,7 +225,7 @@ export class Player {
         ctx.fillText(nameText, sX, nickY);
 
         // Barra de HP
-        if (!this.isLocal) {
+        if (!this.isLocal || this.hp < this.maxHp) { // Mostra barra se não for local ou se estiver ferido
             const barW = 30 * zoomScale;
             const barH = 4 * zoomScale;
             const barY = nickY - (12 * zoomScale);
@@ -210,7 +235,7 @@ export class Player {
             ctx.fillRect(sX - barW/2, barY, Math.max(0, barW * (this.hp / this.maxHp)), barH);
         }
 
-        // Alerta de Resgate Ativo (Somente parceiros)
+        // Alerta de Resgate Ativo
         if (isPartner && isDead) {
             const pulse = Math.abs(Math.sin(Date.now() / 300));
             ctx.font = `bold ${11 * zoomScale}px sans-serif`;
