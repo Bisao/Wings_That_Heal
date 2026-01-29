@@ -22,6 +22,9 @@ export class Player {
 
         // [NOVO] Controle de efeitos visuais de cura
         this.healEffectTimer = 0;
+        
+        // [NOVO] Controle de Invulnerabilidade (Escudo pós-ressurreição)
+        this.invulnerableTimer = 0;
 
         // COR ÚNICA: Gera uma cor baseada no nome do jogador
         this.color = this.generateColor(nickname);
@@ -51,14 +54,22 @@ export class Player {
         
         this.hp = Math.min(this.maxHp, this.hp + amount);
         this.healEffectTimer = 30; // Ativa efeito visual por 30 frames
-        
-        // Se houver um sistema de som global, você pode disparar aqui
-        // if (window.playSound) window.playSound('heal');
+    }
+
+    /**
+     * [NOVO] Define o estado de invulnerabilidade (Escudo)
+     * @param {number} frames - Duração em frames (ex: 180 para 3s)
+     */
+    setInvulnerable(frames) {
+        this.invulnerableTimer = frames;
     }
 
     update(moveVector) {
         // Reduz timer de efeito visual
         if (this.healEffectTimer > 0) this.healEffectTimer--;
+        
+        // Reduz timer de invulnerabilidade
+        if (this.invulnerableTimer > 0) this.invulnerableTimer--;
 
         if (this.isLocal) {
             const isMoving = moveVector.x !== 0 || moveVector.y !== 0;
@@ -97,6 +108,8 @@ export class Player {
             this.pos = { ...this.homeBase };
             this.targetPos = { ...this.pos };
         }
+        // Ao renascer na base, também ganha um pouco de escudo
+        this.setInvulnerable(180);
     }
 
     serialize() {
@@ -180,6 +193,21 @@ export class Player {
             });
         }
 
+        // [NOVO] Visual de Imunidade / Escudo
+        if (this.invulnerableTimer > 0) {
+            ctx.save();
+            ctx.strokeStyle = `rgba(46, 204, 113, ${Math.min(1, this.invulnerableTimer / 30)})`;
+            ctx.lineWidth = 3 * zoomScale;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = "#2ecc71";
+            ctx.beginPath();
+            // Raio oscila levemente para dar efeito de energia
+            const shieldPulse = Math.sin(Date.now() / 100) * 2;
+            ctx.arc(sX, sY, (20 * zoomScale) + shieldPulse, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+
         // [NOVO] Efeito Visual de Cura (Partículas de Cruz ou Brilho)
         if (this.healEffectTimer > 0) {
             ctx.save();
@@ -203,7 +231,10 @@ export class Player {
         // 3. Sprite
         ctx.save();
         ctx.translate(sX, drawY);
-        if (isDead) ctx.rotate(Math.PI / 2);
+        if (isDead) {
+            ctx.rotate(Math.PI / 2);
+            ctx.filter = "grayscale(100%) brightness(0.8)"; // Escurece se estiver morto
+        }
         
         if (sprite.complete && sprite.naturalWidth !== 0) {
             ctx.drawImage(sprite, -tileSize/2, -tileSize/2, tileSize, tileSize);
@@ -218,7 +249,7 @@ export class Player {
         const iconDisplay = (isPartner && partyIcon) ? partyIcon : (isPartner ? "🛡️" : "");
         const nameText = isPartner ? `${iconDisplay} ${this.nickname}` : this.nickname;
 
-        ctx.fillStyle = isDead ? "#666" : this.color; 
+        ctx.fillStyle = isDead ? "#999" : this.color; 
         
         ctx.font = `bold ${12 * zoomScale}px sans-serif`; 
         ctx.textAlign = "center";
@@ -242,11 +273,17 @@ export class Player {
 
         // Alerta de Resgate Ativo
         if (isPartner && isDead) {
-            const pulse = Math.abs(Math.sin(Date.now() / 300));
-            ctx.font = `bold ${11 * zoomScale}px sans-serif`;
-            ctx.fillStyle = `rgba(46, 204, 113, ${0.5 + pulse * 0.5})`;
-            ctx.strokeText("🆘 RESGATE!", sX, nickY - (25 * zoomScale));
-            ctx.fillText("🆘 RESGATE!", sX, nickY - (25 * zoomScale));
+            const pulse = Math.abs(Math.sin(Date.now() / 200)); // Pulso mais rápido
+            const floatAlert = Math.sin(Date.now() / 150) * 5; // Movimento vertical
+            
+            ctx.font = `bold ${12 * zoomScale}px sans-serif`;
+            ctx.fillStyle = `rgba(231, 76, 60, ${0.5 + pulse * 0.5})`; // Vermelho alerta
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 2;
+            
+            const alertY = nickY - (30 * zoomScale) + floatAlert;
+            ctx.strokeText("🆘 SOS!", sX, alertY);
+            ctx.fillText("🆘 SOS!", sX, alertY);
         }
     }
 }
