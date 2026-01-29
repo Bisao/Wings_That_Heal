@@ -109,10 +109,8 @@ let faintTimeout = null;
 // [NOVO] Variáveis de Resgate
 let rescueTimer = 0;
 let currentRescueTarget = null;
-let isHoldingRescue = false;
 const RESCUE_DURATION = 180; // ~3 segundos a 60 FPS
 const RESCUE_POLLEN_COST = 20;
-let rescueBtnElement = null; // Elemento DOM para mobile
 
 let invulnerabilityTimer = 0; // Timer de imunidade após renascer
 
@@ -146,33 +144,12 @@ function showError(msg) {
     }, 3000);
 }
 
-// [NOVO] Configuração de controles extras (Tecla E)
-window.addEventListener('keydown', (e) => {
-    if (e.key.toLowerCase() === 'e') isHoldingRescue = true;
-});
-window.addEventListener('keyup', (e) => {
-    if (e.key.toLowerCase() === 'e') isHoldingRescue = false;
-});
-
 window.addEventListener('load', () => {
     const savedNick = localStorage.getItem('wings_nick');
     if (savedNick) {
         document.getElementById('host-nickname').value = savedNick;
         document.getElementById('join-nickname').value = savedNick;
     }
-    
-    // [NOVO] Criar botão de resgate flutuante para mobile
-    rescueBtnElement = document.createElement('button');
-    rescueBtnElement.id = 'rescue-btn-mobile';
-    rescueBtnElement.innerText = "⛑️ RESGATAR (Segure)";
-    rescueBtnElement.style.cssText = "position: fixed; bottom: 120px; right: 30px; background: #2ecc71; color: white; padding: 20px; border-radius: 50px; font-weight: bold; font-size: 16px; border: 4px solid white; display: none; z-index: 9999; box-shadow: 0 5px 15px rgba(0,0,0,0.5); user-select: none; touch-action: none;";
-    
-    // Eventos de Touch para o botão
-    rescueBtnElement.addEventListener('pointerdown', (e) => { e.preventDefault(); isHoldingRescue = true; rescueBtnElement.style.transform = "scale(0.9)"; });
-    rescueBtnElement.addEventListener('pointerup', (e) => { e.preventDefault(); isHoldingRescue = false; rescueBtnElement.style.transform = "scale(1.0)"; });
-    rescueBtnElement.addEventListener('pointerleave', (e) => { e.preventDefault(); isHoldingRescue = false; rescueBtnElement.style.transform = "scale(1.0)"; });
-    
-    document.body.appendChild(rescueBtnElement);
 });
 
 window.addEventListener('wheel', (e) => {
@@ -854,15 +831,18 @@ function update() {
     
     updateParticles();
 
-    // [NOVO] Lógica de Resgate com "Hold" (Segurar)
+    // [CORRIGIDO] Lógica de Resgate Unificada (PC + Mobile)
     let nearbyFaintedPartner = null;
 
     partyMembers.forEach(memberId => {
+        // Garante que não estamos tentando resgatar a nós mesmos (segurança)
+        if (memberId === localPlayer.id) return;
+
         const partner = remotePlayers[memberId];
-        // Verifica: Existe? Tá desmaiado? Tá perto? Eu tenho pólen suficiente?
+        // Verifica: Existe? Tá desmaiado? Tá perto (1.5 tiles agora)?
         if (partner && partner.hp <= 0) {
             const d = Math.sqrt(Math.pow(localPlayer.pos.x - partner.pos.x, 2) + Math.pow(localPlayer.pos.y - partner.pos.y, 2));
-            if (d < 1.0) { 
+            if (d < 1.5) { // Aumentado o range para facilitar
                 nearbyFaintedPartner = { id: memberId, nickname: partner.nickname, obj: partner };
             }
         }
@@ -871,20 +851,15 @@ function update() {
     if (nearbyFaintedPartner) {
         currentRescueTarget = nearbyFaintedPartner;
         
-        // Mostra botão no mobile
-        if (rescueBtnElement) {
-            rescueBtnElement.style.display = 'block';
-            if (localPlayer.pollen < RESCUE_POLLEN_COST) {
-                rescueBtnElement.style.background = "#e74c3c"; // Vermelho se sem pólen
-                rescueBtnElement.innerText = `FALTA PÓLEN (${localPlayer.pollen}/${RESCUE_POLLEN_COST})`;
-            } else {
-                rescueBtnElement.style.background = "#2ecc71";
-                rescueBtnElement.innerText = "⛑️ SEGURE PARA RESGATAR";
-            }
-        }
+        // Configura o botão via InputHandler (Texto e Cor)
+        const canAfford = localPlayer.pollen >= RESCUE_POLLEN_COST;
+        const btnText = canAfford ? "⛑️ RESGATAR (Segure)" : `FALTA PÓLEN (${localPlayer.pollen}/${RESCUE_POLLEN_COST})`;
+        const btnColor = canAfford ? "#2ecc71" : "#e74c3c";
+        
+        input.updateActionButton(true, btnText, btnColor);
 
-        // Se estiver segurando botão (E ou Touch) E tiver pólen
-        if (isHoldingRescue && localPlayer.pollen >= RESCUE_POLLEN_COST) {
+        // Verifica se a ação está ativa (Seja por tecla 'E', 'Space' ou botão na tela)
+        if (input.isActionActive() && canAfford) {
             rescueTimer++;
             if (rescueTimer >= RESCUE_DURATION) {
                 // SUCESSO NO RESGATE
@@ -893,7 +868,6 @@ function update() {
                 chat.addMessage('SYSTEM', null, `Você salvou ${currentRescueTarget.nickname}!`);
                 updateUI();
                 rescueTimer = 0;
-                isHoldingRescue = false;
             }
         } else {
             // Se soltar, reseta ou diminui gradualmente
@@ -903,7 +877,7 @@ function update() {
         // Ninguém por perto
         currentRescueTarget = null;
         rescueTimer = 0;
-        if (rescueBtnElement) rescueBtnElement.style.display = 'none';
+        input.updateActionButton(false); // Esconde o botão
     }
 
     const tile = worldState.getModifiedTile(gx, gy) || world.getTileAt(gx, gy);
@@ -1045,7 +1019,10 @@ function draw() {
                 const type = worldState.getModifiedTile(t.x, t.y) || t.type;
                 if (type === 'TERRA_QUEIMADA' && Math.random() < 0.015) spawnSmokeParticle(t.x, t.y);
                 ctx.fillStyle = (type === 'COLMEIA') ? '#f1c40f' : (['GRAMA','GRAMA_SAFE','BROTO','MUDA','FLOR', 'FLOR_COOLDOWN'].includes(type) ? '#2ecc71' : '#34495e');
+                
+                // [CORRIGIDO] +1 pixel para remover as linhas do grid (frestas)
                 ctx.fillRect(sX, sY, rTileSize + 1, rTileSize + 1);
+                
                 if (type === 'BROTO') { ctx.fillStyle = '#006400'; const sz = 12*zoomLevel; ctx.fillRect(sX+(rTileSize-sz)/2, sY+(rTileSize-sz)/2, sz, sz); }
                 else if (type === 'MUDA') { ctx.fillStyle = '#228B22'; const sz = 20*zoomLevel; ctx.fillRect(sX+(rTileSize-sz)/2, sY+(rTileSize-sz)/2, sz, sz); }
                 else if (['FLOR','FLOR_COOLDOWN'].includes(type) && assets.flower.complete) {
