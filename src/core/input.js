@@ -110,6 +110,11 @@ export class InputHandler {
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     }
 
+    // [NOVO] Método utilitário para checar ação (Resgate/Interação)
+    isActionActive() {
+        return this.keys['e'] || this.keys[' ']; // E ou Espaço
+    }
+
     // Cria o visual do joystick se não houver no HTML
     injectMobileStyles() {
         if (document.getElementById('joystick-styles')) return;
@@ -133,6 +138,20 @@ export class InputHandler {
                 border-radius: 50%; transform: translate(-50%, -50%);
                 box-shadow: 0 0 15px var(--honey-glow); pointer-events: none;
             }
+            /* [NOVO] Estilo base para botões de ação (usado pelo Resgate) */
+            .mobile-action-btn {
+                position: fixed; bottom: 120px; right: 30px;
+                background: #2ecc71; color: white;
+                padding: 20px; border-radius: 50px;
+                font-weight: bold; font-size: 16px;
+                border: 4px solid white;
+                z-index: 1000;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+                user-select: none; touch-action: none;
+                display: none; /* Controlado via JS */
+                transition: transform 0.1s;
+            }
+            .mobile-action-btn:active { transform: scale(0.9); }
         `;
         document.head.appendChild(style);
     }
