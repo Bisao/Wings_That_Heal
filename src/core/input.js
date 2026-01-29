@@ -95,6 +95,10 @@ export class InputHandler {
         this.isMobile = this.detectMobile();
         this.leftStick = null;
 
+        // Estado do botão de ação mobile
+        this.isMobileActionHeld = false;
+        this.actionBtn = null;
+
         // Listener Teclado
         window.addEventListener('keydown', e => { if(e.key) this.keys[e.key.toLowerCase()] = true; });
         window.addEventListener('keyup', e => { if(e.key) this.keys[e.key.toLowerCase()] = false; });
@@ -103,6 +107,7 @@ export class InputHandler {
             this.injectMobileStyles();
             this.injectMobileHTML();
             this.leftStick = new VirtualJoystick('stick-left-zone', 'stick-left-knob');
+            this.bindMobileActionEvents();
         }
     }
 
@@ -110,12 +115,12 @@ export class InputHandler {
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     }
 
-    // [NOVO] Método utilitário para checar ação (Resgate/Interação)
+    // [CORRIGIDO] Checa Teclado (E ou Espaço) OU Botão Mobile
     isActionActive() {
-        return this.keys['e'] || this.keys[' ']; // E ou Espaço
+        return this.keys['e'] || this.keys[' '] || this.isMobileActionHeld;
     }
 
-    // Cria o visual do joystick se não houver no HTML
+    // Cria o visual do joystick e botão se não houver no HTML
     injectMobileStyles() {
         if (document.getElementById('joystick-styles')) return;
         const style = document.createElement('style');
@@ -138,7 +143,7 @@ export class InputHandler {
                 border-radius: 50%; transform: translate(-50%, -50%);
                 box-shadow: 0 0 15px var(--honey-glow); pointer-events: none;
             }
-            /* [NOVO] Estilo base para botões de ação (usado pelo Resgate) */
+            /* Estilo base para botões de ação */
             .mobile-action-btn {
                 position: fixed; bottom: 120px; right: 30px;
                 background: #2ecc71; color: white;
@@ -148,6 +153,7 @@ export class InputHandler {
                 z-index: 1000;
                 box-shadow: 0 5px 15px rgba(0,0,0,0.5);
                 user-select: none; touch-action: none;
+                pointer-events: auto;
                 display: none; /* Controlado via JS */
                 transition: transform 0.1s;
             }
@@ -160,12 +166,45 @@ export class InputHandler {
         if (document.getElementById('mobile-controls')) return;
         const div = document.createElement('div');
         div.id = 'mobile-controls';
+        // Inclui o Joystick E o botão de Ação
         div.innerHTML = `
             <div id="stick-left-zone" class="joystick-zone">
                 <div id="stick-left-knob" class="joystick-knob"></div>
             </div>
+            <button id="mobile-action-btn" class="mobile-action-btn">AÇÃO</button>
         `;
         document.body.appendChild(div);
+        
+        this.actionBtn = document.getElementById('mobile-action-btn');
+    }
+
+    // [NOVO] Vincula eventos de toque do botão de ação
+    bindMobileActionEvents() {
+        if (!this.actionBtn) return;
+        
+        const setHeld = (state) => {
+            this.isMobileActionHeld = state;
+            if(state) this.actionBtn.style.transform = "scale(0.9)";
+            else this.actionBtn.style.transform = "scale(1.0)";
+        };
+
+        this.actionBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); setHeld(true); });
+        this.actionBtn.addEventListener('pointerup', (e) => { e.preventDefault(); setHeld(false); });
+        this.actionBtn.addEventListener('pointerleave', (e) => { e.preventDefault(); setHeld(false); });
+        this.actionBtn.addEventListener('contextmenu', e => e.preventDefault());
+    }
+
+    // [NOVO] Método para o Main controlar o botão (visibilidade, texto, cor)
+    updateActionButton(visible, text = "AÇÃO", color = "#2ecc71") {
+        if (!this.actionBtn) return;
+        
+        if (visible) {
+            this.actionBtn.style.display = 'block';
+            this.actionBtn.innerText = text;
+            this.actionBtn.style.background = color;
+        } else {
+            this.actionBtn.style.display = 'none';
+        }
     }
 
     // Método para mostrar o joystick (chamado no startGame)
