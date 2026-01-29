@@ -4,315 +4,187 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Wings That Heal</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+
     <style>
         :root {
-            --primary: #f1c40f;
-            --primary-dark: #d4ac0d;
-            --bg-dark: #0d0d0d;
-            --bg-card: rgba(20, 20, 20, 0.98);
-            --accent-green: #2ecc71;
+            --primary: #FFD700; /* Mel Dourado */
+            --primary-dark: #F39C12;
+            --accent-green: #2ecc71; /* Folha Viva */
             --danger: #e74c3c;
-            --honey-glow: rgba(241, 196, 15, 0.3);
+            --bg-dark: #2c3e50; /* Azul Noturno Suave */
+            --bg-card: rgba(255, 255, 255, 0.95); /* Cartões Claros (Cera) */
+            --honey-glow: rgba(255, 215, 0, 0.5);
+            --text-dark: #5D4037; /* Marrom Terra */
         }
 
         body { 
             margin: 0; overflow: hidden; background: var(--bg-dark); 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            font-family: 'Nunito', sans-serif; 
             touch-action: none; user-select: none; -webkit-user-select: none;
-            color: white; width: 100vw; height: 100vh;
+            color: var(--text-dark); width: 100vw; height: 100vh;
         }
 
+        /* Overlays de Ambiente */
         #suffocation-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: radial-gradient(circle, transparent 40%, black 150%);
+            background: radial-gradient(circle, transparent 40%, #000 150%);
             pointer-events: none; z-index: 100;
             opacity: 0; transition: opacity 0.5s ease;
         }
 
         #day-night-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: #000015; 
+            background-color: #000022; 
             pointer-events: none; z-index: 5; 
             opacity: 0; transition: opacity 1s linear;
         }
 
+        /* Tela de Desmaio */
         #faint-screen {
             display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: black; z-index: 500; flex-direction: column;
+            background: rgba(0,0,0,0.9); z-index: 500; flex-direction: column;
             align-items: center; justify-content: center; text-align: center;
             animation: fadeInBlack 1s forwards;
         }
-        .faint-title { font-size: 32px; color: var(--primary); margin-bottom: 20px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; }
-        .faint-msg { font-size: 18px; max-width: 80%; line-height: 1.6; color: #ccc; font-style: italic; }
-        .faint-hint { margin-top: 25px; color: var(--accent-green); font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+        .faint-title { font-size: 32px; color: var(--primary); margin-bottom: 20px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; }
+        .faint-msg { font-size: 18px; max-width: 80%; line-height: 1.6; color: #eee; }
+        .faint-hint { margin-top: 25px; color: var(--accent-green); font-weight: bold; }
         
-        /* BOTÃO DE RESPAWN IMEDIATO */
         .btn-respawn {
-            margin-top: 40px;
-            padding: 18px 35px;
-            background: transparent;
-            border: 2px solid var(--primary);
-            color: var(--primary);
-            font-weight: 900;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            border-radius: 50px;
-            cursor: pointer;
-            transition: all 0.3s;
-            box-shadow: 0 0 15px var(--honey-glow);
+            margin-top: 40px; padding: 15px 30px;
+            background: transparent; border: 3px solid var(--primary);
+            color: var(--primary); font-weight: 900; border-radius: 50px;
+            cursor: pointer; text-transform: uppercase; font-family: 'Nunito', sans-serif;
+            transition: all 0.2s;
         }
-        .btn-respawn:active {
-            background: var(--primary);
-            color: black;
-            transform: scale(0.95);
-        }
+        .btn-respawn:active { background: var(--primary); color: #fff; transform: scale(0.95); }
 
         @keyframes fadeInBlack { from { opacity: 0; } to { opacity: 1; } }
 
-        #toast-msg {
-            position: fixed; top: 10%; left: 50%; transform: translateX(-50%);
-            background: rgba(231, 76, 60, 0.95); color: white;
-            padding: 15px 25px; border-radius: 50px;
-            font-weight: 900; z-index: 9999;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.5);
-            opacity: 0; transition: opacity 0.3s;
-            text-transform: uppercase; font-size: 12px; letter-spacing: 1px;
-            pointer-events: none;
-        }
-
-        #mobile-controls { display: none; }
-
+        /* Lobby (Tela Inicial) */
         #lobby-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: radial-gradient(circle at center, #1a1a1a 0%, #000000 100%);
+            background: linear-gradient(135deg, #f6d365 0%, #fda085 100%); /* Gradiente Pôr do Sol */
             display: flex; align-items: center; justify-content: center; z-index: 200;
         }
         
         .lobby-card { 
-            background: var(--bg-card); border: 2px solid var(--primary);
-            box-shadow: 0 0 50px var(--honey-glow); 
-            width: 90%; max-width: 420px; border-radius: 24px; overflow: hidden;
-            backdrop-filter: blur(15px);
-            animation: cardPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            background: white; border-radius: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2); 
+            width: 90%; max-width: 400px; overflow: hidden;
+            animation: cardPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
 
         @keyframes cardPop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
         .lobby-header {
-            background: linear-gradient(135deg, var(--primary), #e67e22); 
-            color: #000; padding: 25px 20px;
-            text-align: center; font-weight: 900; font-size: 26px;
-            text-transform: uppercase; letter-spacing: 4px;
+            background: var(--primary); 
+            color: white; padding: 30px 20px;
+            text-align: center; font-weight: 900; font-size: 24px;
+            text-transform: uppercase; letter-spacing: 2px;
+            text-shadow: 0 2px 0 rgba(0,0,0,0.1);
         }
 
         .studio-footer {
-            position: absolute;
-            bottom: 20px;
-            width: 100%;
-            text-align: center;
-            font-weight: 900;
-            font-size: 14px;
-            letter-spacing: 2px;
-            color: rgba(255, 255, 255, 0.3);
-            text-transform: uppercase;
-            z-index: 210;
+            position: absolute; bottom: 20px; width: 100%;
+            text-align: center; font-weight: 900; font-size: 12px;
+            color: rgba(255,255,255,0.8); letter-spacing: 2px;
             pointer-events: none;
         }
 
-        .tabs { display: flex; background: #0a0a0a; padding: 5px; gap: 5px; }
+        .tabs { display: flex; padding: 10px; gap: 10px; justify-content: center; }
         .tab-btn {
-            flex: 1; padding: 15px; cursor: pointer;
-            background: transparent; color: #555; border: none;
-            font-weight: 800; transition: all 0.3s; border-radius: 12px;
-            font-size: 13px; text-transform: uppercase;
+            flex: 1; padding: 12px; cursor: pointer;
+            background: #f0f0f0; color: #999; border: none;
+            font-weight: 800; border-radius: 15px;
+            font-size: 14px; transition: all 0.3s;
+            font-family: 'Nunito', sans-serif;
         }
         .tab-btn.active { 
-            color: #000; background: var(--primary);
-            box-shadow: 0 4px 10px var(--honey-glow);
+            background: var(--accent-green); color: white;
+            box-shadow: 0 5px 15px rgba(46, 204, 113, 0.4);
         }
 
-        .tab-content { display: none; padding: 30px; animation: slideUp 0.4s ease-out; }
+        .tab-content { display: none; padding: 25px; animation: slideUp 0.4s ease-out; }
         .tab-content.active { display: block; }
         
-        @keyframes slideUp { 
-            from { opacity: 0; transform: translateY(20px); } 
-            to { opacity: 1; transform: translateY(0); } 
-        }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         
         .input-group { margin-bottom: 20px; }
-        .input-label { display: block; color: var(--primary); font-size: 11px; margin-bottom: 8px; font-weight: 900; letter-spacing: 1.5px; }
+        .input-label { display: block; color: #888; font-size: 12px; margin-bottom: 5px; font-weight: 800; text-transform: uppercase; }
         
         input { 
-            padding: 16px; border-radius: 14px; border: 1px solid #333; 
-            width: 100%; box-sizing: border-box; background: #121212; color: white; 
-            font-size: 16px; -webkit-appearance: none;
+            padding: 15px; border-radius: 15px; border: 2px solid #eee; 
+            width: 100%; box-sizing: border-box; background: #fafafa; color: #333; 
+            font-size: 16px; font-family: 'Nunito', sans-serif; outline: none; transition: border 0.3s;
+            -webkit-appearance: none;
         }
-        input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 15px rgba(241, 196, 15, 0.15); }
+        input:focus { border-color: var(--primary); background: white; }
 
         .btn-action { 
-            padding: 20px; cursor: pointer; background: var(--primary); 
-            color: #000; border: none; font-weight: 900; border-radius: 16px; 
-            width: 100%; margin-top: 10px; font-size: 16px; text-transform: uppercase;
-            letter-spacing: 2px; box-shadow: 0 5px 0 var(--primary-dark);
-            -webkit-tap-highlight-color: transparent;
-            pointer-events: auto;
+            padding: 18px; cursor: pointer; background: var(--primary); 
+            color: white; border: none; font-weight: 900; border-radius: 18px; 
+            width: 100%; margin-top: 10px; font-size: 16px; 
+            box-shadow: 0 8px 20px var(--honey-glow);
+            transition: transform 0.2s; font-family: 'Nunito', sans-serif;
         }
-        .btn-action:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--primary-dark); }
+        .btn-action:active { transform: scale(0.98); }
 
-        #rpg-hud {
-            display: none; position: absolute; top: env(safe-area-inset-top, 20px); left: 0;
-            width: 190px; background: rgba(0, 0, 0, 0.85);
-            padding: 15px; 
-            border: 1px solid #333; 
-            border-left: none; 
-            border-bottom: none; 
-            border-radius: 0 18px 0 0; 
-            pointer-events: none; z-index: 10; backdrop-filter: blur(10px);
-        }
-
-        .hud-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-        .player-name { color: var(--primary); font-weight: 900; font-size: 14px; text-transform: uppercase; }
-        .player-coords { color: #666; font-size: 10px; font-family: monospace; }
-        
-        #hud-time {
-            text-align: center; font-size: 10px; color: #aaa; font-weight: bold; font-family: monospace;
-            border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 8px;
-            letter-spacing: 0.5px;
-        }
-        
-        .hud-row { display: flex; align-items: center; margin-bottom: 8px; height: 18px; }
-        .hud-icon { width: 22px; font-size: 14px; text-align: center; margin-right: 8px; }
-        .bar-container { flex: 1; position: relative; height: 100%; background: #0a0a0a; border-radius: 6px; overflow: hidden; border: 1px solid #222; }
-        .bar-fill { height: 100%; width: 100%; transition: width 0.5s ease; }
-        .bar-text { position: absolute; top: 0; left: 0; width: 100%; height: 100%; text-align: center; line-height: 16px; color: white; font-size: 9px; font-weight: 900; z-index: 2; }
-        
-        .fill-hp { background: linear-gradient(90deg, #962115, #e74c3c); }
-        .fill-xp { background: linear-gradient(90deg, #1d5d8a, #3498db); }
-        .fill-pollen { background: linear-gradient(90deg, #b38f00, #f1c40f); }
-
-        #ranking-container {
-            display: none; 
-            position: absolute; 
-            top: calc(env(safe-area-inset-top, 20px) + 145px); 
-            left: 0;
-            width: 190px; 
-            height: 95px; 
-            background: rgba(0, 0, 0, 0.85);
-            padding: 5px 15px 5px 15px; 
-            border: 1px solid #333; 
-            border-left: none; 
-            border-top: 1px solid #222; 
-            border-radius: 0 0 18px 0; 
-            pointer-events: auto; 
-            z-index: 10; 
-            backdrop-filter: blur(10px);
-            overflow: hidden;
-        }
-
-        .ranking-header {
-            color: var(--primary); font-weight: 900; font-size: 11px;
-            text-transform: uppercase; letter-spacing: 1px;
-            border-bottom: 1px solid #333; padding-bottom: 6px; margin-bottom: 6px;
-            text-align: center;
-            cursor: pointer;
-            transition: color 0.2s;
-        }
-        .ranking-header:hover { color: white; }
-
-        .rank-item {
-            display: flex; justify-content: space-between; align-items: center;
-            font-size: 11px; margin-bottom: 5px; color: #ddd; padding-right: 4px;
-        }
-        .rank-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px; }
-        .rank-item b { color: var(--accent-green); }
-
-        #ranking-full-modal {
+        /* Modais Genéricos (Party, Convite) */
+        .modal-overlay {
             display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 300px; max-height: 400px; background: var(--bg-card); border: 2px solid var(--primary);
-            border-radius: 24px; padding: 25px; z-index: 500;
+            background: white; border-radius: 25px; padding: 25px; z-index: 600;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3); width: 85%; max-width: 320px; text-align: center;
         }
-        #ranking-full-list { max-height: 300px; overflow-y: auto; margin-top: 15px; }
-
-        #chat-toggle-btn { 
-            display: none; 
-            position: absolute; 
-            bottom: 320px; 
-            left: 0; 
-            width: 40px; 
-            height: 60px; 
-            background: rgba(0,0,0,0.85); 
-            border: 2px solid var(--primary); 
-            border-left: none; 
-            border-radius: 0 15px 15px 0; 
-            color: white; 
-            cursor: pointer; 
-            z-index: 160; 
-            transition: left 0.3s ease;
-        }
-
-        #chat-container { 
-            display: none; 
-            position: absolute; 
-            bottom: 320px; 
-            left: -300px; 
-            width: 280px; 
-            height: 200px; 
-            background: var(--bg-card); 
-            border: 1px solid #333; 
-            border-radius: 0 20px 20px 0; 
-            z-index: 150; 
-            flex-direction: column; 
-            overflow: hidden; 
-            box-shadow: 10px 0 30px rgba(0,0,0,0.5);
-            transition: left 0.3s ease;
-        }
-
-        #chat-container.open { left: 0; display: flex; }
-        #chat-toggle-btn.open { left: 280px; }
-
-        #chat-tabs-container { display: flex; background: #000; border-bottom: 1px solid #222; }
-        #chat-messages { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 4px; }
-        .chat-input-area { display: flex; padding: 10px; background: #0a0a0a; border-top: 1px solid #222; gap: 8px; align-items: center; }
-        #chat-input { flex: 1; background: #121212; border: 1px solid #333; border-radius: 12px; padding: 10px 14px; color: white; font-size: 14px; outline: none; }
-        #chat-send-btn { background: var(--primary); border: none; border-radius: 10px; width: 40px; height: 40px; color: black; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-
-        #player-modal, #party-invite-popup, #party-create-modal {
-            display: none; position: absolute; background: var(--bg-card); border: 2px solid var(--primary);
-            border-radius: 24px; padding: 30px; z-index: 400; text-align: center;
-        }
-        #player-modal { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 280px; }
-        #party-invite-popup { top: 40px; left: 50%; transform: translateX(-50%); width: 310px; border-color: var(--accent-green); }
-        #party-create-modal { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; }
         
+        .modal-title { font-weight: 900; color: var(--text-dark); font-size: 18px; margin-bottom: 15px; text-transform: uppercase; }
+        .modal-btn { 
+            width: 100%; padding: 15px; border-radius: 15px; border: none; 
+            font-weight: 900; cursor: pointer; margin-top: 10px; font-family: 'Nunito', sans-serif;
+        }
+
         .icon-selector { display: flex; justify-content: center; gap: 10px; margin: 15px 0; }
         .icon-btn { 
-            background: #111; border: 1px solid #333; font-size: 20px; padding: 10px; 
-            border-radius: 50%; cursor: pointer; transition: all 0.2s;
+            width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+            background: #eee; border-radius: 50%; cursor: pointer; font-size: 20px; transition: all 0.2s;
         }
-        .icon-btn.selected { background: var(--primary); color: black; box-shadow: 0 0 10px var(--primary); }
+        .icon-btn.selected { background: var(--primary); color: white; transform: scale(1.1); }
 
-        .modal-btn { display: block; width: 100%; padding: 16px; margin-top: 12px; border: none; border-radius: 14px; font-weight: 900; cursor: pointer; text-transform: uppercase; }
+        /* PLACEHOLDERS PARA INJEÇÃO JS */
+        #rpg-hud, #ranking-container, #chat-container, #mobile-controls, #chat-toggle-btn {
+            /* Estilos são injetados pelo main.js e input.js */
+        }
 
-        @media (max-height: 450px) {
-            .lobby-card { transform: scale(0.7); }
-            #chat-container { height: 150px; width: 250px; bottom: 80px; }
-            #chat-toggle-btn { bottom: 80px; }
-            .studio-footer { bottom: 5px; font-size: 10px; }
+        /* Notificação Toast */
+        #toast-msg {
+            position: fixed; top: 10%; left: 50%; transform: translateX(-50%);
+            background: white; color: var(--text-dark);
+            padding: 12px 25px; border-radius: 30px;
+            font-weight: 800; z-index: 9999;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+            opacity: 0; transition: opacity 0.3s;
+            pointer-events: none; font-size: 13px;
         }
     </style>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
 
+    <canvas id="gameCanvas" style="display:none;"></canvas>
+
     <div id="suffocation-overlay"></div>
-    <div id="day-night-overlay"></div> <div id="toast-msg"></div>
+    <div id="day-night-overlay"></div> 
+    <div id="toast-msg"></div>
 
     <div id="faint-screen">
         <div class="faint-title">Asas Caídas</div>
-        <div class="faint-msg">O equilíbrio da floresta foi quebrado... <br>Aguarde o resgate da colmeia.</div>
-        <div class="faint-hint">Um aliado pode te salvar com pólen real!</div>
-        
-        <button id="btn-immediate-respawn" class="btn-respawn">Reascender na Colmeia</button>
+        <div class="faint-msg">Suas asas pesam... A colmeia aguarda seu retorno.</div>
+        <div class="faint-hint">Um amigo pode te resgatar com Pólen!</div>
+        <button id="btn-immediate-respawn" class="btn-respawn">Voltar para a Base</button>
     </div>
 
     <div id="lobby-overlay">
@@ -321,126 +193,97 @@
         <div class="lobby-card">
             <div class="lobby-header">WINGS THAT HEAL</div>
             <div class="tabs">
-                <button class="tab-btn active" id="tab-btn-create" onclick="openTab('create')">Hospedar</button>
+                <button class="tab-btn active" id="tab-btn-create" onclick="openTab('create')">Criar Mundo</button>
                 <button class="tab-btn" id="tab-btn-join" onclick="openTab('join')">Entrar</button>
             </div>
             
             <div id="tab-create" class="tab-content active">
                 <div class="input-group">
-                    <label class="input-label">NICKNAME DA ABELHA</label>
-                    <input type="text" id="host-nickname" placeholder="Ex: AbelhaRainha" maxlength="12">
+                    <label class="input-label">Seu Nome</label>
+                    <input type="text" id="host-nickname" placeholder="Ex: Melzinha" maxlength="12">
                 </div>
                 <div class="input-group">
-                    <label class="input-label">CÓDIGO DA COLMEIA (ID)</label>
-                    <input type="text" id="create-id" placeholder="Crie um ID para seus amigos">
+                    <label class="input-label">Nome do Mundo</label>
+                    <input type="text" id="create-id" placeholder="Ex: BosqueSecreto">
                 </div>
                 <div class="input-group">
-                    <label class="input-label">SENHA DA SALA</label>
-                    <input type="password" id="create-pass" placeholder="Opcional">
+                    <label class="input-label">Senha (Opcional)</label>
+                    <input type="password" id="create-pass" placeholder="***">
                 </div>
                 <div class="input-group">
-                    <label class="input-label">BIOMA DO MUNDO (SEED)</label>
-                    <input type="text" id="world-seed" value="FLORESTA_ETERNAL">
+                    <label class="input-label">Semente (Seed)</label>
+                    <input type="text" id="world-seed" value="JARDIM_SOLAR">
                 </div>
-                <button id="btn-create" class="btn-action">INICIAR COLMEIA</button>
+                <button id="btn-create" class="btn-action">CRIAR COLMEIA</button>
             </div>
 
             <div id="tab-join" class="tab-content">
                 <div class="input-group">
-                    <label class="input-label">NICKNAME DO CURADOR</label>
+                    <label class="input-label">Seu Nome</label>
                     <input type="text" id="join-nickname" placeholder="Ex: Zangão" maxlength="12">
                 </div>
                 <div class="input-group">
-                    <label class="input-label">CÓDIGO DA COLMEIA ALVO</label>
-                    <input type="text" id="join-id" placeholder="Digite o ID do Host">
+                    <label class="input-label">Mundo Alvo</label>
+                    <input type="text" id="join-id" placeholder="Nome do Mundo do Amigo">
                 </div>
                 <div class="input-group">
-                    <label class="input-label">SENHA DE ACESSO</label>
+                    <label class="input-label">Senha</label>
                     <input type="password" id="join-pass" placeholder="Se houver">
                 </div>
-                <button id="btn-join" class="btn-action">VOAR PARA O MUNDO</button>
+                <button id="btn-join" class="btn-action">VOAR PARA LÁ</button>
             </div>
-            <div id="status-msg" style="text-align:center; color:var(--danger); padding: 15px; font-size:12px; font-weight:bold; text-transform:uppercase;"></div>
         </div>
     </div>
 
     <div id="rpg-hud">
-        <div class="hud-header">
-            <span class="player-name" id="hud-name">Abelha</span>
-            <span class="player-coords" id="hud-coords">0, 0</span>
-            <span style="color:#666; font-weight:900">LV <span id="hud-lvl" style="color:var(--primary)">1</span></span>
+        <div id="hud-info">
+            <span id="hud-name">Abelha</span> <small style="opacity:0.7">LV <span id="hud-lvl">1</span></small>
         </div>
-        <div id="hud-time">01 JAN 2074 - 12:00</div>
-        <div class="hud-row"><div class="hud-icon">❤️</div><div class="bar-container"><div id="bar-hp-fill" class="bar-fill fill-hp"></div><span id="bar-hp-text" class="bar-text">100/100</span></div></div>
-        <div class="hud-row"><div class="hud-icon">💠</div><div class="bar-container"><div id="bar-xp-fill" class="bar-fill fill-xp"></div><span id="bar-xp-text" class="bar-text">0/100</span></div></div>
-        <div class="hud-row"><div class="hud-icon">🌻</div><div class="bar-container"><div id="bar-pollen-fill" class="bar-fill fill-pollen"></div><span id="bar-pollen-text" class="bar-text">0/100</span></div></div>
+        <div class="hud-stat-row"><div class="hud-icon">❤️</div><div class="hud-bar-bg"><div id="bar-hp-fill" class="hud-bar-fill" style="background:#ff6b6b; width:100%"></div></div><div id="bar-hp-text" class="hud-text">100</div></div>
+        <div class="hud-stat-row"><div class="hud-icon">💠</div><div class="hud-bar-bg"><div id="bar-xp-fill" class="hud-bar-fill" style="background:#4dabf7; width:0%"></div></div><div id="bar-xp-text" class="hud-text">0</div></div>
+        <div class="hud-stat-row"><div class="hud-icon">🌻</div><div class="hud-bar-bg"><div id="bar-pollen-fill" class="hud-bar-fill" style="background:#ffd43b; width:0%"></div></div><div id="bar-pollen-text" class="hud-text">0</div></div>
+        <div id="hud-time" style="display:none"></div> <div id="hud-coords" style="display:none"></div>
     </div>
 
     <div id="ranking-container">
-        <div class="ranking-header" onclick="openFullRanking()">🏆 TOP CURADORES</div>
-        <div id="ranking-list">
-            <div class="rank-item" style="justify-content:center; color:#666">Carregando...</div>
-        </div>
-    </div>
-
-    <div id="ranking-full-modal">
-        <div style="font-weight:900; color:var(--primary); font-size:18px; text-align:center; text-transform:uppercase;">Colmeia Global</div>
-        <div id="ranking-full-list"></div>
-        <button class="modal-btn" style="background:transparent; color:#555" onclick="closeFullRanking()">FECHAR</button>
+        <div style="font-weight:bold; margin-bottom:5px; font-size:10px; text-transform:uppercase; color:#aaa">Top Curadores</div>
+        <div id="ranking-list"></div>
     </div>
 
     <button id="chat-toggle-btn">💬</button>
-    <div id="chat-container">
-        <div id="chat-tabs-container"></div>
-        <div id="chat-messages"></div>
-        <div class="chat-input-area">
-            <input type="text" id="chat-input" placeholder="Zumbir..." maxlength="50">
-            <button id="chat-send-btn">➤</button>
-        </div>
+    <div id="chat-container"></div> <div id="player-modal" class="modal-overlay">
+        <div id="modal-player-name" class="modal-title">---</div>
+        <div id="modal-player-info" style="color:#666; margin-bottom:20px;">Nível: 1</div>
+        <button id="btn-party-action" class="modal-btn" style="background:var(--primary); color:white">CONVIDAR</button>
+        <button id="btn-whisper-action" class="modal-btn" style="background:#3498db; color:white">COCHICHAR</button>
+        <button class="modal-btn" style="background:#f0f0f0; color:#555" onclick="closePlayerModal()">FECHAR</button>
     </div>
 
-    <div id="player-modal">
-        <div id="modal-player-name" style="font-weight:900; font-size:22px; color:var(--primary)">---</div>
-        <div id="modal-player-info" style="color:#888; margin: 10px 0;">Nível: 1</div>
-        <button id="btn-party-action" class="modal-btn" style="background:var(--primary); color:black">CONVIDAR</button>
-        <button class="modal-btn" style="background:transparent; color:#555" onclick="closePlayerModal()">FECHAR</button>
-    </div>
-
-    <div id="party-create-modal">
-        <div style="font-weight:900; color:var(--primary); font-size:16px; margin-bottom:15px;">CRIAR ESQUADRÃO</div>
-        <input type="text" id="party-name-input" placeholder="Nome (ex: Alfa)" maxlength="5" style="text-align:center; text-transform:uppercase; letter-spacing:2px; font-weight:bold;">
+    <div id="party-create-modal" class="modal-overlay">
+        <div class="modal-title">Novo Esquadrão</div>
+        <input type="text" id="party-name-input" placeholder="NOME (EX: ALFA)" maxlength="5" style="text-align:center; font-weight:bold; letter-spacing:2px; text-transform:uppercase;">
         <div class="icon-selector">
             <div class="icon-btn selected" onclick="selectPartyIcon(this)">🛡️</div>
             <div class="icon-btn" onclick="selectPartyIcon(this)">⚔️</div>
             <div class="icon-btn" onclick="selectPartyIcon(this)">🌿</div>
             <div class="icon-btn" onclick="selectPartyIcon(this)">🐝</div>
-            <div class="icon-btn" onclick="selectPartyIcon(this)">⚡</div>
         </div>
-        <button id="btn-confirm-party-create" class="modal-btn" style="background:var(--primary); color:black">CRIAR & CONVIDAR</button>
-        <button class="modal-btn" style="background:transparent; color:#555" onclick="closePartyCreateModal()">CANCELAR</button>
+        <button id="btn-confirm-party-create" class="modal-btn" style="background:var(--accent-green); color:white">CRIAR</button>
+        <button class="modal-btn" style="background:#f0f0f0; color:#555" onclick="closePartyCreateModal()">VOLTAR</button>
     </div>
 
-    <div id="party-invite-popup">
-        <div id="invite-msg" style="font-weight:900; color:white; font-size:16px;">CONVITE!</div>
-        <div id="invite-party-details" style="color:var(--primary); font-size:12px; margin-bottom:10px;"></div>
-        <div style="display:flex; gap:10px; margin-top:20px;">
-            <button id="btn-accept-invite" class="modal-btn" style="background:var(--accent-green); color:black; margin:0">ACEITAR</button>
-            <button class="modal-btn" style="background:var(--danger); color:white; margin:0" onclick="closeInvitePopup()">RECUSAR</button>
+    <div id="party-invite-popup" class="modal-overlay" style="top:100px;">
+        <div class="modal-title" style="color:var(--accent-green)">Convite Recebido!</div>
+        <div id="invite-msg" style="margin-bottom:5px; font-weight:bold;"></div>
+        <div id="invite-party-details" style="color:#666; font-size:12px; margin-bottom:20px;"></div>
+        <div style="display:flex; gap:10px;">
+            <button id="btn-accept-invite" class="modal-btn" style="background:var(--accent-green); color:white; margin:0">ACEITAR</button>
+            <button class="modal-btn" style="background:#e74c3c; color:white; margin:0" onclick="closeInvitePopup()">RECUSAR</button>
         </div>
     </div>
-
-    <canvas id="gameCanvas" style="display:none;"></canvas>
 
     <script>
-        window.requestGameFullscreen = function() {
-            const doc = window.document;
-            const docEl = doc.documentElement;
-            const requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
-            if (requestFullScreen) {
-                requestFullScreen.call(docEl).catch(e => { console.warn("Fullscreen negado."); });
-            }
-        };
-
+        // Funções de UI Auxiliares
         function openTab(t) {
             document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(e => e.classList.remove('active'));
@@ -455,23 +298,22 @@
             el.classList.add('selected');
         }
 
-        function openFullRanking() { document.getElementById('ranking-full-modal').style.display = 'block'; }
-        function closeFullRanking() { document.getElementById('ranking-full-modal').style.display = 'none'; }
-        
-        const hudObserver = new MutationObserver(mutations => {
-            mutations.forEach(mutation => {
-                if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
-                    const hud = document.getElementById('rpg-hud');
-                    const rank = document.getElementById('ranking-container');
-                    if (hud.style.display === 'block') rank.style.display = 'block';
-                }
-            });
-        });
-        hudObserver.observe(document.getElementById('rpg-hud'), { attributes: true });
+        // Fullscreen Helper
+        window.requestGameFullscreen = function() {
+            const doc = window.document;
+            const docEl = doc.documentElement;
+            const requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
+            if (requestFullScreen) requestFullScreen.call(docEl).catch(e => {});
+        };
 
+        // Bloqueio de Zoom/Scroll no Mobile
         document.addEventListener('touchstart', function(e) {
             if (e.touches.length > 1) e.preventDefault();
         }, { passive: false });
+        
+        document.addEventListener('gesturestart', function(e) {
+            e.preventDefault();
+        });
     </script>
     <script type="module" src="src/main.js"></script>
 </body>
