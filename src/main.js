@@ -844,6 +844,7 @@ function update() {
             const d = Math.sqrt(Math.pow(localPlayer.pos.x - partner.pos.x, 2) + Math.pow(localPlayer.pos.y - partner.pos.y, 2));
             if (d < 1.5) { // Aumentado o range para facilitar
                 nearbyFaintedPartner = { id: memberId, nickname: partner.nickname, obj: partner };
+                partner.showRescuePrompt = true; // [NOVO] Ativa o prompt visual no player
             }
         }
     });
@@ -1051,8 +1052,9 @@ function draw() {
         ctx.fillStyle = `rgba(241,196,15,${p.life})`; ctx.fillRect(psX, psY, p.size * zoomLevel, p.size * zoomLevel); 
     });
     if (localPlayer) {
-        Object.values(remotePlayers).forEach(p => p.draw(ctx, camera, canvas, rTileSize, remotePlayers, partyMembers, localPartyIcon));
-        localPlayer.draw(ctx, camera, canvas, rTileSize, remotePlayers, partyMembers, localPartyIcon);
+        // [NOVO] Passa 'input.isMobile' para o draw do player
+        Object.values(remotePlayers).forEach(p => p.draw(ctx, camera, canvas, rTileSize, remotePlayers, partyMembers, localPartyIcon, input.isMobile));
+        localPlayer.draw(ctx, camera, canvas, rTileSize, remotePlayers, partyMembers, localPartyIcon, input.isMobile);
         
         // [NOVO] Desenhar barra de progresso de resgate
         if (currentRescueTarget && rescueTimer > 0) {
