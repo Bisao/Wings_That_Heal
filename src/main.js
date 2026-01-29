@@ -61,6 +61,16 @@ let uiUpdateCounter = 0;
 let isFainted = false;
 let faintTimeout = null; 
 
+// [NOVO] Variáveis de Resgate
+let rescueTimer = 0;
+let currentRescueTarget = null;
+let isHoldingRescue = false;
+const RESCUE_DURATION = 180; // ~3 segundos a 60 FPS
+const RESCUE_POLLEN_COST = 20;
+let rescueBtnElement = null; // Elemento DOM para mobile
+
+let invulnerabilityTimer = 0; // Timer de imunidade após renascer
+
 let lastManualSaveTime = 0;
 const SAVE_COOLDOWN = 15000; 
 
@@ -88,12 +98,33 @@ function showError(msg) {
     }, 3000);
 }
 
+// [NOVO] Configuração de controles extras (Tecla E)
+window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'e') isHoldingRescue = true;
+});
+window.addEventListener('keyup', (e) => {
+    if (e.key.toLowerCase() === 'e') isHoldingRescue = false;
+});
+
 window.addEventListener('load', () => {
     const savedNick = localStorage.getItem('wings_nick');
     if (savedNick) {
         document.getElementById('host-nickname').value = savedNick;
         document.getElementById('join-nickname').value = savedNick;
     }
+    
+    // [NOVO] Criar botão de resgate flutuante para mobile
+    rescueBtnElement = document.createElement('button');
+    rescueBtnElement.id = 'rescue-btn-mobile';
+    rescueBtnElement.innerText = "⛑️ RESGATAR (Segure)";
+    rescueBtnElement.style.cssText = "position: fixed; bottom: 120px; right: 30px; background: #2ecc71; color: white; padding: 20px; border-radius: 50px; font-weight: bold; font-size: 16px; border: 4px solid white; display: none; z-index: 9999; box-shadow: 0 5px 15px rgba(0,0,0,0.5); user-select: none; touch-action: none;";
+    
+    // Eventos de Touch para o botão
+    rescueBtnElement.addEventListener('pointerdown', (e) => { e.preventDefault(); isHoldingRescue = true; rescueBtnElement.style.transform = "scale(0.9)"; });
+    rescueBtnElement.addEventListener('pointerup', (e) => { e.preventDefault(); isHoldingRescue = false; rescueBtnElement.style.transform = "scale(1.0)"; });
+    rescueBtnElement.addEventListener('pointerleave', (e) => { e.preventDefault(); isHoldingRescue = false; rescueBtnElement.style.transform = "scale(1.0)"; });
+    
+    document.body.appendChild(rescueBtnElement);
 });
 
 window.addEventListener('wheel', (e) => {
@@ -303,7 +334,6 @@ window.addEventListener('netData', e => {
     if (d.type === 'CHAT_MSG') chat.addMessage('GLOBAL', d.nick, d.text);
     if (d.type === 'PARTY_MSG') chat.addMessage('PARTY', d.fromNick, d.text);
 
-    // [NOVO] Recebe pacote de partículas de pólen de outros jogadores
     if (d.type === 'POLLEN_BURST') {
         spawnPollenParticle(d.x, d.y);
     }
@@ -319,7 +349,6 @@ window.addEventListener('netData', e => {
     if (d.type === 'PARTY_ACCEPT') { 
         if (!partyMembers.includes(d.fromId)) partyMembers.push(d.fromId);
         
-        // CORREÇÃO: Host atualiza o ícone para si mesmo
         localPartyName = d.pName;
         localPartyIcon = d.pIcon;
 
@@ -337,13 +366,9 @@ window.addEventListener('netData', e => {
     }
     
     if (d.type === 'PARTY_SYNC') {
-        // CORREÇÃO: Guest recebe e aplica o ícone do grupo
         localPartyName = d.pName;
         localPartyIcon = d.pIcon;
-        
         d.members.forEach(id => {
-            // CORREÇÃO: Removemos a restrição de ID. O player local TAMBÉM entra na lista.
-            // Isso garante que o ícone apareça sobre a própria cabeça.
             if (!partyMembers.includes(id)) partyMembers.push(id);
         });
         chat.openPartyTab(localPartyName, localPartyIcon);
@@ -360,12 +385,20 @@ window.addEventListener('netData', e => {
         }
     }
     
+    // [NOVO] Lógica ao receber sinal de resgate bem-sucedido
     if (d.type === 'PARTY_RESCUE' && isFainted) {
         clearTimeout(faintTimeout);
         isFainted = false;
-        localPlayer.hp = 25; 
+        
+        localPlayer.hp = 25; // Revive com HP parcial
+        localPlayer.pollen = Math.max(0, localPlayer.pollen - 10); // Perde um pouco de pólen ao cair
+        
+        // Imunidade Temporária
+        invulnerabilityTimer = 180; // 3 segundos de invulnerabilidade
+        
         document.getElementById('faint-screen').style.display = 'none';
-        chat.addMessage('SYSTEM', null, `Reanimado por ${d.fromNick}!`);
+        chat.addMessage('SYSTEM', null, `Reanimado por ${d.fromNick}! IMUNIDADE ATIVA.`);
+        
         updateUI();
     }
 
@@ -469,7 +502,6 @@ function updateRanking() {
 }
 
 function startGame(seed, id, nick) {
-    // [NOVO] Lógica da Tela de Loading
     let loader = document.getElementById('loading-screen');
     if (!loader) {
         loader = document.createElement('div');
@@ -482,13 +514,10 @@ function startGame(seed, id, nick) {
 
     document.getElementById('lobby-overlay').style.display = 'none';
     
-    // Oculta a interface do jogo inicialmente (enquanto carrega)
     document.getElementById('rpg-hud').style.display = 'none';
     document.getElementById('chat-toggle-btn').style.display = 'none';
-    canvas.style.display = 'none'; // Canvas oculto mas ativo
+    canvas.style.display = 'none'; 
     
-    // Nota: input.showJoystick() será chamado apenas após o loading
-
     world = new WorldGenerator(seed);
     localPlayer = new Player(id, nick, true);
     const hives = world.getHiveLocations();
@@ -550,7 +579,6 @@ function startGame(seed, id, nick) {
     requestAnimationFrame(loop);
     setInterval(updateRanking, 5000);
 
-    // [NOVO] Timer de 15 segundos para remover loading e mostrar o jogo
     setTimeout(() => {
         const l = document.getElementById('loading-screen');
         if (l) {
@@ -562,8 +590,8 @@ function startGame(seed, id, nick) {
         document.getElementById('rpg-hud').style.display = 'block';
         document.getElementById('chat-toggle-btn').style.display = 'block';
         canvas.style.display = 'block';
-        input.showJoystick(); // Mostra joystick apenas agora
-        resize(); // Garante que o canvas tenha o tamanho correto ao aparecer
+        input.showJoystick(); 
+        resize(); 
     }, 15000);
 }
 
@@ -686,45 +714,94 @@ function updateEnvironment() {
 function update() {
     if(!localPlayer || isFainted) return; 
     updateEnvironment();
+    
+    // Diminui a invulnerabilidade
+    if (invulnerabilityTimer > 0) invulnerabilityTimer--;
+
     const gx = Math.round(localPlayer.pos.x), gy = Math.round(localPlayer.pos.y);
     if (gx !== lastGridX || gy !== lastGridY) {
         lastGridX = gx; lastGridY = gy;
         const el = document.getElementById('hud-coords'); if(el) el.innerText = `${gx}, ${gy}`;
     }
 
-    // CORREÇÃO CRÍTICA: Atualizar jogadores remotos para aplicar a interpolação de movimento
     Object.values(remotePlayers).forEach(p => p.update({}));
 
     const m = input.getMovement();
     localPlayer.update(m);
     const moving = m.x !== 0 || m.y !== 0;
     if(moving || Math.random() < 0.05) {
-        localPlayer.pos.x += m.x * localPlayer.speed; localPlayer.pos.y += m.y * localPlayer.speed;
+        // Se estiver com imunidade, aumenta velocidade levemente
+        const speedMod = invulnerabilityTimer > 0 ? 1.5 : 1.0;
+        localPlayer.pos.x += m.x * localPlayer.speed * speedMod; 
+        localPlayer.pos.y += m.y * localPlayer.speed * speedMod;
+        
         net.sendPayload({ type: 'MOVE', id: localPlayer.id, nick: localPlayer.nickname, x: localPlayer.pos.x, y: localPlayer.pos.y, dir: localPlayer.currentDir, stats: { level: localPlayer.level, hp: localPlayer.hp, maxHp: localPlayer.maxHp, tilesCured: localPlayer.tilesCured } });
     }
     
-    // CORREÇÃO: Enviar pacote de partículas para outros jogadores verem o pólen
     if (localPlayer.pollen > 0 && moving) {
-        spawnPollenParticle(); // Visual local
+        spawnPollenParticle(); 
         net.sendPayload({ type: 'POLLEN_BURST', x: localPlayer.pos.x, y: localPlayer.pos.y });
     }
     
     updateParticles();
+
+    // [NOVO] Lógica de Resgate com "Hold" (Segurar)
+    let nearbyFaintedPartner = null;
+
     partyMembers.forEach(memberId => {
         const partner = remotePlayers[memberId];
-        if (partner && partner.hp <= 0 && localPlayer.pollen >= 20) {
+        // Verifica: Existe? Tá desmaiado? Tá perto? Eu tenho pólen suficiente?
+        if (partner && partner.hp <= 0) {
             const d = Math.sqrt(Math.pow(localPlayer.pos.x - partner.pos.x, 2) + Math.pow(localPlayer.pos.y - partner.pos.y, 2));
             if (d < 1.0) { 
-                localPlayer.pollen -= 20;
-                net.sendPayload({ type: 'PARTY_RESCUE', fromNick: localPlayer.nickname }, memberId);
-                chat.addMessage('SYSTEM', null, `Você salvou ${partner.nickname}!`);
-                updateUI();
+                nearbyFaintedPartner = { id: memberId, nickname: partner.nickname, obj: partner };
             }
         }
     });
+
+    if (nearbyFaintedPartner) {
+        currentRescueTarget = nearbyFaintedPartner;
+        
+        // Mostra botão no mobile
+        if (rescueBtnElement) {
+            rescueBtnElement.style.display = 'block';
+            if (localPlayer.pollen < RESCUE_POLLEN_COST) {
+                rescueBtnElement.style.background = "#e74c3c"; // Vermelho se sem pólen
+                rescueBtnElement.innerText = `FALTA PÓLEN (${localPlayer.pollen}/${RESCUE_POLLEN_COST})`;
+            } else {
+                rescueBtnElement.style.background = "#2ecc71";
+                rescueBtnElement.innerText = "⛑️ SEGURE PARA RESGATAR";
+            }
+        }
+
+        // Se estiver segurando botão (E ou Touch) E tiver pólen
+        if (isHoldingRescue && localPlayer.pollen >= RESCUE_POLLEN_COST) {
+            rescueTimer++;
+            if (rescueTimer >= RESCUE_DURATION) {
+                // SUCESSO NO RESGATE
+                localPlayer.pollen -= RESCUE_POLLEN_COST;
+                net.sendPayload({ type: 'PARTY_RESCUE', fromNick: localPlayer.nickname }, currentRescueTarget.id);
+                chat.addMessage('SYSTEM', null, `Você salvou ${currentRescueTarget.nickname}!`);
+                updateUI();
+                rescueTimer = 0;
+                isHoldingRescue = false;
+            }
+        } else {
+            // Se soltar, reseta ou diminui gradualmente
+            rescueTimer = Math.max(0, rescueTimer - 2);
+        }
+    } else {
+        // Ninguém por perto
+        currentRescueTarget = null;
+        rescueTimer = 0;
+        if (rescueBtnElement) rescueBtnElement.style.display = 'none';
+    }
+
     const tile = worldState.getModifiedTile(gx, gy) || world.getTileAt(gx, gy);
     const isSafe = ['GRAMA', 'GRAMA_SAFE', 'BROTO', 'MUDA', 'FLOR', 'FLOR_COOLDOWN', 'COLMEIA'].includes(tile);
-    if (!isSafe) {
+    
+    // Verifica dano (Ignora se estiver IMUNE)
+    if (!isSafe && invulnerabilityTimer <= 0) {
         damageFrameCounter++;
         if (damageFrameCounter >= DAMAGE_RATE) {
             damageFrameCounter = 0; localPlayer.hp -= DAMAGE_AMOUNT; updateUI();
@@ -792,6 +869,7 @@ function performRespawn() {
     const faintScreen = document.getElementById('faint-screen');
     if(faintScreen) faintScreen.style.display = 'none';
     isFainted = false; 
+    invulnerabilityTimer = 180; // Imunidade ao dar respawn na base também
     updateUI();
     net.sendPayload({ 
         type: 'MOVE', 
@@ -839,7 +917,6 @@ function changeTile(x, y, newType, ownerId = null) {
     }
 }
 
-// CORREÇÃO: Atualizada para suportar coordenadas remotas
 function spawnPollenParticle(x = null, y = null) {
     const px = x !== null ? x : localPlayer.pos.x;
     const py = y !== null ? y : localPlayer.pos.y;
@@ -914,6 +991,36 @@ function draw() {
     if (localPlayer) {
         Object.values(remotePlayers).forEach(p => p.draw(ctx, camera, canvas, rTileSize, remotePlayers, partyMembers, localPartyIcon));
         localPlayer.draw(ctx, camera, canvas, rTileSize, remotePlayers, partyMembers, localPartyIcon);
+        
+        // [NOVO] Desenhar barra de progresso de resgate
+        if (currentRescueTarget && rescueTimer > 0) {
+            const tPos = currentRescueTarget.obj.pos;
+            const tScreenX = (tPos.x - camera.x) * rTileSize + canvas.width / 2;
+            const tScreenY = (tPos.y - camera.y) * rTileSize + canvas.height / 2;
+            
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 4 * zoomLevel;
+            ctx.beginPath();
+            ctx.arc(tScreenX, tScreenY, 30 * zoomLevel, -Math.PI/2, (-Math.PI/2) + (Math.PI*2 * (rescueTimer/RESCUE_DURATION)));
+            ctx.stroke();
+            
+            // Texto de indicação
+            ctx.fillStyle = "#ffffff";
+            ctx.font = `bold ${10 * zoomLevel}px sans-serif`;
+            ctx.textAlign = "center";
+            ctx.fillText("RESGATANDO...", tScreenX, tScreenY - (40 * zoomLevel));
+        }
+        
+        // Indicador de Imunidade
+        if (invulnerabilityTimer > 0) {
+             const pScreenX = canvas.width / 2;
+             const pScreenY = canvas.height / 2;
+             ctx.strokeStyle = `rgba(46, 204, 113, ${invulnerabilityTimer/60})`;
+             ctx.lineWidth = 2 * zoomLevel;
+             ctx.beginPath();
+             ctx.arc(pScreenX, pScreenY, 20 * zoomLevel, 0, Math.PI*2);
+             ctx.stroke();
+        }
     }
     if (localPlayer && localPlayer.homeBase && Math.sqrt(Math.pow(localPlayer.homeBase.x-localPlayer.pos.x,2)+Math.pow(localPlayer.homeBase.y-localPlayer.pos.y,2)) > 30) {
         const angle = Math.atan2(localPlayer.homeBase.y-localPlayer.pos.y, localPlayer.homeBase.x-localPlayer.pos.x), orbit = 60*zoomLevel;
