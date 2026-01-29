@@ -20,6 +20,51 @@ let pollenParticles = [];
 let smokeParticles = []; 
 let camera = { x: 0, y: 0 };
 
+// [NOVO] Sistema de Ondas
+let activeWaves = [];
+
+class WaveEffect {
+    constructor(x, y, maxRadius, color, healAmount) {
+        this.x = x;
+        this.y = y;
+        this.currentRadius = 0;
+        this.maxRadius = maxRadius;
+        this.color = color;
+        this.healAmount = healAmount;
+        this.speed = 0.1; // Velocidade de expansão da onda
+        this.life = 1.0;
+        this.curedLocal = false; // Garante que cure o player apenas uma vez
+    }
+
+    update() {
+        this.currentRadius += this.speed;
+        this.life = 1.0 - (this.currentRadius / this.maxRadius);
+        return this.life > 0;
+    }
+
+    draw(ctx, cam, canvas, tileSize) {
+        const sX = (this.x - cam.x) * tileSize + canvas.width / 2;
+        const sY = (this.y - cam.y) * tileSize + canvas.height / 2;
+        const r = this.currentRadius * tileSize;
+
+        if (this.life <= 0) return;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(sX, sY, r, 0, Math.PI * 2);
+        ctx.lineWidth = 4 * (tileSize / 32);
+        // Cor pulsante baseada na vida
+        ctx.strokeStyle = this.color.replace('ALPHA', this.life);
+        ctx.stroke();
+        
+        // Brilho interno
+        ctx.globalAlpha = this.life * 0.2;
+        ctx.fillStyle = this.color.replace('ALPHA', this.life);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
 let partyMembers = []; 
 let localPartyName = "";
 let localPartyIcon = "";
@@ -53,8 +98,8 @@ const GROWTH_TIMES = { BROTO: 5000, MUDA: 10000, FLOR: 15000 };
 const MONTHS = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
 
 let collectionFrameCounter = 0;
-let cureFrameCounter = 0;
-let flowerCureFrameCounter = 0;
+// let cureFrameCounter = 0; // Removido pois agora usamos Waves
+// let flowerCureFrameCounter = 0; // Removido pois agora usamos Waves
 let damageFrameCounter = 0;
 let uiUpdateCounter = 0; 
 
@@ -73,6 +118,9 @@ let invulnerabilityTimer = 0; // Timer de imunidade após renascer
 
 let lastManualSaveTime = 0;
 const SAVE_COOLDOWN = 15000; 
+
+// Contador para disparo da onda da colmeia no Host
+let hiveWaveTick = 0;
 
 const assets = { flower: new Image() };
 assets.flower.src = 'assets/Flower.png';
@@ -337,6 +385,11 @@ window.addEventListener('netData', e => {
     if (d.type === 'POLLEN_BURST') {
         spawnPollenParticle(d.x, d.y);
     }
+    
+    // [NOVO] Recebimento de pacote de onda de cura
+    if (d.type === 'WAVE_SPAWN') {
+        activeWaves.push(new WaveEffect(d.x, d.y, d.radius, d.color || "rgba(241, 196, 15, ALPHA)", d.amount));
+    }
 
     if (d.type === 'PARTY_INVITE') {
         pendingInviteFrom = d.fromId;
@@ -428,7 +481,8 @@ window.addEventListener('netData', e => {
     }
 
     if (d.type === 'FLOWER_CURE') {
-        if (localPlayer && d.ownerId === localPlayer.id) { localPlayer.tilesCured++; gainXp(XP_PASSIVE_CURE); }
+        // Mantém apenas a parte de estatística, a cura de HP agora é via WAVE_SPAWN
+        if (localPlayer && d.ownerId === localPlayer.id) { localPlayer.tilesCured++; }
         if (remotePlayers[d.ownerId]) remotePlayers[d.ownerId].tilesCured++;
     }
 
@@ -601,6 +655,25 @@ function startHostSimulation() {
         net.sendPayload({ type: 'TIME_SYNC', time: worldState.worldTime });
         let changed = false;
         const now = Date.now();
+        
+        // [NOVO] Lógica de Onda das Colmeias (A cada 3 segundos ~ 3 ticks do setInterval que é 1s)
+        hiveWaveTick++;
+        if (hiveWaveTick >= 3) {
+            hiveWaveTick = 0;
+            const hives = world.getHiveLocations();
+            hives.forEach(h => {
+                net.sendPayload({
+                    type: 'WAVE_SPAWN',
+                    x: h.x,
+                    y: h.y,
+                    radius: 4.0, // Colmeia tem raio maior
+                    color: "rgba(241, 196, 15, ALPHA)",
+                    amount: 5 // Cura mais forte
+                });
+                // Host também vê a onda (cria local)
+                activeWaves.push(new WaveEffect(h.x, h.y, 4.0, "rgba(241, 196, 15, ALPHA)", 5));
+            });
+        }
 
         Object.values(remotePlayers).forEach(p => {
             if (p.nickname && hiveRegistry[p.nickname] === undefined) {
@@ -628,8 +701,22 @@ function startHostSimulation() {
             else if (currentType === 'MUDA' && elapsedSinceStart > GROWTH_TIMES.FLOR) { changeTile(x, y, 'FLOR', ownerId); changed = true; }
             else if (currentType === 'FLOR_COOLDOWN' && elapsedSinceStart > FLOWER_COOLDOWN_TIME) { changeTile(x, y, 'FLOR', ownerId); changed = true; }
 
+            // [NOVO] Lógica de Onda das Flores
             if (currentType === 'FLOR' && plantData.isReadyToHeal && elapsedSinceHeal >= 3000) {
                 plantData.lastHealTime = now;
+                
+                // Emite a onda visual e funcional
+                net.sendPayload({
+                    type: 'WAVE_SPAWN',
+                    x: x,
+                    y: y,
+                    radius: 2.0, // Planta tem raio menor
+                    color: "rgba(46, 204, 113, ALPHA)", // Onda verde para plantas
+                    amount: 2 // Cura normal
+                });
+                activeWaves.push(new WaveEffect(x, y, 2.0, "rgba(46, 204, 113, ALPHA)", 2));
+
+                // Mantém a lógica de terraformação (Opcional, mas bom para gameplay)
                 for (let dx = -1; dx <= 1; dx++) {
                     for (let dy = -1; dy <= 1; dy++) {
                         if (dx === 0 && dy === 0) continue; 
@@ -640,6 +727,7 @@ function startHostSimulation() {
                         if (target === 'TERRA_QUEIMADA') {
                             changeTile(tx, ty, 'GRAMA_SAFE', ownerId);
                             if (ownerId) {
+                                // Apenas para stats, não cura HP aqui
                                 net.sendPayload({ type: 'FLOWER_CURE', ownerId: ownerId, x: tx, y: ty });
                                 if (localPlayer && ownerId === localPlayer.id) {
                                     localPlayer.tilesCured++; gainXp(XP_PASSIVE_CURE);
@@ -725,6 +813,27 @@ function update() {
     }
 
     Object.values(remotePlayers).forEach(p => p.update({}));
+    
+    // [NOVO] Atualização das Ondas e Detecção de Colisão
+    activeWaves = activeWaves.filter(wave => {
+        const stillAlive = wave.update();
+        if (stillAlive && !wave.curedLocal) {
+            // Verifica distância entre o player e o centro da onda
+            const d = Math.sqrt(Math.pow(localPlayer.pos.x - wave.x, 2) + Math.pow(localPlayer.pos.y - wave.y, 2));
+            
+            // Se a distância for menor que o raio atual da onda (com uma pequena margem para simular a borda passando)
+            // A lógica aqui é: A onda precisa "bater" no player.
+            // Então detectamos se a borda da onda está próxima da posição do player
+            if (Math.abs(d - wave.currentRadius) < 0.5) {
+                wave.curedLocal = true;
+                if (localPlayer.hp < localPlayer.maxHp) {
+                    localPlayer.applyHeal(wave.healAmount);
+                    updateUI();
+                }
+            }
+        }
+        return stillAlive;
+    });
 
     const m = input.getMovement();
     localPlayer.update(m);
@@ -812,36 +921,8 @@ function update() {
     const overlay = document.getElementById('suffocation-overlay');
     if (overlay) overlay.style.opacity = hpRatio < 0.7 ? (0.7 - hpRatio) * 1.4 : 0;
 
-    if (localPlayer.hp < localPlayer.maxHp) {
-        const hives = world.getHiveLocations();
-        let closestHiveDist = Infinity;
-        for (const hive of hives) {
-            const dist = Math.sqrt(Math.pow(localPlayer.pos.x - hive.x, 2) + Math.pow(localPlayer.pos.y - hive.y, 2));
-            if (dist < closestHiveDist) closestHiveDist = dist;
-        }
-        let healTickRate = (closestHiveDist <= 1.5) ? 60 : (closestHiveDist <= 2.5 ? 120 : (closestHiveDist <= 3.5 ? 240 : 0));
-        
-        if (healTickRate > 0 && ++cureFrameCounter >= healTickRate) {
-            cureFrameCounter = 0;
-            localPlayer.hp = Math.min(localPlayer.maxHp, localPlayer.hp + 1);
-            updateUI();
-        }
-
-        for (const [key, plantData] of Object.entries(worldState.growingPlants)) {
-            const [fx, fy] = key.split(',').map(Number);
-            const type = worldState.getModifiedTile(fx, fy);
-            if (type === 'FLOR' && plantData.isReadyToHeal) {
-                const dist = Math.sqrt(Math.pow(localPlayer.pos.x - fx, 2) + Math.pow(localPlayer.pos.y - fy, 2));
-                if (dist <= 1.5) {
-                    if (++flowerCureFrameCounter >= 45) {
-                        flowerCureFrameCounter = 0;
-                        localPlayer.hp = Math.min(localPlayer.maxHp, localPlayer.hp + 1);
-                        updateUI();
-                    }
-                }
-            }
-        }
-    }
+    // [MODIFICADO] A lógica de cura passiva (cureFrameCounter e flowerCureFrameCounter) foi removida
+    // pois agora a cura vem das Ondas (WaveEffect)
 
     if (tile === 'FLOR' && localPlayer.pollen < localPlayer.maxPollen && ++collectionFrameCounter >= COLLECTION_RATE) {
         localPlayer.pollen++; collectionFrameCounter = 0; gainXp(XP_PER_POLLEN);
@@ -979,6 +1060,10 @@ function draw() {
             }
         });
     }
+
+    // [NOVO] Renderizar as Ondas
+    activeWaves.forEach(wave => wave.draw(ctx, camera, canvas, rTileSize));
+
     smokeParticles.forEach(p => { 
         const psX = (p.wx - camera.x) * rTileSize + canvas.width / 2, psY = (p.wy - camera.y) * rTileSize + canvas.height / 2; 
         if (p.isEmber) ctx.fillStyle = `rgba(231, 76, 60, ${p.life})`; else ctx.fillStyle = `rgba(${p.grayVal},${p.grayVal},${p.grayVal},${p.life*0.4})`;
