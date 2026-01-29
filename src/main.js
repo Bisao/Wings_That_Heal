@@ -232,8 +232,8 @@ document.getElementById('btn-accept-invite').onclick = () => {
         net.sendPayload({ 
             type: 'PARTY_ACCEPT', 
             fromId: localPlayer.id, 
-            fromNick: localPlayer.nickname,
-            pName: localPartyName,
+            fromNick: localPlayer.nickname, 
+            pName: localPartyName, 
             pIcon: localPartyIcon
         }, pendingInviteFrom);
 
@@ -469,11 +469,25 @@ function updateRanking() {
 }
 
 function startGame(seed, id, nick) {
+    // [NOVO] Lógica da Tela de Loading
+    let loader = document.getElementById('loading-screen');
+    if (!loader) {
+        loader = document.createElement('div');
+        loader.id = 'loading-screen';
+        loader.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000 url('assets/loading.png') no-repeat center center; background-size: contain; z-index: 99999; display: block;";
+        document.body.appendChild(loader);
+    } else {
+        loader.style.display = 'block';
+    }
+
     document.getElementById('lobby-overlay').style.display = 'none';
-    document.getElementById('rpg-hud').style.display = 'block';
-    document.getElementById('chat-toggle-btn').style.display = 'block';
-    canvas.style.display = 'block';
-    input.showJoystick();
+    
+    // Oculta a interface do jogo inicialmente (enquanto carrega)
+    document.getElementById('rpg-hud').style.display = 'none';
+    document.getElementById('chat-toggle-btn').style.display = 'none';
+    canvas.style.display = 'none'; // Canvas oculto mas ativo
+    
+    // Nota: input.showJoystick() será chamado apenas após o loading
 
     world = new WorldGenerator(seed);
     localPlayer = new Player(id, nick, true);
@@ -530,8 +544,27 @@ function startGame(seed, id, nick) {
     });
 
     chat.addMessage('SYSTEM', null, `Abelha ${nick} pronta para o voo!`);
-    updateUI(); resize(); requestAnimationFrame(loop);
+    
+    updateUI(); 
+    resize(); 
+    requestAnimationFrame(loop);
     setInterval(updateRanking, 5000);
+
+    // [NOVO] Timer de 15 segundos para remover loading e mostrar o jogo
+    setTimeout(() => {
+        const l = document.getElementById('loading-screen');
+        if (l) {
+            l.style.opacity = '0';
+            l.style.transition = 'opacity 1s ease';
+            setTimeout(() => l.style.display = 'none', 1000);
+        }
+        
+        document.getElementById('rpg-hud').style.display = 'block';
+        document.getElementById('chat-toggle-btn').style.display = 'block';
+        canvas.style.display = 'block';
+        input.showJoystick(); // Mostra joystick apenas agora
+        resize(); // Garante que o canvas tenha o tamanho correto ao aparecer
+    }, 15000);
 }
 
 function startHostSimulation() {
