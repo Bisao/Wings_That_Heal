@@ -46,11 +46,11 @@ export class Player {
     }
 
     /**
-     * [NOVO] Método para aplicar cura recebida via Network.
+     * [NOVO] Método para aplicar cura recebida via Network ou Onda.
      * Isso garante que convidados processem a cura localmente.
      */
     applyHeal(amount) {
-        if (this.hp <= 0) return; // Não cura se estiver desmaiado (opcional)
+        if (this.hp <= 0) return; // Não cura se estiver desmaiado
         
         this.hp = Math.min(this.maxHp, this.hp + amount);
         this.healEffectTimer = 30; // Ativa efeito visual por 30 frames
@@ -193,31 +193,6 @@ export class Player {
             });
         }
 
-        // [NOVO] Visual de Imunidade / Escudo
-        if (this.invulnerableTimer > 0) {
-            ctx.save();
-            ctx.strokeStyle = `rgba(46, 204, 113, ${Math.min(1, this.invulnerableTimer / 30)})`;
-            ctx.lineWidth = 3 * zoomScale;
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = "#2ecc71";
-            ctx.beginPath();
-            // Raio oscila levemente para dar efeito de energia
-            const shieldPulse = Math.sin(Date.now() / 100) * 2;
-            ctx.arc(sX, sY, (20 * zoomScale) + shieldPulse, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.restore();
-        }
-
-        // [NOVO] Efeito Visual de Cura (Partículas de Cruz ou Brilho)
-        if (this.healEffectTimer > 0) {
-            ctx.save();
-            ctx.fillStyle = "#2ecc71";
-            ctx.font = `${14 * zoomScale}px Arial`;
-            ctx.globalAlpha = this.healEffectTimer / 30;
-            ctx.fillText("✚", sX + (Math.sin(Date.now()/50)*10), sY - (30 * zoomScale) - (30 - this.healEffectTimer));
-            ctx.restore();
-        }
-
         // 1. Balanço (Bobbing)
         const floatY = isDead ? 0 : Math.sin(Date.now() / 200) * (3 * zoomScale); 
         const drawY = sY - (12 * zoomScale) + floatY;
@@ -243,6 +218,21 @@ export class Player {
             ctx.beginPath(); ctx.arc(0, 0, 10 * zoomScale, 0, Math.PI*2); ctx.fill();
         }
         ctx.restore();
+
+        // [NOVO] Visual de Imunidade / Escudo (Desenha sobre o sprite)
+        if (this.invulnerableTimer > 0) {
+            ctx.save();
+            ctx.strokeStyle = `rgba(46, 204, 113, ${Math.min(1, this.invulnerableTimer / 30)})`;
+            ctx.lineWidth = 3 * zoomScale;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = "#2ecc71";
+            ctx.beginPath();
+            // Raio oscila levemente para dar efeito de energia
+            const shieldPulse = Math.sin(Date.now() / 100) * 2;
+            ctx.arc(sX, sY, (20 * zoomScale) + shieldPulse, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
 
         // 4. Nickname e Party Icon
         // Se for parceiro e tiver ícone definido, usa o ícone. Senão, usa o escudo padrão.
@@ -284,6 +274,19 @@ export class Player {
             const alertY = nickY - (30 * zoomScale) + floatAlert;
             ctx.strokeText("🆘 SOS!", sX, alertY);
             ctx.fillText("🆘 SOS!", sX, alertY);
+        }
+
+        // [ATUALIZADO] Efeito Visual de Cura (Desenhado por último para ficar no topo)
+        if (this.healEffectTimer > 0) {
+            ctx.save();
+            ctx.fillStyle = "#2ecc71";
+            ctx.font = `bold ${16 * zoomScale}px Arial`;
+            ctx.shadowColor = "black";
+            ctx.shadowBlur = 4;
+            ctx.globalAlpha = this.healEffectTimer / 30;
+            // O texto flutua para cima
+            ctx.fillText("✚", sX + (Math.sin(Date.now()/50)*5), sY - (35 * zoomScale) - (30 - this.healEffectTimer));
+            ctx.restore();
         }
     }
 }
