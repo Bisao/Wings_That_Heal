@@ -25,6 +25,9 @@ export class Player {
         
         // [NOVO] Controle de Invulnerabilidade (Escudo pós-ressurreição)
         this.invulnerableTimer = 0;
+        
+        // [NOVO] Controle visual do prompt de resgate
+        this.showRescuePrompt = false;
 
         // COR ÚNICA: Gera uma cor baseada no nome do jogador
         this.color = this.generateColor(nickname);
@@ -70,6 +73,9 @@ export class Player {
         
         // Reduz timer de invulnerabilidade
         if (this.invulnerableTimer > 0) this.invulnerableTimer--;
+        
+        // Reseta o prompt a cada frame (o main.js que deve setar como true se estiver perto)
+        this.showRescuePrompt = false;
 
         if (this.isLocal) {
             const isMoving = moveVector.x !== 0 || moveVector.y !== 0;
@@ -146,7 +152,7 @@ export class Player {
     }
 
     // --- RENDERIZAÇÃO ATUALIZADA PARA MULTI-PARTY ---
-    draw(ctx, cam, canvas, tileSize, remotePlayers = {}, partyMemberIds = [], partyIcon = "") {
+    draw(ctx, cam, canvas, tileSize, remotePlayers = {}, partyMemberIds = [], partyIcon = "", isMobileDevice = false) {
         const sX = (this.pos.x - cam.x) * tileSize + canvas.width / 2;
         const sY = (this.pos.y - cam.y) * tileSize + canvas.height / 2;
         
@@ -261,7 +267,7 @@ export class Player {
             ctx.fillRect(sX - barW/2, barY, Math.max(0, barW * (this.hp / this.maxHp)), barH);
         }
 
-        // Alerta de Resgate Ativo
+        // Alerta de Resgate Ativo (SOS)
         if (isPartner && isDead) {
             const pulse = Math.abs(Math.sin(Date.now() / 200)); // Pulso mais rápido
             const floatAlert = Math.sin(Date.now() / 150) * 5; // Movimento vertical
@@ -274,6 +280,54 @@ export class Player {
             const alertY = nickY - (30 * zoomScale) + floatAlert;
             ctx.strokeText("🆘 SOS!", sX, alertY);
             ctx.fillText("🆘 SOS!", sX, alertY);
+        }
+
+        // [NOVO] Prompt de Interação para Resgate (Tecla E ou Botão Touch)
+        if (this.showRescuePrompt) {
+            const promptY = sY - (50 * zoomScale);
+            const promptPulse = Math.sin(Date.now() / 100) * (2 * zoomScale);
+            
+            ctx.save();
+            ctx.translate(sX, promptY + promptPulse);
+            
+            // Fundo do botão/tecla
+            ctx.fillStyle = "#2ecc71"; // Verde
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 3;
+            
+            if (isMobileDevice) {
+                // Desenha Círculo com Cruz (Estilo Botão de Médico)
+                ctx.beginPath();
+                ctx.arc(0, 0, 18 * zoomScale, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                
+                // Cruz branca
+                ctx.fillStyle = "white";
+                ctx.fillRect(-5 * zoomScale, -10 * zoomScale, 10 * zoomScale, 20 * zoomScale);
+                ctx.fillRect(-10 * zoomScale, -5 * zoomScale, 20 * zoomScale, 10 * zoomScale);
+            } else {
+                // Desenha Tecla [E]
+                const boxS = 30 * zoomScale;
+                ctx.fillRect(-boxS/2, -boxS/2, boxS, boxS);
+                ctx.strokeRect(-boxS/2, -boxS/2, boxS, boxS);
+                
+                ctx.fillStyle = "white";
+                ctx.font = `bold ${18 * zoomScale}px Arial`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText("E", 0, 2 * zoomScale);
+            }
+            
+            // Texto "CURAR" abaixo
+            ctx.fillStyle = "white";
+            ctx.font = `bold ${10 * zoomScale}px sans-serif`;
+            ctx.strokeStyle = "black";
+            ctx.lineWidth = 2;
+            ctx.strokeText("CURAR", 0, -25 * zoomScale);
+            ctx.fillText("CURAR", 0, -25 * zoomScale);
+            
+            ctx.restore();
         }
 
         // [ATUALIZADO] Efeito Visual de Cura (Desenhado por último para ficar no topo)
