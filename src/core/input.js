@@ -4,14 +4,13 @@ class VirtualJoystick {
         this.zone = document.getElementById(zoneId);
         this.knob = document.getElementById(knobId);
         
-        if (!this.zone || !this.knob) return; // Segurança contra IDs inexistentes
+        if (!this.zone || !this.knob) return; 
 
         this.vector = { x: 0, y: 0 };
         this.touchId = null;
         this.origin = { x: 0, y: 0 };
         this.radius = 50; 
 
-        // Binda os eventos
         this.zone.addEventListener('touchstart', e => this.onTouchStart(e), {passive: false});
         this.zone.addEventListener('touchmove', e => this.onTouchMove(e), {passive: false});
         this.zone.addEventListener('touchend', e => this.onTouchEnd(e), {passive: false});
@@ -19,14 +18,14 @@ class VirtualJoystick {
     }
 
     onTouchStart(e) {
-        // Se já houver um toque neste joystick, ignora novos toques
         if (this.touchId !== null) return;
+        
+        // [INTERAÇÃO] Avisa o jogo que o analógico foi tocado (para fechar chat)
+        window.dispatchEvent(new CustomEvent('joystickInteract'));
 
         for (let i = 0; i < e.changedTouches.length; i++) {
             const touch = e.changedTouches[i];
             const rect = this.zone.getBoundingClientRect();
-            
-            // Verifica se o toque começou dentro da zona circular
             const centerX = rect.left + rect.width / 2;
             const centerY = rect.top + rect.height / 2;
             const dist = Math.sqrt(Math.pow(touch.clientX - centerX, 2) + Math.pow(touch.clientY - centerY, 2));
@@ -44,7 +43,6 @@ class VirtualJoystick {
 
     onTouchMove(e) {
         if (this.touchId === null) return;
-        
         for (let i = 0; i < e.changedTouches.length; i++) {
             if (e.changedTouches[i].identifier === this.touchId) {
                 e.preventDefault();
@@ -69,16 +67,12 @@ class VirtualJoystick {
         const dy = clientY - this.origin.y;
         const distance = Math.sqrt(dx*dx + dy*dy);
         const angle = Math.atan2(dy, dx);
-        
         const limit = Math.min(distance, this.radius);
         const force = Math.min(distance / this.radius, 1.0);
-
         this.vector.x = Math.cos(angle) * force;
         this.vector.y = Math.sin(angle) * force;
-
         const knobX = Math.cos(angle) * limit;
         const knobY = Math.sin(angle) * limit;
-        
         this.knob.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
     }
 
@@ -94,12 +88,9 @@ export class InputHandler {
         this.keys = {};
         this.isMobile = this.detectMobile();
         this.leftStick = null;
-
-        // Estado do botão de ação mobile
         this.isMobileActionHeld = false;
         this.actionBtn = null;
 
-        // Listener Teclado
         window.addEventListener('keydown', e => { if(e.key) this.keys[e.key.toLowerCase()] = true; });
         window.addEventListener('keyup', e => { if(e.key) this.keys[e.key.toLowerCase()] = false; });
 
@@ -115,47 +106,35 @@ export class InputHandler {
         return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     }
 
-    // [CORRIGIDO] Checa Teclado (E ou Espaço) OU Botão Mobile
     isActionActive() {
         return this.keys['e'] || this.keys[' '] || this.isMobileActionHeld;
     }
 
-    // Cria o visual do joystick e botão se não houver no HTML
     injectMobileStyles() {
         if (document.getElementById('joystick-styles')) return;
         const style = document.createElement('style');
         style.id = 'joystick-styles';
         style.innerHTML = `
             #mobile-controls {
-                display: none; /* Começa oculto por padrão */
-                position: fixed; bottom: 30px; left: 30px; 
-                width: 120px; height: 120px; z-index: 1000;
-                pointer-events: none;
+                display: none; position: fixed; bottom: 40px; left: 40px; 
+                width: 120px; height: 120px; z-index: 1000; pointer-events: none;
             }
             .joystick-zone {
                 width: 100%; height: 100%; border-radius: 50%;
-                background: rgba(255,255,255,0.1); border: 2px solid rgba(241,196,15,0.3);
+                background: rgba(255,255,255,0.1); border: 2px solid rgba(255,215,0,0.3);
                 position: relative; pointer-events: auto;
             }
             .joystick-knob {
                 position: absolute; top: 50%; left: 50%;
-                width: 50px; height: 50px; background: var(--primary);
+                width: 50px; height: 50px; background: #FFD700;
                 border-radius: 50%; transform: translate(-50%, -50%);
-                box-shadow: 0 0 15px var(--honey-glow); pointer-events: none;
+                box-shadow: 0 0 15px rgba(255,215,0,0.5); pointer-events: none;
             }
-            /* Estilo base para botões de ação */
             .mobile-action-btn {
-                position: fixed; bottom: 120px; right: 30px;
-                background: #2ecc71; color: white;
-                padding: 20px; border-radius: 50px;
-                font-weight: bold; font-size: 16px;
-                border: 4px solid white;
-                z-index: 1000;
-                box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-                user-select: none; touch-action: none;
-                pointer-events: auto;
-                display: none; /* Controlado via JS */
-                transition: transform 0.1s;
+                position: fixed; bottom: 40px; right: 100px;
+                background: #2ecc71; color: white; padding: 20px; border-radius: 50px;
+                font-weight: 900; border: 4px solid white; z-index: 1000;
+                display: none; transition: transform 0.1s; pointer-events: auto;
             }
             .mobile-action-btn:active { transform: scale(0.9); }
         `;
@@ -166,7 +145,6 @@ export class InputHandler {
         if (document.getElementById('mobile-controls')) return;
         const div = document.createElement('div');
         div.id = 'mobile-controls';
-        // Inclui o Joystick E o botão de Ação
         div.innerHTML = `
             <div id="stick-left-zone" class="joystick-zone">
                 <div id="stick-left-knob" class="joystick-knob"></div>
@@ -174,18 +152,21 @@ export class InputHandler {
             <button id="mobile-action-btn" class="mobile-action-btn">AÇÃO</button>
         `;
         document.body.appendChild(div);
-        
         this.actionBtn = document.getElementById('mobile-action-btn');
     }
 
-    // [NOVO] Vincula eventos de toque do botão de ação
     bindMobileActionEvents() {
         if (!this.actionBtn) return;
         
-        const setHeld = (state) => {
-            this.isMobileActionHeld = state;
-            if(state) this.actionBtn.style.transform = "scale(0.9)";
-            else this.actionBtn.style.transform = "scale(1.0)";
+        const setHeld = (s) => { 
+            this.isMobileActionHeld = s;
+            if(s) {
+                this.actionBtn.style.transform = "scale(0.9)";
+                // Fecha chat ao usar ação também
+                window.dispatchEvent(new CustomEvent('joystickInteract'));
+            } else {
+                this.actionBtn.style.transform = "scale(1.0)";
+            }
         };
 
         this.actionBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); setHeld(true); });
@@ -194,10 +175,8 @@ export class InputHandler {
         this.actionBtn.addEventListener('contextmenu', e => e.preventDefault());
     }
 
-    // [NOVO] Método para o Main controlar o botão (visibilidade, texto, cor)
     updateActionButton(visible, text = "AÇÃO", color = "#2ecc71") {
         if (!this.actionBtn) return;
-        
         if (visible) {
             this.actionBtn.style.display = 'block';
             this.actionBtn.innerText = text;
@@ -207,7 +186,6 @@ export class InputHandler {
         }
     }
 
-    // Método para mostrar o joystick (chamado no startGame)
     showJoystick() {
         if (this.isMobile) {
             const el = document.getElementById('mobile-controls');
@@ -219,13 +197,11 @@ export class InputHandler {
         if (this.isMobile && this.leftStick && this.leftStick.touchId !== null) {
             return { x: this.leftStick.vector.x, y: this.leftStick.vector.y };
         }
-
         let x = 0, y = 0;
         if (this.keys['w'] || this.keys['arrowup']) y -= 1;
         if (this.keys['s'] || this.keys['arrowdown']) y += 1;
         if (this.keys['a'] || this.keys['arrowleft']) x -= 1;
         if (this.keys['d'] || this.keys['arrowright']) x += 1;
-        
         if (x !== 0 && y !== 0) { x *= 0.707; y *= 0.707; }
         return { x, y };
     }
