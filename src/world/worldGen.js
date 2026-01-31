@@ -95,7 +95,7 @@ export class WorldGenerator {
     }
 
     generateHives() {
-        this.hives.push({ x: 0, y: 0 });
+        this.hives.push({ x: 0, y: 0 }); // Colmeia Central (Spawn Principal)
         let attempts = 0;
         
         while (this.hives.length < 8 && attempts < 2000) {
@@ -122,13 +122,14 @@ export class WorldGenerator {
         let wx = ((x % this.worldSize) + this.worldSize) % this.worldSize;
         let wy = ((y % this.worldSize) + this.worldSize) % this.worldSize;
 
-        // 2. ESTRUTURAS FIXAS (COLMEIAS)
+        // 2. ESTRUTURAS FIXAS (COLMEIAS e SAFE ZONES)
         for (let h of this.hives) {
             if (h.x === x && h.y === y) return 'COLMEIA';
+            // Garante uma flor perto da colmeia para testes/cura inicial
             if (x === h.x + 2 && y === h.y + 2) return 'FLOR';
             
             const dist = Math.sqrt(Math.pow(x - h.x, 2) + Math.pow(y - h.y, 2));
-            if (dist <= 4.0) return 'GRAMA_SAFE'; 
+            if (dist <= 6.0) return 'GRAMA_SAFE'; // Área segura um pouco maior
         }
 
         // 3. GERAÇÃO PROCEDURAL IRREGULAR (FRACTAL)
@@ -140,13 +141,12 @@ export class WorldGenerator {
         const distFromCenter = Math.sqrt(x*x + y*y);
         
         // Lava agora aparece em formas irregulares ("manchas" ou "rios" quebrados)
+        // Isso cria perigos naturais e paredes para o combate
         if (noiseVal > 0.45 && distFromCenter > 25) {
             return 'LAVA'; 
         }
         
-        // Podemos ter variações de solo no futuro com outros thresholds
-        // if (noiseVal < -0.5) return 'CRATERA';
-
+        // Padrão: Terra Queimada (onde inimigos podem spawnar)
         return 'TERRA_QUEIMADA';
     }
 
