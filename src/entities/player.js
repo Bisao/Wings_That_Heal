@@ -20,6 +20,12 @@ export class Player {
         this.maxXp = 100; 
         this.tilesCured = 0;
 
+        // [NOVO] Sistema de Skills e Atributos Especiais
+        this.skillPoints = 0; // Pontos para gastar na árvore
+        this.collectionRange = 1.5; // Raio de coleta (pode ser aumentado)
+        this.lavaResistance = false; // Flag para resistir a lava
+        this.passiveRegen = false; // Flag para regeneração perto de flores
+
         // [NOVO] Controle de efeitos visuais de cura
         this.healEffectTimer = 0;
         
@@ -130,7 +136,8 @@ export class Player {
                 maxHp: this.maxHp,
                 pollen: this.pollen,
                 maxPollen: this.maxPollen,
-                tilesCured: this.tilesCured 
+                tilesCured: this.tilesCured,
+                skillPoints: this.skillPoints // [NOVO] Salva os pontos
             }
         };
     }
@@ -148,6 +155,7 @@ export class Player {
             this.pollen = data.stats.pollen || 0;
             this.maxPollen = data.stats.maxPollen || 100;
             this.tilesCured = data.stats.tilesCured || 0;
+            this.skillPoints = data.stats.skillPoints || 0; // [NOVO] Carrega os pontos
         }
     }
 
