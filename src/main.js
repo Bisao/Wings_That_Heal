@@ -5,6 +5,7 @@ import { Player } from './entities/player.js';
 import { InputHandler } from './core/input.js';
 import { SaveSystem } from './core/saveSystem.js';
 import { ChatSystem } from './core/chatSystem.js';
+import { SkillTree } from './player/skillTree.js'; // [NOVO] Importação da Skill Tree
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -248,6 +249,28 @@ function injectGameStyles() {
         }
         #chat-toggle-btn:active { transform: scale(0.9); }
 
+        /* [NOVO] BOTÃO DE SKILLS */
+        #btn-skills {
+            display: flex !important;
+            justify-content: center;
+            align-items: center;
+            position: fixed;
+            top: 150px; 
+            left: 10px;
+            width: 45px;
+            height: 45px;
+            background: #8e44ad !important;
+            border: 2px solid white !important;
+            border-radius: 50% !important;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.4) !important;
+            z-index: 9000 !important;
+            font-size: 20px;
+            color: white;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        #btn-skills:active { transform: scale(0.9); }
+
         /* Toast Messages */
         #toast-msg {
             background: linear-gradient(135deg, #FFD700, #F39C12) !important;
@@ -261,6 +284,7 @@ function injectGameStyles() {
             #rpg-hud { top: 5px; left: 5px; transform: scale(0.9); transform-origin: top left; }
             #ranking-container { top: 50px; right: 5px; transform: scale(0.8); transform-origin: top right; }
             #hud-time { top: 40px; font-size: 11px; padding: 4px 10px; } /* Ajustado para não sobrepor Ranking */
+            #btn-skills { top: 120px; left: 5px; width: 40px; height: 40px; }
         }
     `;
     document.head.appendChild(style);
@@ -698,6 +722,11 @@ function startGame(seed, id, nick) {
     
     world = new WorldGenerator(seed);
     localPlayer = new Player(id, nick, true);
+
+    // [NOVO] Inicializa Sistema de Skills
+    localPlayer.skillPoints = 0;
+    localPlayer.skillTree = new SkillTree(localPlayer);
+
     const hives = world.getHiveLocations();
 
     if (net.isHost) {
@@ -724,6 +753,12 @@ function startGame(seed, id, nick) {
             worldState.applyFullState(saved.world);
             if (saved.host) {
                 localPlayer.deserialize({ stats: saved.host });
+                // [NOVO] Carregar Skills salvas do Host
+                localPlayer.skillPoints = saved.host.skillPoints || 0;
+                if (saved.host.unlockedSkills) {
+                    localPlayer.skillTree.deserialize(saved.host.unlockedSkills);
+                }
+
                 if (saved.host.x !== undefined) {
                     localPlayer.pos.x = saved.host.x;
                     localPlayer.pos.y = saved.host.y;
@@ -752,6 +787,13 @@ function startGame(seed, id, nick) {
 
     chat.addMessage('SYSTEM', null, `Abelha ${nick} pronta para o voo!`);
     
+    // [NOVO] Botão Mobile para Skills
+    const skillBtn = document.createElement('button');
+    skillBtn.id = 'btn-skills';
+    skillBtn.innerText = '⚡'; 
+    skillBtn.onclick = () => localPlayer.skillTree.toggle();
+    document.body.appendChild(skillBtn);
+
     updateUI(); 
     resize(); 
     requestAnimationFrame(loop);
@@ -898,6 +940,9 @@ function saveProgress(force = false) {
     const hostStats = localPlayer.serialize().stats;
     hostStats.x = localPlayer.pos.x;
     hostStats.y = localPlayer.pos.y;
+    // [NOVO] Salvar Skills
+    hostStats.skillPoints = localPlayer.skillPoints;
+    hostStats.unlockedSkills = localPlayer.skillTree.serialize();
 
     saveSystem.save({ 
         seed: world.seed, 
@@ -1115,8 +1160,13 @@ function gainXp(amount) {
     const old = localPlayer.level; localPlayer.xp += amount;
     if (localPlayer.xp >= localPlayer.maxXp) {
         localPlayer.xp -= localPlayer.maxXp; localPlayer.level++;
+        
+        // [NOVO] Ganha Skill Point
+        localPlayer.skillPoints = (localPlayer.skillPoints || 0) + 1;
+
         localPlayer.maxXp = Math.floor(localPlayer.maxXp * 1.5); localPlayer.maxPollen += 10; localPlayer.hp = localPlayer.maxHp; 
-        chat.addMessage('SYSTEM', null, `Nível ${localPlayer.level}!`);
+        chat.addMessage('SYSTEM', null, `Nível ${localPlayer.level}! (+1 Skill Point)`);
+        showError(`Nível ${localPlayer.level}! Pressione 'K' para Skills`);
     }
     if (localPlayer.level > old) saveProgress(true); 
     updateUI();
@@ -1253,3 +1303,12 @@ function draw() {
 
 function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 window.onresize = resize;
+
+// [NOVO] Atalho de Teclado para Skills
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'k' || e.key === 'K') {
+        if (localPlayer && localPlayer.skillTree) {
+            localPlayer.skillTree.toggle();
+        }
+    }
+});
