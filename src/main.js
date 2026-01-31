@@ -6,8 +6,8 @@ import { InputHandler } from './core/input.js';
 import { SaveSystem } from './core/saveSystem.js';
 import { ChatSystem } from './core/chatSystem.js';
 import { SkillTree } from './player/skillTree.js'; 
-import { Ant } from './entities/ant.js'; // [NOVO] Importação das Formigas
-import { Projectile } from './entities/projectile.js'; // [NOVO] Importação dos Projéteis
+import { Ant } from './entities/ant.js'; 
+import { Projectile } from './entities/projectile.js'; 
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -23,11 +23,11 @@ let pollenParticles = [];
 let smokeParticles = []; 
 let camera = { x: 0, y: 0 };
 
-// [NOVO] Listas de Entidades Dinâmicas
+// Listas de Entidades Dinâmicas
 let enemies = [];
 let projectiles = [];
 
-// [NOVO] Sistema de Ondas
+// Sistema de Ondas
 let activeWaves = [];
 
 class WaveEffect {
@@ -109,7 +109,7 @@ let uiUpdateCounter = 0;
 let isFainted = false;
 let faintTimeout = null; 
 
-// [NOVO] Variáveis de Resgate
+// Variáveis de Resgate
 let rescueTimer = 0;
 let currentRescueTarget = null;
 const RESCUE_DURATION = 180; 
@@ -122,7 +122,7 @@ const SAVE_COOLDOWN = 15000;
 
 // Contador para disparo da onda da colmeia no Host
 let hiveWaveTick = 0;
-let enemySpawnTick = 0; // [NOVO] Timer para spawn de inimigos
+let enemySpawnTick = 0; 
 
 const assets = { flower: new Image() };
 assets.flower.src = 'assets/Flower.png';
@@ -228,12 +228,13 @@ function injectGameStyles() {
             font-family: monospace;
         }
 
+        /* [ATUALIZADO] Botão de Chat reposicionado para não cobrir analógico direito */
         #chat-toggle-btn {
             display: flex !important;
             justify-content: center;
             align-items: center;
             position: fixed;
-            bottom: 30px;
+            bottom: 160px; /* SUBIU PARA EVITAR O JOYSTICK */
             right: 20px; 
             width: 55px;
             height: 55px;
@@ -270,27 +271,6 @@ function injectGameStyles() {
             transition: transform 0.2s;
         }
         #btn-skills:active { transform: scale(0.9); }
-        
-        /* [NOVO] Botão de Ataque Mobile */
-        #btn-attack {
-            display: flex !important;
-            justify-content: center;
-            align-items: center;
-            position: fixed;
-            bottom: 40px; 
-            right: 90px;
-            width: 60px;
-            height: 60px;
-            background: #e74c3c !important;
-            border: 3px solid white !important;
-            border-radius: 50% !important;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.4) !important;
-            z-index: 9000 !important;
-            font-size: 24px;
-            color: white;
-            cursor: pointer;
-        }
-        #btn-attack:active { transform: scale(0.95); background: #c0392b !important; }
 
         #toast-msg {
             background: linear-gradient(135deg, #FFD700, #F39C12) !important;
@@ -549,18 +529,18 @@ window.addEventListener('netData', e => {
         spawnPollenParticle(d.x, d.y);
     }
     
-    // [NOVO] Renderizar Tiro de Outro Jogador
+    // Renderizar Tiro de Outro Jogador
     if (d.type === 'SHOOT') {
         projectiles.push(new Projectile(d.x, d.y, d.vx, d.vy, d.ownerId, d.damage));
     }
 
-    // [NOVO] Host enviou spawn de inimigo
+    // Host enviou spawn de inimigo
     if (d.type === 'SPAWN_ENEMY') {
         const ant = new Ant(d.id, d.x, d.y, d.type);
         enemies.push(ant);
     }
     
-    // [NOVO] Recebimento de pacote de onda de cura
+    // Recebimento de pacote de onda de cura
     if (d.type === 'WAVE_SPAWN') {
         activeWaves.push(new WaveEffect(d.x, d.y, d.radius, d.color || "rgba(241, 196, 15, ALPHA)", d.amount));
     }
@@ -777,7 +757,7 @@ function startGame(seed, id, nick) {
             worldState.applyFullState(saved.world);
             if (saved.host) {
                 localPlayer.deserialize({ stats: saved.host });
-                // [NOVO] Carregar Skills salvas do Host
+                // Carregar Skills salvas do Host
                 localPlayer.skillPoints = saved.host.skillPoints || 0;
                 if (saved.host.unlockedSkills) {
                     localPlayer.skillTree.deserialize(saved.host.unlockedSkills);
@@ -811,18 +791,14 @@ function startGame(seed, id, nick) {
 
     chat.addMessage('SYSTEM', null, `Abelha ${nick} pronta para o voo!`);
     
-    // [NOVO] Botão Mobile para Skills e Ataque
+    // Botão Mobile para Skills
     const skillBtn = document.createElement('button');
     skillBtn.id = 'btn-skills';
     skillBtn.innerText = '⚡'; 
     skillBtn.onclick = () => localPlayer.skillTree.toggle();
     document.body.appendChild(skillBtn);
 
-    const attackBtn = document.createElement('button');
-    attackBtn.id = 'btn-attack';
-    attackBtn.innerText = '⚔️'; 
-    attackBtn.onpointerdown = (e) => { e.preventDefault(); tryShoot(); };
-    if(input.isMobile) document.body.appendChild(attackBtn);
+    // [MODIFICADO] Removido o botão de ataque antigo (#btn-attack) pois agora usamos analógico direito/mouse
 
     updateUI(); 
     resize(); 
@@ -847,7 +823,32 @@ function startGame(seed, id, nick) {
     }, 15000);
 }
 
+// [NOVO] Função para processar o tiro baseado no Input (Mouse ou Analógico Direito)
+function processShooting() {
+    if (!localPlayer) return;
+
+    // Obtém dados de mira do InputHandler
+    const aim = input.getAim();
+
+    if (aim.isFiring) {
+        const proj = localPlayer.shootPollen(aim.x, aim.y);
+        
+        if (proj) {
+            projectiles.push(new Projectile(proj.x, proj.y, proj.vx, proj.vy, proj.ownerId, proj.damage));
+            net.sendPayload({ 
+                type: 'SHOOT', 
+                ownerId: proj.ownerId, 
+                x: proj.x, y: proj.y, 
+                vx: proj.vx, vy: proj.vy, 
+                damage: proj.damage 
+            });
+        }
+    }
+}
+
+// Mantido para compatibilidade com tecla Space
 function tryShoot() {
+    // Chama o shoot padrão que usará a direção do corpo se nenhum vetor for passado
     const proj = localPlayer.shootPollen();
     if (proj) {
         projectiles.push(new Projectile(proj.x, proj.y, proj.vx, proj.vy, proj.ownerId, proj.damage));
@@ -868,7 +869,7 @@ function startHostSimulation() {
         let changed = false;
         const now = Date.now();
         
-        // [NOVO] Lógica de Onda das Colmeias
+        // Lógica de Onda das Colmeias
         hiveWaveTick++;
         if (hiveWaveTick >= 3) {
             hiveWaveTick = 0;
@@ -883,7 +884,7 @@ function startHostSimulation() {
             });
         }
 
-        // [NOVO] Lógica de Spawn de Inimigos (A cada 5 seg)
+        // Lógica de Spawn de Inimigos (A cada 5 seg)
         enemySpawnTick++;
         if (enemySpawnTick >= 5) {
             enemySpawnTick = 0;
@@ -934,7 +935,7 @@ function startHostSimulation() {
             else if (currentType === 'MUDA' && elapsedSinceStart > GROWTH_TIMES.FLOR) { changeTile(x, y, 'FLOR', ownerId); changed = true; }
             else if (currentType === 'FLOR_COOLDOWN' && elapsedSinceStart > FLOWER_COOLDOWN_TIME) { changeTile(x, y, 'FLOR', ownerId); changed = true; }
 
-            // [NOVO] Lógica de Onda das Flores
+            // Lógica de Onda das Flores
             if (currentType === 'FLOR' && plantData.isReadyToHeal && elapsedSinceHeal >= 3000) {
                 plantData.lastHealTime = now;
                 
@@ -997,7 +998,7 @@ function saveProgress(force = false) {
     const hostStats = localPlayer.serialize().stats;
     hostStats.x = localPlayer.pos.x;
     hostStats.y = localPlayer.pos.y;
-    // [NOVO] Salvar Skills
+    // Salvar Skills
     hostStats.skillPoints = localPlayer.skillPoints;
     hostStats.unlockedSkills = localPlayer.skillTree.serialize();
 
@@ -1048,13 +1049,13 @@ function update() {
 
     Object.values(remotePlayers).forEach(p => p.update({}));
     
-    // [NOVO] Atualizar Projéteis
+    // Atualizar Projéteis
     projectiles.forEach((p, idx) => {
         const alive = p.update();
         if (!alive) projectiles.splice(idx, 1);
     });
 
-    // [NOVO] Atualizar Inimigos e Colisões
+    // Atualizar Inimigos e Colisões
     enemies.forEach((ant, idx) => {
         // Ant IA (Persegue o player mais próximo)
         const players = [localPlayer, ...Object.values(remotePlayers)];
@@ -1092,7 +1093,7 @@ function update() {
         }
     });
 
-    // [NOVO] Colisão Física entre Players (Repulsão)
+    // Colisão Física entre Players (Repulsão)
     Object.values(remotePlayers).forEach(p => {
         localPlayer.resolveCollision(p);
     });
@@ -1116,6 +1117,10 @@ function update() {
 
     const m = input.getMovement();
     localPlayer.update(m);
+    
+    // [NOVO] Processa Mira e Tiro (PC e Mobile)
+    processShooting();
+
     const moving = m.x !== 0 || m.y !== 0;
     if(moving || Math.random() < 0.05) {
         const speedMod = invulnerabilityTimer > 0 ? 1.5 : 1.0;
