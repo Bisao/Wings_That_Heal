@@ -10,8 +10,9 @@ import { Ant } from './entities/ant.js';
 import { Projectile } from './entities/projectile.js'; 
 import { WaveEffect } from './entities/WaveEffect.js'; 
 import { ParticleSystem } from './utils/ParticleSystem.js';
-// [NOVO] Importação do UIManager
 import { UIManager } from './core/UIManager.js';
+// [NOVO] Importação da Simulação
+import { HostSimulation } from './core/HostSimulation.js';
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -25,8 +26,6 @@ const worldState = new WorldState();
 const saveSystem = new SaveSystem();
 const chat = new ChatSystem();
 const particles = new ParticleSystem();
-
-// [MODIFICAÇÃO] Instância do Gerenciador de UI
 const ui = new UIManager();
 
 let world, localPlayer;
@@ -48,6 +47,8 @@ let lastGridX = -9999;
 let lastGridY = -9999;
 let guestDataDB = {}; 
 let hiveRegistry = {}; 
+// [NOVO] Instância da Simulação (será iniciada apenas se Host)
+let hostSim = null;
 
 let zoomLevel = 1.5; 
 const MIN_ZOOM = 0.5;
@@ -55,18 +56,14 @@ const MAX_ZOOM = 2.0;
 
 const PLANT_SPAWN_CHANCE = 0.01; 
 const CURE_ATTEMPT_RATE = 20;    
-const FLOWER_COOLDOWN_TIME = 10000;
 const COLLECTION_RATE = 5; 
 
 const DAMAGE_RATE = 2; 
 const DAMAGE_AMOUNT = 0.2; 
 const XP_PER_CURE = 15;    
 const XP_PER_POLLEN = 0.2;
-const XP_PASSIVE_CURE = 5; 
 
-const GROWTH_TIMES = { BROTO: 5000, MUDA: 10000, FLOR: 15000 };
-
-// [REMOVIDO] const MONTHS = ... (Movido para UIManager)
+// [REMOVIDO] Constantes de crescimento e tempo (movidas para HostSimulation)
 
 let collectionFrameCounter = 0;
 let damageFrameCounter = 0;
@@ -84,19 +81,14 @@ let invulnerabilityTimer = 0;
 let lastManualSaveTime = 0;
 const SAVE_COOLDOWN = 15000; 
 
-let hiveWaveTick = 0;
-let enemySpawnTick = 0; 
+// [REMOVIDO] hiveWaveTick e enemySpawnTick
 
 const assets = { flower: new Image() };
 assets.flower.src = 'assets/Flower.png';
 
-// [REMOVIDO] injectGameStyles()
-
 function logDebug(msg, color = "#00ff00") {
     console.log(`%c[Wings] ${msg}`, `color: ${color}`);
 }
-
-// [REMOVIDO] showError() -> Usar ui.showError()
 
 window.addEventListener('load', () => {
     const savedNick = localStorage.getItem('wings_nick');
@@ -135,7 +127,18 @@ document.getElementById('btn-create').onpointerdown = (e) => {
         if(ok) {
             net.hostRoom(id, pass, seed, () => worldState.getFullState(), (guestNick) => guestDataDB[guestNick], () => guestDataDB);
             startGame(seed, id, nick);
-            if(net.isHost) startHostSimulation();
+            
+            // [MODIFICAÇÃO] Inicia a simulação do host
+            if(net.isHost) {
+                hostSim = new HostSimulation(world, worldState, net);
+                hostSim.start({
+                    localPlayer, remotePlayers, enemies, activeWaves,
+                    hiveRegistry, guestDataDB,
+                    fnChangeTile: changeTile, 
+                    fnSaveProgress: saveProgress, 
+                    fnGainXp: gainXp
+                });
+            }
         } else { 
             let msg = "Erro ao criar sala."; if (errorType === 'unavailable-id') msg = "Este ID de Colmeia já existe!"; ui.showError(msg);
         }
@@ -333,10 +336,7 @@ window.addEventListener('netData', e => {
     if(d.type === 'TILE_CHANGE') changeTile(d.x, d.y, d.tileType, d.ownerId);
 });
 
-// [REMOVIDO] updateRanking() -> Usar ui.updateRanking()
-
 function startGame(seed, id, nick) {
-    // [MODIFICAÇÃO] O CSS já é injetado pelo construtor do UIManager
     if (typeof input.hideJoystick === 'function') input.hideJoystick();
     let loader = document.getElementById('loading-screen');
     if (!loader) {
@@ -382,7 +382,7 @@ function startGame(seed, id, nick) {
     
     ui.updateHUD(localPlayer); 
     resize(); requestAnimationFrame(loop); 
-    setInterval(() => ui.updateRanking(guestDataDB, localPlayer, remotePlayers), 5000); // [MODIFICAÇÃO]
+    setInterval(() => ui.updateRanking(guestDataDB, localPlayer, remotePlayers), 5000);
 
     setTimeout(() => {
         const l = document.getElementById('loading-screen');
@@ -415,79 +415,7 @@ function tryShoot() {
     }
 }
 
-function startHostSimulation() {
-    setInterval(() => {
-        worldState.worldTime += 60000; net.sendPayload({ type: 'TIME_SYNC', time: worldState.worldTime });
-        let changed = false; const now = Date.now();
-        hiveWaveTick++;
-        if (hiveWaveTick >= 3) {
-            hiveWaveTick = 0; const hives = world.getHiveLocations();
-            hives.forEach(h => {
-                net.sendPayload({ type: 'WAVE_SPAWN', x: h.x, y: h.y, radius: 4.0, color: "rgba(241, 196, 15, ALPHA)", amount: 5 });
-                activeWaves.push(new WaveEffect(h.x, h.y, 4.0, "rgba(241, 196, 15, ALPHA)", 5));
-            });
-        }
-        enemySpawnTick++;
-        if (enemySpawnTick >= 10) {
-            enemySpawnTick = 0; const players = [localPlayer, ...Object.values(remotePlayers)];
-            const target = players[Math.floor(Math.random() * players.length)];
-            for(let i=0; i<5; i++) {
-                let spawnX = target.pos.x + (Math.random() * 30 - 15); let spawnY = target.pos.y + (Math.random() * 30 - 15);
-                const distToPlayer = Math.sqrt(Math.pow(spawnX - target.pos.x, 2) + Math.pow(spawnY - target.pos.y, 2));
-                const tile = worldState.getModifiedTile(Math.round(spawnX), Math.round(spawnY)) || world.getTileAt(Math.round(spawnX), Math.round(spawnY));
-                if (tile === 'TERRA_QUEIMADA' && distToPlayer > 10) {
-                    const groupSize = 2 + Math.floor(Math.random() * 3);
-                    for(let j=0; j < groupSize; j++) {
-                        const enemyId = `ant_${Date.now()}_${j}`; const ox = spawnX + (Math.random() * 2 - 1); const oy = spawnY + (Math.random() * 2 - 1);
-                        enemies.push(new Ant(enemyId, ox, oy, 'worker'));
-                        net.sendPayload({ type: 'SPAWN_ENEMY', id: enemyId, x: ox, y: oy, type: 'worker' });
-                    }
-                    break;
-                }
-            }
-        }
-        Object.values(remotePlayers).forEach(p => {
-            if (p.nickname && hiveRegistry[p.nickname] === undefined) {
-                const usedIndices = Object.values(hiveRegistry);
-                for(let i=1; i<8; i++) { if (!usedIndices.includes(i)) { hiveRegistry[p.nickname] = i; break; } }
-            }
-        });
-        for (const [key, plantData] of Object.entries(worldState.growingPlants)) {
-            const startTime = plantData.time || plantData; const lastHeal = plantData.lastHealTime || startTime;
-            const ownerId = plantData.owner || null; const [x, y] = key.split(',').map(Number);
-            const elapsedSinceStart = now - startTime; const elapsedSinceHeal = now - lastHeal;
-            const currentType = worldState.getModifiedTile(x, y);
-            if (currentType === 'GRAMA' && elapsedSinceStart > GROWTH_TIMES.BROTO) { changeTile(x, y, 'BROTO', ownerId); changed = true; }
-            else if (currentType === 'BROTO' && elapsedSinceStart > GROWTH_TIMES.MUDA) { changeTile(x, y, 'MUDA', ownerId); changed = true; }
-            else if (currentType === 'MUDA' && elapsedSinceStart > GROWTH_TIMES.FLOR) { changeTile(x, y, 'FLOR', ownerId); changed = true; }
-            else if (currentType === 'FLOR_COOLDOWN' && elapsedSinceStart > FLOWER_COOLDOWN_TIME) { changeTile(x, y, 'FLOR', ownerId); changed = true; }
-            if (currentType === 'FLOR' && plantData.isReadyToHeal && elapsedSinceHeal >= 3000) {
-                plantData.lastHealTime = now;
-                net.sendPayload({ type: 'WAVE_SPAWN', x: x, y: y, radius: 2.0, color: "rgba(46, 204, 113, ALPHA)", amount: 2 });
-                activeWaves.push(new WaveEffect(x, y, 2.0, "rgba(46, 204, 113, ALPHA)", 2));
-                for (let dx = -1; dx <= 1; dx++) {
-                    for (let dy = -1; dy <= 1; dy++) {
-                        if (dx === 0 && dy === 0) continue; const tx = x + dx; const ty = y + dy;
-                        const target = worldState.getModifiedTile(tx, ty) || world.getTileAt(tx, ty);
-                        if (target === 'TERRA_QUEIMADA') {
-                            changeTile(tx, ty, 'GRAMA_SAFE', ownerId);
-                            if (ownerId) {
-                                net.sendPayload({ type: 'FLOWER_CURE', ownerId: ownerId, x: tx, y: ty });
-                                if (localPlayer && ownerId === localPlayer.id) { localPlayer.tilesCured++; gainXp(XP_PASSIVE_CURE); }
-                                else if (remotePlayers[ownerId]) {
-                                    remotePlayers[ownerId].tilesCured++; const pName = remotePlayers[ownerId].nickname;
-                                    if (pName) { if (!guestDataDB[pName]) guestDataDB[pName] = {}; guestDataDB[pName].tilesCured = remotePlayers[ownerId].tilesCured; }
-                                }
-                            }
-                            changed = true;
-                        }
-                    }
-                }
-            }
-        }
-        if (changed) saveProgress(); 
-    }, 1000);
-}
+// [REMOVIDO] startHostSimulation() (Substituído por hostSim.start)
 
 function saveProgress(force = false) {
     if (!net.isHost || !localPlayer) return;
@@ -501,19 +429,15 @@ function saveProgress(force = false) {
 
 function loop() { update(); draw(); requestAnimationFrame(loop); }
 
-// [REMOVIDO] updateEnvironment() -> ui.updateEnvironment()
-
 function update() {
     if(!localPlayer || isFainted) return; 
-    
-    // [MODIFICAÇÃO]
     ui.updateEnvironment(worldState.worldTime);
 
     if (invulnerabilityTimer > 0) invulnerabilityTimer--;
     const gx = Math.round(localPlayer.pos.x), gy = Math.round(localPlayer.pos.y);
     if (gx !== lastGridX || gy !== lastGridY) { 
         lastGridX = gx; lastGridY = gy; 
-        ui.updateCoords(gx, gy); // [MODIFICAÇÃO]
+        ui.updateCoords(gx, gy);
     }
     Object.values(remotePlayers).forEach(p => p.update({}));
     projectiles.forEach((p, idx) => { if (!p.update()) projectiles.splice(idx, 1); });
@@ -605,7 +529,7 @@ function changeTile(x, y, newType, ownerId = null) {
     }
 }
 
-// [REMOVIDO] updateUI() -> Usar ui.updateHUD()
+// [REMOVIDO] updateUI() -> ui.updateHUD()
 
 function draw() {
     ctx.fillStyle = "#0d0d0d"; ctx.fillRect(0, 0, canvas.width, canvas.height); if(!world) return;
