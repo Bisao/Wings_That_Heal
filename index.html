@@ -11,13 +11,13 @@
 
     <style>
         :root {
-            --primary: #FFD700;
+            --primary: #FFD700;       /* Amarelo Mel */
             --primary-dark: #F39C12;
-            --accent-green: #2ecc71;
-            --danger: #e74c3c;
+            --accent-green: #2ecc71;  /* Verde Vida */
+            --danger: #e74c3c;        /* Vermelho Alerta */
             --bg-dark: #1a1a1a;
-            --honey-glow: rgba(255, 215, 0, 0.4);
-            --glass: rgba(0, 0, 0, 0.7);
+            --glass: rgba(0, 0, 0, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.1);
         }
 
         body { 
@@ -29,7 +29,7 @@
 
         canvas { display: block; }
 
-        /* --- Overlays de Efeito --- */
+        /* --- Overlays de Ambiente (Visual) --- */
         #suffocation-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: radial-gradient(circle, transparent 40%, #000 150%);
@@ -42,7 +42,7 @@
             opacity: 0; transition: opacity 1s linear;
         }
 
-        /* --- UI de Jogo (HUD) --- */
+        /* --- HUD (Interface de Jogo) --- */
         #rpg-hud {
             position: fixed; top: 15px; left: 15px; z-index: 1000;
             display: flex; flex-direction: column; gap: 8px; pointer-events: none;
@@ -51,21 +51,30 @@
         #hud-info {
             background: var(--glass); padding: 8px 15px; border-radius: 20px;
             color: white; border-left: 4px solid var(--primary); backdrop-filter: blur(5px);
+            font-weight: 900; text-transform: uppercase; font-size: 14px;
+            text-shadow: 1px 1px 2px black;
         }
 
         .hud-stat-row {
             display: flex; align-items: center; gap: 10px; width: 200px;
-            background: rgba(0,0,0,0.5); padding: 4px 10px; border-radius: 12px;
+            background: rgba(0,0,0,0.6); padding: 5px 10px; border-radius: 12px;
+            border: 1px solid var(--glass-border);
         }
 
-        .hud-bar-bg { flex: 1; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; }
-        .hud-bar-fill { height: 100%; width: 0%; transition: width 0.3s ease; }
-        .hud-text { font-size: 11px; color: #eee; width: 45px; text-align: right; font-family: monospace; }
+        .hud-bar-bg { flex: 1; height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; overflow: hidden; }
+        .hud-bar-fill { height: 100%; width: 0%; transition: width 0.3s ease; box-shadow: 0 0 5px rgba(255,255,255,0.5); }
+        .hud-text { font-size: 11px; color: #fff; width: 50px; text-align: right; font-family: monospace; font-weight: bold; }
 
         #hud-time {
             position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-            background: var(--glass); color: var(--primary); padding: 5px 15px;
-            border-radius: 20px; font-weight: 900; z-index: 1000; font-size: 13px;
+            background: rgba(0, 0, 0, 0.8); color: var(--primary); padding: 5px 20px;
+            border-radius: 20px; font-weight: 900; z-index: 1000; font-size: 14px;
+            border: 1px solid rgba(255, 215, 0, 0.3);
+        }
+
+        #hud-coords {
+            position: fixed; bottom: 10px; right: 10px; 
+            color: rgba(255,255,255,0.5); font-size: 10px; pointer-events: none; z-index: 1000;
         }
 
         /* --- Ranking --- */
@@ -73,51 +82,109 @@
             position: fixed; top: 15px; right: 15px; z-index: 1000;
             background: var(--glass); padding: 12px; border-radius: 15px;
             min-width: 140px; pointer-events: none; backdrop-filter: blur(5px);
+            border: 1px solid var(--glass-border);
         }
-        .rank-item { display: flex; justify-content: space-between; font-size: 12px; color: #ccc; margin-top: 4px; }
+        .rank-item { display: flex; justify-content: space-between; font-size: 12px; color: #eee; margin-top: 4px; }
+        .rank-item b { color: var(--accent-green); }
 
-        /* --- Modais e Lobby --- */
+        /* --- Telas de Sistema (Toast, Faint) --- */
+        #toast-msg {
+            position: fixed; top: 15%; left: 50%; transform: translateX(-50%);
+            background: linear-gradient(135deg, #FFD700, #F39C12); color: #222; 
+            padding: 12px 30px; border-radius: 30px; font-weight: 900; z-index: 9999;
+            opacity: 0; transition: opacity 0.3s; pointer-events: none;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5); font-size: 14px; text-transform: uppercase;
+        }
+
+        #faint-screen {
+            display: none; position: fixed; inset: 0; 
+            background: rgba(0,0,0,0.95); z-index: 9000; 
+            flex-direction: column; align-items: center; justify-content: center; 
+            color: white; text-align: center;
+        }
+
+        /* --- Lobby e Modais --- */
         #lobby-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 5000;
             background: url('assets/background_lobby.png') center/cover no-repeat;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
+        #lobby-overlay::before {
+            content: ""; position: absolute; inset: 0;
+            background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.8)); z-index: -1;
+        }
 
         .lobby-modal {
             display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             background: rgba(20, 20, 20, 0.95); border: 2px solid var(--primary);
-            width: 90%; max-width: 400px; padding: 30px; border-radius: 25px;
+            width: 90%; max-width: 380px; padding: 25px; border-radius: 25px;
             color: white; z-index: 6000; backdrop-filter: blur(10px);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
         }
-        .lobby-modal.active { display: block; }
+        .lobby-modal.active { display: block; animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
 
+        .modal-header {
+            font-size: 20px; font-weight: 900; color: var(--primary); margin-bottom: 20px;
+            text-align: center; letter-spacing: 1px; text-transform: uppercase;
+        }
+
+        /* --- Inputs e Botões --- */
         .btn-action {
-            width: 100%; padding: 18px; border-radius: 15px; border: none;
-            background: var(--primary); color: #2c1e0f; font-weight: 900;
+            width: 100%; padding: 16px; border-radius: 12px; border: none;
+            background: linear-gradient(to bottom, var(--primary), var(--primary-dark)); 
+            color: #2c1e0f; font-weight: 900; font-size: 16px;
             text-transform: uppercase; cursor: pointer; margin-top: 15px;
+            box-shadow: 0 4px 0 #c77d00, 0 10px 20px rgba(0,0,0,0.3);
+            transition: transform 0.1s;
+        }
+        .btn-action:active { transform: translateY(4px); box-shadow: 0 0 0 #c77d00; }
+
+        .main-menu-btn {
+            background: white; border: 3px solid var(--primary); color: #333;
+            margin-bottom: 15px; font-size: 18px;
         }
 
         input {
-            width: 100%; padding: 15px; margin-top: 8px; border-radius: 12px;
+            width: 100%; padding: 14px; margin-top: 8px; border-radius: 12px;
             border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.4);
-            color: white; font-family: inherit; box-sizing: border-box;
+            color: white; font-family: inherit; box-sizing: border-box; outline: none;
         }
+        input:focus { border-color: var(--primary); background: rgba(0,0,0,0.6); }
 
-        /* --- Toast Messages --- */
-        #toast-msg {
-            position: fixed; top: 10%; left: 50%; transform: translateX(-50%);
-            background: var(--primary); color: #000; padding: 12px 30px;
-            border-radius: 30px; font-weight: 900; z-index: 9999;
-            opacity: 0; transition: opacity 0.3s; pointer-events: none;
-        }
-
-        /* Popups de Jogo */
+        /* --- Modais In-Game --- */
         .modal-overlay {
             display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             background: white; border-radius: 20px; padding: 20px; z-index: 8000;
-            width: 80%; max-width: 300px; text-align: center; color: #333;
+            width: 85%; max-width: 300px; text-align: center; color: #333;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+
+        #chat-toggle-btn {
+            position: fixed; bottom: 160px; right: 20px; width: 50px; height: 50px;
+            background: var(--primary); border: 3px solid white; border-radius: 50%;
+            font-size: 24px; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; z-index: 9999; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        #btn-skills {
+            position: fixed; top: 150px; left: 10px; width: 45px; height: 45px;
+            background: #8e44ad; border: 2px solid white; border-radius: 50%;
+            color: white; font-size: 20px; cursor: pointer; z-index: 9000;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        @keyframes popIn { from { transform: translate(-50%, -40%) scale(0.8); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+        
+        @media (max-width: 600px) {
+            #rpg-hud { top: 5px; left: 5px; transform: scale(0.9); transform-origin: top left; }
+            #ranking-container { top: 50px; right: 5px; transform: scale(0.8); transform-origin: top right; }
+            #hud-time { top: 40px; font-size: 11px; } 
+            #btn-skills { top: 120px; }
+            #lobby-overlay { background-position: 50% 20%; }
         }
     </style>
+    
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
@@ -130,60 +197,66 @@
 
     <div id="rpg-hud" style="display:none;">
         <div id="hud-info">
-            <span id="hud-name">---</span> <small>LV <span id="hud-lvl">1</span></small>
+            <span id="hud-name">---</span> <small style="opacity:0.8; font-size:0.8em;">LV <span id="hud-lvl">1</span></small>
         </div>
+        
         <div class="hud-stat-row">
+            <span style="font-size:12px;">❤️</span>
             <div class="hud-bar-bg"><div id="bar-hp-fill" class="hud-bar-fill" style="background:var(--danger)"></div></div>
             <div id="bar-hp-text" class="hud-text">0/0</div>
         </div>
+        
         <div class="hud-stat-row">
+            <span style="font-size:12px;">💠</span>
             <div class="hud-bar-bg"><div id="bar-xp-fill" class="hud-bar-fill" style="background:#3498db"></div></div>
             <div id="bar-xp-text" class="hud-text">0/0</div>
         </div>
+        
         <div class="hud-stat-row">
+            <span style="font-size:12px;">🌻</span>
             <div class="hud-bar-bg"><div id="bar-pollen-fill" class="hud-bar-fill" style="background:var(--primary)"></div></div>
             <div id="bar-pollen-text" class="hud-text">0/0</div>
         </div>
     </div>
 
-    <div id="hud-time"></div>
-    <div id="hud-coords" style="display:none"></div>
+    <div id="hud-time" style="display:none;"></div>
+    <div id="hud-coords" style="display:none;"></div>
 
     <div id="ranking-container" style="display:none;">
-        <div style="font-size:10px; font-weight:900; color:var(--primary); margin-bottom:5px;">RANKING</div>
+        <div style="font-size:10px; font-weight:900; color:var(--primary); margin-bottom:5px;">TOP CURADORES</div>
         <div id="ranking-list"></div>
         <div id="ranking-full-list" style="display:none"></div>
     </div>
 
-    <div id="faint-screen" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:9000; flex-direction:column; align-items:center; justify-content:center; color:white;">
-        <h2 style="color:var(--primary)">ASAS CAÍDAS</h2>
-        <p>Aguarde um resgate ou retorne à base.</p>
-        <button id="btn-immediate-respawn" class="btn-action" style="width:auto; padding:15px 40px;">VOLTAR PARA BASE</button>
+    <div id="faint-screen">
+        <h2 style="color:var(--primary); font-size:28px; margin-bottom:10px;">ASAS CAÍDAS</h2>
+        <p style="opacity:0.8; margin-bottom:30px;">Suas asas pesam... A colmeia aguarda.</p>
+        <button id="btn-immediate-respawn" class="btn-action" style="background:transparent; border:2px solid var(--primary); color:var(--primary); width:auto; padding:10px 30px;">VOLTAR PARA BASE</button>
     </div>
 
     <div id="lobby-overlay">
-        <div id="main-menu" class="main-menu-container">
-            <button class="main-menu-btn" onclick="openModal('modal-create')">✨ Criar Colmeia</button>
-            <button class="main-menu-btn" onclick="openModal('modal-join')">🚀 Entrar na Colmeia</button>
+        <div id="main-menu" class="main-menu-container" style="display:flex; flex-direction:column; gap:15px; width:90%; max-width:320px;">
+            <button class="btn-action main-menu-btn" onclick="openModal('modal-create')">✨ Criar Colmeia</button>
+            <button class="btn-action main-menu-btn" onclick="openModal('modal-join')">🚀 Entrar na Colmeia</button>
         </div>
 
         <div id="modal-create" class="lobby-modal">
             <div class="modal-header">NOVA COLMEIA</div>
-            <input type="text" id="host-nickname" placeholder="Seu Nome">
-            <input type="text" id="create-id" placeholder="ID da Colmeia">
+            <input type="text" id="host-nickname" placeholder="Seu Apelido" maxlength="12">
+            <input type="text" id="create-id" placeholder="Nome do Mundo (ID)">
             <input type="password" id="create-pass" placeholder="Senha (Opcional)">
-            <input type="text" id="world-seed" value="JARDIM_SOLAR" placeholder="Seed do Mundo">
-            <button id="btn-create" class="btn-action">CRIAR</button>
-            <button onclick="closeAllModals()" style="background:none; border:none; color:#777; width:100%; margin-top:10px; cursor:pointer;">VOLTAR</button>
+            <input type="text" id="world-seed" value="JARDIM_SOLAR" placeholder="Semente do Mundo">
+            <button id="btn-create" class="btn-action">INICIAR VOO</button>
+            <button onclick="closeAllModals()" style="background:none; border:none; color:#aaa; width:100%; margin-top:15px; cursor:pointer; font-weight:bold;">VOLTAR</button>
         </div>
 
         <div id="modal-join" class="lobby-modal">
             <div class="modal-header">ENTRAR</div>
-            <input type="text" id="join-nickname" placeholder="Seu Nome">
+            <input type="text" id="join-nickname" placeholder="Seu Apelido" maxlength="12">
             <input type="text" id="join-id" placeholder="ID da Colmeia">
-            <input type="password" id="join-pass" placeholder="Senha">
-            <button id="btn-join" class="btn-action">ENTRAR</button>
-            <button onclick="closeAllModals()" style="background:none; border:none; color:#777; width:100%; margin-top:10px; cursor:pointer;">VOLTAR</button>
+            <input type="password" id="join-pass" placeholder="Senha da Sala">
+            <button id="btn-join" class="btn-action">JUNTAR-SE</button>
+            <button onclick="closeAllModals()" style="background:none; border:none; color:#aaa; width:100%; margin-top:15px; cursor:pointer; font-weight:bold;">VOLTAR</button>
         </div>
     </div>
 
@@ -191,21 +264,32 @@
     <div id="chat-container"></div>
 
     <div id="player-modal" class="modal-overlay">
-        <div id="modal-player-name" style="font-weight:900;">---</div>
-        <div id="modal-player-info">LV 1</div>
-        <button id="btn-party-action" class="btn-action">CONVIDAR</button>
-        <button id="btn-whisper-action" class="btn-action" style="background:#3498db">COCHICHAR</button>
-        <button onclick="document.getElementById('player-modal').style.display='none'">FECHAR</button>
+        <div id="modal-player-name" style="font-weight:900; font-size:20px; margin-bottom:5px; color:var(--primary-dark)">---</div>
+        <div id="modal-player-info" style="color:#666; margin-bottom:20px;">LV 1</div>
+        <button id="btn-party-action" class="btn-action" style="margin-top:5px;">CONVIDAR</button>
+        <button id="btn-whisper-action" class="btn-action" style="background:#3498db; margin-top:10px;">COCHICHAR</button>
+        <button onclick="document.getElementById('player-modal').style.display='none'" style="margin-top:15px; border:none; background:none; color:#999; font-weight:bold;">FECHAR</button>
     </div>
 
     <div id="party-invite-popup" class="modal-overlay">
-        <div class="modal-header" style="color:var(--accent-green)">CONVITE!</div>
-        <div id="invite-msg"></div>
-        <button id="btn-accept-invite" class="btn-action">ACEITAR</button>
-        <button onclick="document.getElementById('party-invite-popup').style.display='none'">RECUSAR</button>
+        <div class="modal-header" style="color:var(--accent-green); margin-bottom:10px;">CONVITE DE GRUPO</div>
+        <div id="invite-msg" style="margin-bottom:5px; font-weight:bold;"></div>
+        <div id="invite-party-details" style="font-size:12px; color:#666; margin-bottom:15px;"></div>
+        <div style="display:flex; gap:10px;">
+            <button id="btn-accept-invite" class="btn-action" style="background:var(--accent-green); margin-top:0;">ACEITAR</button>
+            <button onclick="document.getElementById('party-invite-popup').style.display='none'" class="btn-action" style="background:#e74c3c; margin-top:0;">RECUSAR</button>
+        </div>
+    </div>
+
+    <div id="party-create-modal" class="modal-overlay">
+        <div class="modal-header">CRIAR GRUPO</div>
+        <input type="text" id="party-name-input" placeholder="NOME DO GRUPO (EX: ALFA)" maxlength="5" style="text-align:center; text-transform:uppercase;">
+        <button id="btn-confirm-party-create" class="btn-action">CRIAR</button>
+        <button onclick="document.getElementById('party-create-modal').style.display='none'" style="margin-top:10px; border:none; background:none; color:#999;">CANCELAR</button>
     </div>
 
     <script>
+        // Lógica simples de UI que roda antes do jogo carregar
         function openModal(id) {
             document.getElementById('main-menu').style.display = 'none';
             document.getElementById(id).classList.add('active');
@@ -215,6 +299,7 @@
             document.getElementById('main-menu').style.display = 'flex';
         }
     </script>
+    
     <script type="module" src="src/main.js"></script>
 </body>
 </html>
