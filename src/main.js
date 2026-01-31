@@ -884,28 +884,42 @@ function startHostSimulation() {
             });
         }
 
-        // Lógica de Spawn de Inimigos (A cada 5 seg)
+        // [ATUALIZADO] Lógica de Spawn de Inimigos em Grupos e Longe dos Players
         enemySpawnTick++;
-        if (enemySpawnTick >= 5) {
+        if (enemySpawnTick >= 10) { // A cada 10 ticks (segundos aprox)
             enemySpawnTick = 0;
-            // Spawna inimigo perto de um jogador aleatório em área "ruim"
+            
+            // Escolhe um player aleatório como referência
             const players = [localPlayer, ...Object.values(remotePlayers)];
             const target = players[Math.floor(Math.random() * players.length)];
             
-            // Tenta encontrar Terra Queimada perto
-            let spawnX = target.pos.x + (Math.random() * 20 - 10);
-            let spawnY = target.pos.y + (Math.random() * 20 - 10);
-            const tile = worldState.getModifiedTile(Math.round(spawnX), Math.round(spawnY)) || world.getTileAt(Math.round(spawnX), Math.round(spawnY));
-            
-            // Só spawna se for longe da colmeia e em terra ruim
-            if (tile === 'TERRA_QUEIMADA') {
-                const enemyId = `ant_${Date.now()}`;
-                const ant = new Ant(enemyId, spawnX, spawnY, 'worker');
-                enemies.push(ant);
-                net.sendPayload({
-                    type: 'SPAWN_ENEMY',
-                    id: enemyId, x: spawnX, y: spawnY, type: 'worker'
-                });
+            // Tenta 5 vezes achar um ponto válido de spawn (Terra Queimada e Longe)
+            for(let i=0; i<5; i++) {
+                let spawnX = target.pos.x + (Math.random() * 30 - 15);
+                let spawnY = target.pos.y + (Math.random() * 30 - 15);
+                
+                const distToPlayer = Math.sqrt(Math.pow(spawnX - target.pos.x, 2) + Math.pow(spawnY - target.pos.y, 2));
+                // Verifica o bioma
+                const tile = worldState.getModifiedTile(Math.round(spawnX), Math.round(spawnY)) || world.getTileAt(Math.round(spawnX), Math.round(spawnY));
+                
+                // Spawn se for TERRA_QUEIMADA e estiver a mais de 10 tiles do player (fora da tela)
+                if (tile === 'TERRA_QUEIMADA' && distToPlayer > 10) {
+                    const groupSize = 2 + Math.floor(Math.random() * 3); // Grupo de 2 a 4 formigas
+                    for(let j=0; j < groupSize; j++) {
+                        const enemyId = `ant_${Date.now()}_${j}`;
+                        // Espalha um pouco os membros do grupo
+                        const ox = spawnX + (Math.random() * 2 - 1);
+                        const oy = spawnY + (Math.random() * 2 - 1);
+                        
+                        const ant = new Ant(enemyId, ox, oy, 'worker');
+                        enemies.push(ant);
+                        net.sendPayload({
+                            type: 'SPAWN_ENEMY',
+                            id: enemyId, x: ox, y: oy, type: 'worker'
+                        });
+                    }
+                    break; // Sucesso, para de tentar neste tick
+                }
             }
         }
 
@@ -1057,9 +1071,9 @@ function update() {
 
     // Atualizar Inimigos e Colisões
     enemies.forEach((ant, idx) => {
-        // Ant IA (Persegue o player mais próximo)
+        // [ATUALIZADO] Ant IA agora recebe world e worldState para checar bioma
         const players = [localPlayer, ...Object.values(remotePlayers)];
-        ant.update(players);
+        ant.update(players, world, worldState);
         
         // Colisão Player vs Inimigo (Dano)
         if (invulnerabilityTimer <= 0) {
