@@ -4,11 +4,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Wings That Heal</title>
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+    
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    
     <link rel="stylesheet" href="css/style.css">
+
+    <style>
+        /* Variáveis de segurança caso o style.css falhe ou esteja incompleto */
+        :root {
+            --primary: #FFD700;
+            --primary-dark: #F39C12;
+            --accent-green: #2ecc71;
+            --danger: #e74c3c;
+        }
+
+        /* Garantia de que elementos críticos não quebrem o layout antes do JS */
+        #faint-screen {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.9);
+            z-index: 9000;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: white;
+        }
+
+        .lobby-modal {
+            display: none; /* Controlado pelas funções openModal/closeAllModals */
+        }
+        
+        .lobby-modal.active {
+            display: block;
+        }
+    </style>
 </head>
 <body>
 
@@ -25,19 +60,25 @@
         
         <div class="hud-stat-row">
             <span style="font-size:12px;">❤️</span>
-            <div class="hud-bar-bg"><div id="bar-hp-fill" class="hud-bar-fill" style="background:var(--danger)"></div></div>
+            <div class="hud-bar-bg">
+                <div id="bar-hp-fill" class="hud-bar-fill" style="background:var(--danger); width: 0%;"></div>
+            </div>
             <div id="bar-hp-text" class="hud-text">0/0</div>
         </div>
         
         <div class="hud-stat-row">
             <span style="font-size:12px;">💠</span>
-            <div class="hud-bar-bg"><div id="bar-xp-fill" class="hud-bar-fill" style="background:#3498db"></div></div>
+            <div class="hud-bar-bg">
+                <div id="bar-xp-fill" class="hud-bar-fill" style="background:#3498db; width: 0%;"></div>
+            </div>
             <div id="bar-xp-text" class="hud-text">0/0</div>
         </div>
         
         <div class="hud-stat-row">
             <span style="font-size:12px;">🌻</span>
-            <div class="hud-bar-bg"><div id="bar-pollen-fill" class="hud-bar-fill" style="background:var(--primary)"></div></div>
+            <div class="hud-bar-bg">
+                <div id="bar-pollen-fill" class="hud-bar-fill" style="background:var(--primary); width: 0%;"></div>
+            </div>
             <div id="bar-pollen-text" class="hud-text">0/0</div>
         </div>
     </div>
@@ -65,19 +106,33 @@
 
         <div id="modal-create" class="lobby-modal">
             <div class="modal-header">NOVA COLMEIA</div>
-            <input type="text" id="host-nickname" placeholder="Seu Apelido" maxlength="12">
-            <input type="text" id="create-id" placeholder="Nome do Mundo (ID)">
-            <input type="password" id="create-pass" placeholder="Senha (Opcional)">
-            <input type="text" id="world-seed" value="JARDIM_SOLAR" placeholder="Semente do Mundo">
+            <div class="input-group">
+                <input type="text" id="host-nickname" placeholder="Seu Apelido" maxlength="12">
+            </div>
+            <div class="input-group">
+                <input type="text" id="create-id" placeholder="Nome do Mundo (ID)">
+            </div>
+            <div class="input-group">
+                <input type="password" id="create-pass" placeholder="Senha (Opcional)">
+            </div>
+            <div class="input-group">
+                <input type="text" id="world-seed" value="JARDIM_SOLAR" placeholder="Semente do Mundo">
+            </div>
             <button id="btn-create" class="btn-action">INICIAR VOO</button>
             <button onclick="closeAllModals()" style="background:none; border:none; color:#aaa; width:100%; margin-top:15px; cursor:pointer; font-weight:bold;">VOLTAR</button>
         </div>
 
         <div id="modal-join" class="lobby-modal">
-            <div class="modal-header">ENTRAR</div>
-            <input type="text" id="join-nickname" placeholder="Seu Apelido" maxlength="12">
-            <input type="text" id="join-id" placeholder="ID da Colmeia">
-            <input type="password" id="join-pass" placeholder="Senha da Sala">
+            <div class="modal-header">ENTRAR NA COLMEIA</div>
+            <div class="input-group">
+                <input type="text" id="join-nickname" placeholder="Seu Apelido" maxlength="12">
+            </div>
+            <div class="input-group">
+                <input type="text" id="join-id" placeholder="ID da Colmeia">
+            </div>
+            <div class="input-group">
+                <input type="password" id="join-pass" placeholder="Senha da Sala">
+            </div>
             <button id="btn-join" class="btn-action">JUNTAR-SE</button>
             <button onclick="closeAllModals()" style="background:none; border:none; color:#aaa; width:100%; margin-top:15px; cursor:pointer; font-weight:bold;">VOLTAR</button>
         </div>
@@ -100,27 +155,48 @@
         <div id="invite-party-details" style="font-size:12px; color:#666; margin-bottom:15px;"></div>
         <div style="display:flex; gap:10px;">
             <button id="btn-accept-invite" class="btn-action" style="background:var(--accent-green); margin-top:0;">ACEITAR</button>
-            <button onclick="document.getElementById('party-invite-popup').style.display='none'" class="btn-action" style="background:#e74c3c; margin-top:0;">RECUSAR</button>
+            <button onclick="document.getElementById('party-invite-popup').style.display='none'" class="btn-action" style="background:var(--accent-green); margin-top:0; background-color: var(--danger) !important;">RECUSAR</button>
         </div>
     </div>
 
     <div id="party-create-modal" class="modal-overlay">
         <div class="modal-header">CRIAR GRUPO</div>
-        <input type="text" id="party-name-input" placeholder="NOME DO GRUPO (EX: ALFA)" maxlength="5" style="text-align:center; text-transform:uppercase;">
+        <div class="input-group">
+            <input type="text" id="party-name-input" placeholder="NOME DO GRUPO (EX: ALFA)" maxlength="5" style="text-align:center; text-transform:uppercase;">
+        </div>
         <button id="btn-confirm-party-create" class="btn-action">CRIAR</button>
         <button onclick="document.getElementById('party-create-modal').style.display='none'" style="margin-top:10px; border:none; background:none; color:#999;">CANCELAR</button>
     </div>
 
     <script>
-        // Lógica simples de UI que roda antes do jogo carregar
+        /**
+         * Abre um modal específico e esconde o menu principal
+         */
         function openModal(id) {
-            document.getElementById('main-menu').style.display = 'none';
-            document.getElementById(id).classList.add('active');
+            const menu = document.getElementById('main-menu');
+            if (menu) menu.style.display = 'none';
+            
+            const modal = document.getElementById(id);
+            if (modal) modal.classList.add('active');
         }
+
+        /**
+         * Fecha todos os modais e retorna ao menu principal
+         */
         function closeAllModals() {
-            document.querySelectorAll('.lobby-modal').forEach(m => m.classList.remove('active'));
-            document.getElementById('main-menu').style.display = 'flex';
+            document.querySelectorAll('.lobby-modal').forEach(m => {
+                m.classList.remove('active');
+            });
+            const menu = document.getElementById('main-menu');
+            if (menu) menu.style.display = 'flex';
         }
+
+        // Prevenção de comportamentos padrão do navegador que atrapalham o jogo
+        window.addEventListener('keydown', function(e) {
+            if(e.code === 'Space' && e.target === document.body) {
+                e.preventDefault();
+            }
+        });
     </script>
     
     <script type="module" src="src/main.js"></script>
