@@ -5,7 +5,9 @@ import { Player } from './entities/player.js';
 import { InputHandler } from './core/input.js';
 import { SaveSystem } from './core/saveSystem.js';
 import { ChatSystem } from './core/chatSystem.js';
-import { SkillTree } from './player/skillTree.js'; // [NOVO] Importação da Skill Tree
+import { SkillTree } from './player/skillTree.js'; 
+import { Ant } from './entities/ant.js'; // [NOVO] Importação das Formigas
+import { Projectile } from './entities/projectile.js'; // [NOVO] Importação dos Projéteis
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -21,6 +23,10 @@ let pollenParticles = [];
 let smokeParticles = []; 
 let camera = { x: 0, y: 0 };
 
+// [NOVO] Listas de Entidades Dinâmicas
+let enemies = [];
+let projectiles = [];
+
 // [NOVO] Sistema de Ondas
 let activeWaves = [];
 
@@ -32,9 +38,9 @@ class WaveEffect {
         this.maxRadius = maxRadius;
         this.color = color;
         this.healAmount = healAmount;
-        this.speed = 0.1; // Velocidade de expansão da onda
+        this.speed = 0.1; 
         this.life = 1.0;
-        this.curedLocal = false; // Garante que cure o player apenas uma vez
+        this.curedLocal = false; 
     }
 
     update() {
@@ -54,11 +60,9 @@ class WaveEffect {
         ctx.beginPath();
         ctx.arc(sX, sY, r, 0, Math.PI * 2);
         ctx.lineWidth = 4 * (tileSize / 32);
-        // Cor pulsante baseada na vida
         ctx.strokeStyle = this.color.replace('ALPHA', this.life);
         ctx.stroke();
         
-        // Brilho interno
         ctx.globalAlpha = this.life * 0.2;
         ctx.fillStyle = this.color.replace('ALPHA', this.life);
         ctx.fill();
@@ -108,21 +112,21 @@ let faintTimeout = null;
 // [NOVO] Variáveis de Resgate
 let rescueTimer = 0;
 let currentRescueTarget = null;
-const RESCUE_DURATION = 180; // ~3 segundos a 60 FPS
+const RESCUE_DURATION = 180; 
 const RESCUE_POLLEN_COST = 20;
 
-let invulnerabilityTimer = 0; // Timer de imunidade após renascer
+let invulnerabilityTimer = 0; 
 
 let lastManualSaveTime = 0;
 const SAVE_COOLDOWN = 15000; 
 
 // Contador para disparo da onda da colmeia no Host
 let hiveWaveTick = 0;
+let enemySpawnTick = 0; // [NOVO] Timer para spawn de inimigos
 
 const assets = { flower: new Image() };
 assets.flower.src = 'assets/Flower.png';
 
-// --- INJEÇÃO DE ESTILOS CORRIGIDA (POSICIONAMENTO CENTRAL E BOTÃO VISÍVEL) ---
 function injectGameStyles() {
     if (document.getElementById('wings-game-styles')) return;
     const style = document.createElement('style');
@@ -136,7 +140,6 @@ function injectGameStyles() {
             --glass: rgba(255, 255, 255, 0.15);
         }
 
-        /* DATA E HORA NO CENTRO SUPERIOR - VISIBILIDADE FORÇADA */
         #hud-time {
             display: block !important;
             position: fixed;
@@ -151,14 +154,13 @@ function injectGameStyles() {
             font-weight: 900;
             font-size: 14px;
             letter-spacing: 1px;
-            z-index: 8000; /* Acima de quase tudo */
+            z-index: 8000;
             border: 1px solid rgba(255, 215, 0, 0.3);
             box-shadow: 0 4px 10px rgba(0,0,0,0.3);
             white-space: nowrap;
             pointer-events: none;
         }
 
-        /* HUD DE STATUS (TOP LEFT) - Limpo e Compacto */
         #rpg-hud {
             position: fixed;
             top: 10px;
@@ -197,7 +199,7 @@ function injectGameStyles() {
             background: rgba(0,0,0,0.5);
             padding: 3px 6px;
             border-radius: 8px;
-            width: 180px; /* Mais compacto para mobile */
+            width: 180px; 
         }
         
         .hud-icon { width: 18px; text-align: center; font-size: 12px; }
@@ -226,21 +228,20 @@ function injectGameStyles() {
             font-family: monospace;
         }
 
-        /* BOTÃO DO CHAT (BOLHA FLUTUANTE) - CORRIGIDO */
         #chat-toggle-btn {
             display: flex !important;
             justify-content: center;
             align-items: center;
             position: fixed;
             bottom: 30px;
-            right: 20px; /* Afastado da borda para não colar */
+            right: 20px; 
             width: 55px;
             height: 55px;
             background: var(--primary) !important;
             border: 3px solid white !important;
             border-radius: 50% !important;
             box-shadow: 0 5px 15px rgba(0,0,0,0.4) !important;
-            z-index: 9999 !important; /* Acima de TUDO */
+            z-index: 9999 !important; 
             font-size: 24px;
             cursor: pointer;
             opacity: 1 !important;
@@ -249,7 +250,6 @@ function injectGameStyles() {
         }
         #chat-toggle-btn:active { transform: scale(0.9); }
 
-        /* [NOVO] BOTÃO DE SKILLS */
         #btn-skills {
             display: flex !important;
             justify-content: center;
@@ -270,8 +270,28 @@ function injectGameStyles() {
             transition: transform 0.2s;
         }
         #btn-skills:active { transform: scale(0.9); }
+        
+        /* [NOVO] Botão de Ataque Mobile */
+        #btn-attack {
+            display: flex !important;
+            justify-content: center;
+            align-items: center;
+            position: fixed;
+            bottom: 40px; 
+            right: 90px;
+            width: 60px;
+            height: 60px;
+            background: #e74c3c !important;
+            border: 3px solid white !important;
+            border-radius: 50% !important;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.4) !important;
+            z-index: 9000 !important;
+            font-size: 24px;
+            color: white;
+            cursor: pointer;
+        }
+        #btn-attack:active { transform: scale(0.95); background: #c0392b !important; }
 
-        /* Toast Messages */
         #toast-msg {
             background: linear-gradient(135deg, #FFD700, #F39C12) !important;
             color: #333 !important;
@@ -279,11 +299,10 @@ function injectGameStyles() {
             border: 2px solid white !important;
         }
 
-        /* Adaptação Vertical (Retrato) */
         @media (max-width: 600px) {
             #rpg-hud { top: 5px; left: 5px; transform: scale(0.9); transform-origin: top left; }
             #ranking-container { top: 50px; right: 5px; transform: scale(0.8); transform-origin: top right; }
-            #hud-time { top: 40px; font-size: 11px; padding: 4px 10px; } /* Ajustado para não sobrepor Ranking */
+            #hud-time { top: 40px; font-size: 11px; padding: 4px 10px; } 
             #btn-skills { top: 120px; left: 5px; width: 40px; height: 40px; }
         }
     `;
@@ -433,8 +452,8 @@ document.getElementById('btn-confirm-party-create').onclick = () => {
         net.sendPayload({ 
             type: 'PARTY_INVITE', 
             fromId: localPlayer.id, 
-            fromNick: localPlayer.nickname,
-            pName: localPartyName,
+            fromNick: localPlayer.nickname, 
+            pName: localPartyName, 
             pIcon: localPartyIcon
         }, selectedPlayerId);
         
@@ -530,6 +549,17 @@ window.addEventListener('netData', e => {
         spawnPollenParticle(d.x, d.y);
     }
     
+    // [NOVO] Renderizar Tiro de Outro Jogador
+    if (d.type === 'SHOOT') {
+        projectiles.push(new Projectile(d.x, d.y, d.vx, d.vy, d.ownerId, d.damage));
+    }
+
+    // [NOVO] Host enviou spawn de inimigo
+    if (d.type === 'SPAWN_ENEMY') {
+        const ant = new Ant(d.id, d.x, d.y, d.type);
+        enemies.push(ant);
+    }
+    
     // [NOVO] Recebimento de pacote de onda de cura
     if (d.type === 'WAVE_SPAWN') {
         activeWaves.push(new WaveEffect(d.x, d.y, d.radius, d.color || "rgba(241, 196, 15, ALPHA)", d.amount));
@@ -582,16 +612,14 @@ window.addEventListener('netData', e => {
         }
     }
     
-    // [NOVO] Lógica ao receber sinal de resgate bem-sucedido
     if (d.type === 'PARTY_RESCUE' && isFainted) {
         clearTimeout(faintTimeout);
         isFainted = false;
         
-        localPlayer.hp = 25; // Revive com HP parcial
-        localPlayer.pollen = Math.max(0, localPlayer.pollen - 10); // Perde um pouco de pólen ao cair
+        localPlayer.hp = 25; 
+        localPlayer.pollen = Math.max(0, localPlayer.pollen - 10); 
         
-        // Imunidade Temporária
-        invulnerabilityTimer = 180; // 3 segundos de invulnerabilidade
+        invulnerabilityTimer = 180; 
         
         document.getElementById('faint-screen').style.display = 'none';
         chat.addMessage('SYSTEM', null, `Reanimado por ${d.fromNick}! IMUNIDADE ATIVA.`);
@@ -625,7 +653,6 @@ window.addEventListener('netData', e => {
     }
 
     if (d.type === 'FLOWER_CURE') {
-        // Mantém apenas a parte de estatística, a cura de HP agora é via WAVE_SPAWN
         if (localPlayer && d.ownerId === localPlayer.id) { localPlayer.tilesCured++; }
         if (remotePlayers[d.ownerId]) remotePlayers[d.ownerId].tilesCured++;
     }
@@ -700,7 +727,6 @@ function updateRanking() {
 }
 
 function startGame(seed, id, nick) {
-    // [NOVO] Injeta os estilos do HUD Profissional assim que o jogo começa
     injectGameStyles();
 
     let loader = document.getElementById('loading-screen');
@@ -715,7 +741,6 @@ function startGame(seed, id, nick) {
 
     document.getElementById('lobby-overlay').style.display = 'none';
     
-    // Esconde HUD e elementos até o carregamento
     document.getElementById('rpg-hud').style.display = 'none';
     document.getElementById('chat-toggle-btn').style.display = 'none';
     canvas.style.display = 'none'; 
@@ -723,7 +748,6 @@ function startGame(seed, id, nick) {
     world = new WorldGenerator(seed);
     localPlayer = new Player(id, nick, true);
 
-    // [NOVO] Inicializa Sistema de Skills
     localPlayer.skillPoints = 0;
     localPlayer.skillTree = new SkillTree(localPlayer);
 
@@ -787,12 +811,18 @@ function startGame(seed, id, nick) {
 
     chat.addMessage('SYSTEM', null, `Abelha ${nick} pronta para o voo!`);
     
-    // [NOVO] Botão Mobile para Skills
+    // [NOVO] Botão Mobile para Skills e Ataque
     const skillBtn = document.createElement('button');
     skillBtn.id = 'btn-skills';
     skillBtn.innerText = '⚡'; 
     skillBtn.onclick = () => localPlayer.skillTree.toggle();
     document.body.appendChild(skillBtn);
+
+    const attackBtn = document.createElement('button');
+    attackBtn.id = 'btn-attack';
+    attackBtn.innerText = '⚔️'; 
+    attackBtn.onpointerdown = (e) => { e.preventDefault(); tryShoot(); };
+    if(input.isMobile) document.body.appendChild(attackBtn);
 
     updateUI(); 
     resize(); 
@@ -807,9 +837,7 @@ function startGame(seed, id, nick) {
             setTimeout(() => l.style.display = 'none', 1000);
         }
         
-        // Exibe elementos do jogo
         document.getElementById('rpg-hud').style.display = 'block';
-        // Força o display flex para o ícone de chat ficar centralizado
         const chatBtn = document.getElementById('chat-toggle-btn');
         chatBtn.style.display = 'flex'; 
         
@@ -819,6 +847,20 @@ function startGame(seed, id, nick) {
     }, 15000);
 }
 
+function tryShoot() {
+    const proj = localPlayer.shootPollen();
+    if (proj) {
+        projectiles.push(new Projectile(proj.x, proj.y, proj.vx, proj.vy, proj.ownerId, proj.damage));
+        net.sendPayload({ 
+            type: 'SHOOT', 
+            ownerId: proj.ownerId, 
+            x: proj.x, y: proj.y, 
+            vx: proj.vx, vy: proj.vy, 
+            damage: proj.damage 
+        });
+    }
+}
+
 function startHostSimulation() {
     setInterval(() => {
         worldState.worldTime += 60000;
@@ -826,7 +868,7 @@ function startHostSimulation() {
         let changed = false;
         const now = Date.now();
         
-        // [NOVO] Lógica de Onda das Colmeias (A cada 3 segundos ~ 3 ticks do setInterval que é 1s)
+        // [NOVO] Lógica de Onda das Colmeias
         hiveWaveTick++;
         if (hiveWaveTick >= 3) {
             hiveWaveTick = 0;
@@ -834,15 +876,36 @@ function startHostSimulation() {
             hives.forEach(h => {
                 net.sendPayload({
                     type: 'WAVE_SPAWN',
-                    x: h.x,
-                    y: h.y,
-                    radius: 4.0, // Colmeia tem raio maior
-                    color: "rgba(241, 196, 15, ALPHA)",
-                    amount: 5 // Cura mais forte
+                    x: h.x, y: h.y,
+                    radius: 4.0, color: "rgba(241, 196, 15, ALPHA)", amount: 5
                 });
-                // Host também vê a onda (cria local)
                 activeWaves.push(new WaveEffect(h.x, h.y, 4.0, "rgba(241, 196, 15, ALPHA)", 5));
             });
+        }
+
+        // [NOVO] Lógica de Spawn de Inimigos (A cada 5 seg)
+        enemySpawnTick++;
+        if (enemySpawnTick >= 5) {
+            enemySpawnTick = 0;
+            // Spawna inimigo perto de um jogador aleatório em área "ruim"
+            const players = [localPlayer, ...Object.values(remotePlayers)];
+            const target = players[Math.floor(Math.random() * players.length)];
+            
+            // Tenta encontrar Terra Queimada perto
+            let spawnX = target.pos.x + (Math.random() * 20 - 10);
+            let spawnY = target.pos.y + (Math.random() * 20 - 10);
+            const tile = worldState.getModifiedTile(Math.round(spawnX), Math.round(spawnY)) || world.getTileAt(Math.round(spawnX), Math.round(spawnY));
+            
+            // Só spawna se for longe da colmeia e em terra ruim
+            if (tile === 'TERRA_QUEIMADA') {
+                const enemyId = `ant_${Date.now()}`;
+                const ant = new Ant(enemyId, spawnX, spawnY, 'worker');
+                enemies.push(ant);
+                net.sendPayload({
+                    type: 'SPAWN_ENEMY',
+                    id: enemyId, x: spawnX, y: spawnY, type: 'worker'
+                });
+            }
         }
 
         Object.values(remotePlayers).forEach(p => {
@@ -875,18 +938,13 @@ function startHostSimulation() {
             if (currentType === 'FLOR' && plantData.isReadyToHeal && elapsedSinceHeal >= 3000) {
                 plantData.lastHealTime = now;
                 
-                // Emite a onda visual e funcional
                 net.sendPayload({
                     type: 'WAVE_SPAWN',
-                    x: x,
-                    y: y,
-                    radius: 2.0, // Planta tem raio menor
-                    color: "rgba(46, 204, 113, ALPHA)", // Onda verde para plantas
-                    amount: 2 // Cura normal
+                    x: x, y: y,
+                    radius: 2.0, color: "rgba(46, 204, 113, ALPHA)", amount: 2
                 });
                 activeWaves.push(new WaveEffect(x, y, 2.0, "rgba(46, 204, 113, ALPHA)", 2));
 
-                // Mantém a lógica de terraformação (Opcional, mas bom para gameplay)
                 for (let dx = -1; dx <= 1; dx++) {
                     for (let dy = -1; dy <= 1; dy++) {
                         if (dx === 0 && dy === 0) continue; 
@@ -897,7 +955,6 @@ function startHostSimulation() {
                         if (target === 'TERRA_QUEIMADA') {
                             changeTile(tx, ty, 'GRAMA_SAFE', ownerId);
                             if (ownerId) {
-                                // Apenas para stats, não cura HP aqui
                                 net.sendPayload({ type: 'FLOWER_CURE', ownerId: ownerId, x: tx, y: ty });
                                 if (localPlayer && ownerId === localPlayer.id) {
                                     localPlayer.tilesCured++; gainXp(XP_PASSIVE_CURE);
@@ -965,10 +1022,9 @@ function updateEnvironment() {
     const minutes = String(date.getMinutes()).padStart(2, '0');
     const timeEl = document.getElementById('hud-time');
     
-    // [FIX] Garante que a data seja exibida no elemento correto
     if (timeEl) {
         timeEl.innerText = `${day} ${month} ${year} - ${hours}:${minutes}`;
-        timeEl.style.display = 'block'; // Reforça a visibilidade
+        timeEl.style.display = 'block'; 
     }
     
     const h = date.getHours() + date.getMinutes() / 60;
@@ -982,7 +1038,6 @@ function update() {
     if(!localPlayer || isFainted) return; 
     updateEnvironment();
     
-    // Diminui a invulnerabilidade
     if (invulnerabilityTimer > 0) invulnerabilityTimer--;
 
     const gx = Math.round(localPlayer.pos.x), gy = Math.round(localPlayer.pos.y);
@@ -993,16 +1048,61 @@ function update() {
 
     Object.values(remotePlayers).forEach(p => p.update({}));
     
-    // [NOVO] Atualização das Ondas e Detecção de Colisão
+    // [NOVO] Atualizar Projéteis
+    projectiles.forEach((p, idx) => {
+        const alive = p.update();
+        if (!alive) projectiles.splice(idx, 1);
+    });
+
+    // [NOVO] Atualizar Inimigos e Colisões
+    enemies.forEach((ant, idx) => {
+        // Ant IA (Persegue o player mais próximo)
+        const players = [localPlayer, ...Object.values(remotePlayers)];
+        ant.update(players);
+        
+        // Colisão Player vs Inimigo (Dano)
+        if (invulnerabilityTimer <= 0) {
+            const dx = ant.x - localPlayer.pos.x;
+            const dy = ant.y - localPlayer.pos.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist < 0.6) { // Tocou na formiga
+                localPlayer.hp -= 5;
+                // Empurrão
+                localPlayer.pos.x -= dx * 0.5;
+                localPlayer.pos.y -= dy * 0.5;
+                updateUI();
+                if (localPlayer.hp <= 0) processFaint();
+            }
+        }
+
+        // Colisão Projétil vs Inimigo
+        projectiles.forEach((proj, pIdx) => {
+            const d = Math.sqrt(Math.pow(proj.x - ant.x, 2) + Math.pow(proj.y - ant.y, 2));
+            if (d < 0.5) { // Acertou
+                ant.hp -= proj.damage;
+                projectiles.splice(pIdx, 1); // Remove tiro
+                // Efeito visual (fumaça branca)
+                smokeParticles.push({ wx: ant.x, wy: ant.y, size: 3, speedY: -0.05, life: 0.5, grayVal: 255, isEmber: false });
+            }
+        });
+
+        if (ant.hp <= 0) {
+            enemies.splice(idx, 1);
+            spawnPollenParticle(ant.x, ant.y); // Drop visual
+        }
+    });
+
+    // [NOVO] Colisão Física entre Players (Repulsão)
+    Object.values(remotePlayers).forEach(p => {
+        localPlayer.resolveCollision(p);
+    });
+
+    // Atualização das Ondas
     activeWaves = activeWaves.filter(wave => {
         const stillAlive = wave.update();
         if (stillAlive && !wave.curedLocal) {
-            // Verifica distância entre o player e o centro da onda
             const d = Math.sqrt(Math.pow(localPlayer.pos.x - wave.x, 2) + Math.pow(localPlayer.pos.y - wave.y, 2));
             
-            // Se a distância for menor que o raio atual da onda (com uma pequena margem para simular a borda passando)
-            // A lógica aqui é: A onda precisa "bater" no player.
-            // Então detectamos se a borda da onda está próxima da posição do player
             if (Math.abs(d - wave.currentRadius) < 0.5) {
                 wave.curedLocal = true;
                 if (localPlayer.hp < localPlayer.maxHp) {
@@ -1018,7 +1118,6 @@ function update() {
     localPlayer.update(m);
     const moving = m.x !== 0 || m.y !== 0;
     if(moving || Math.random() < 0.05) {
-        // Se estiver com imunidade, aumenta velocidade levemente
         const speedMod = invulnerabilityTimer > 0 ? 1.5 : 1.0;
         localPlayer.pos.x += m.x * localPlayer.speed * speedMod; 
         localPlayer.pos.y += m.y * localPlayer.speed * speedMod;
@@ -1033,20 +1132,18 @@ function update() {
     
     updateParticles();
 
-    // [CORRIGIDO] Lógica de Resgate Unificada (PC + Mobile)
+    // Lógica de Resgate Unificada (PC + Mobile)
     let nearbyFaintedPartner = null;
 
     partyMembers.forEach(memberId => {
-        // Garante que não estamos tentando resgatar a nós mesmos (segurança)
         if (memberId === localPlayer.id) return;
 
         const partner = remotePlayers[memberId];
-        // Verifica: Existe? Tá desmaiado? Tá perto (1.5 tiles agora)?
         if (partner && partner.hp <= 0) {
             const d = Math.sqrt(Math.pow(localPlayer.pos.x - partner.pos.x, 2) + Math.pow(localPlayer.pos.y - partner.pos.y, 2));
-            if (d < 1.5) { // Aumentado o range para facilitar
+            if (d < 1.5) { 
                 nearbyFaintedPartner = { id: memberId, nickname: partner.nickname, obj: partner };
-                partner.showRescuePrompt = true; // [NOVO] Ativa o prompt visual no player
+                partner.showRescuePrompt = true; 
             }
         }
     });
@@ -1054,18 +1151,15 @@ function update() {
     if (nearbyFaintedPartner) {
         currentRescueTarget = nearbyFaintedPartner;
         
-        // Configura o botão via InputHandler (Texto e Cor)
         const canAfford = localPlayer.pollen >= RESCUE_POLLEN_COST;
         const btnText = canAfford ? "⛑️ RESGATAR (Segure)" : `FALTA PÓLEN (${localPlayer.pollen}/${RESCUE_POLLEN_COST})`;
         const btnColor = canAfford ? "#2ecc71" : "#e74c3c";
         
         input.updateActionButton(true, btnText, btnColor);
 
-        // Verifica se a ação está ativa (Seja por tecla 'E', 'Space' ou botão na tela)
         if (input.isActionActive() && canAfford) {
             rescueTimer++;
             if (rescueTimer >= RESCUE_DURATION) {
-                // SUCESSO NO RESGATE
                 localPlayer.pollen -= RESCUE_POLLEN_COST;
                 net.sendPayload({ type: 'PARTY_RESCUE', fromNick: localPlayer.nickname }, currentRescueTarget.id);
                 chat.addMessage('SYSTEM', null, `Você salvou ${currentRescueTarget.nickname}!`);
@@ -1073,20 +1167,17 @@ function update() {
                 rescueTimer = 0;
             }
         } else {
-            // Se soltar, reseta ou diminui gradualmente
             rescueTimer = Math.max(0, rescueTimer - 2);
         }
     } else {
-        // Ninguém por perto
         currentRescueTarget = null;
         rescueTimer = 0;
-        input.updateActionButton(false); // Esconde o botão
+        input.updateActionButton(false); 
     }
 
     const tile = worldState.getModifiedTile(gx, gy) || world.getTileAt(gx, gy);
     const isSafe = ['GRAMA', 'GRAMA_SAFE', 'BROTO', 'MUDA', 'FLOR', 'FLOR_COOLDOWN', 'COLMEIA'].includes(tile);
     
-    // Verifica dano (Ignora se estiver IMUNE)
     if (!isSafe && invulnerabilityTimer <= 0) {
         damageFrameCounter++;
         if (damageFrameCounter >= DAMAGE_RATE) {
@@ -1097,9 +1188,6 @@ function update() {
     const hpRatio = localPlayer.hp / localPlayer.maxHp;
     const overlay = document.getElementById('suffocation-overlay');
     if (overlay) overlay.style.opacity = hpRatio < 0.7 ? (0.7 - hpRatio) * 1.4 : 0;
-
-    // [MODIFICADO] A lógica de cura passiva (cureFrameCounter e flowerCureFrameCounter) foi removida
-    // pois agora a cura vem das Ondas (WaveEffect)
 
     if (tile === 'FLOR' && localPlayer.pollen < localPlayer.maxPollen && ++collectionFrameCounter >= COLLECTION_RATE) {
         localPlayer.pollen++; collectionFrameCounter = 0; gainXp(XP_PER_POLLEN);
@@ -1127,7 +1215,7 @@ function performRespawn() {
     const faintScreen = document.getElementById('faint-screen');
     if(faintScreen) faintScreen.style.display = 'none';
     isFainted = false; 
-    invulnerabilityTimer = 180; // Imunidade ao dar respawn na base também
+    invulnerabilityTimer = 180; 
     updateUI();
     net.sendPayload({ 
         type: 'MOVE', 
@@ -1228,7 +1316,6 @@ function draw() {
                 if (type === 'TERRA_QUEIMADA' && Math.random() < 0.015) spawnSmokeParticle(t.x, t.y);
                 ctx.fillStyle = (type === 'COLMEIA') ? '#f1c40f' : (['GRAMA','GRAMA_SAFE','BROTO','MUDA','FLOR', 'FLOR_COOLDOWN'].includes(type) ? '#2ecc71' : '#34495e');
                 
-                // [CORRIGIDO] +1 pixel para remover as linhas do grid (frestas)
                 ctx.fillRect(sX, sY, rTileSize + 1, rTileSize + 1);
                 
                 if (type === 'BROTO') { ctx.fillStyle = '#006400'; const sz = 12*zoomLevel; ctx.fillRect(sX+(rTileSize-sz)/2, sY+(rTileSize-sz)/2, sz, sz); }
@@ -1249,6 +1336,12 @@ function draw() {
     // [NOVO] Renderizar as Ondas
     activeWaves.forEach(wave => wave.draw(ctx, camera, canvas, rTileSize));
 
+    // [NOVO] Renderizar Inimigos
+    enemies.forEach(ant => ant.draw(ctx, camera, canvas, rTileSize));
+
+    // [NOVO] Renderizar Projéteis
+    projectiles.forEach(p => p.draw(ctx, camera, canvas, rTileSize));
+
     smokeParticles.forEach(p => { 
         const psX = (p.wx - camera.x) * rTileSize + canvas.width / 2, psY = (p.wy - camera.y) * rTileSize + canvas.height / 2; 
         if (p.isEmber) ctx.fillStyle = `rgba(231, 76, 60, ${p.life})`; else ctx.fillStyle = `rgba(${p.grayVal},${p.grayVal},${p.grayVal},${p.life*0.4})`;
@@ -1259,11 +1352,9 @@ function draw() {
         ctx.fillStyle = `rgba(241,196,15,${p.life})`; ctx.fillRect(psX, psY, p.size * zoomLevel, p.size * zoomLevel); 
     });
     if (localPlayer) {
-        // [NOVO] Passa 'input.isMobile' para o draw do player
         Object.values(remotePlayers).forEach(p => p.draw(ctx, camera, canvas, rTileSize, remotePlayers, partyMembers, localPartyIcon, input.isMobile));
         localPlayer.draw(ctx, camera, canvas, rTileSize, remotePlayers, partyMembers, localPartyIcon, input.isMobile);
         
-        // [NOVO] Desenhar barra de progresso de resgate
         if (currentRescueTarget && rescueTimer > 0) {
             const tPos = currentRescueTarget.obj.pos;
             const tScreenX = (tPos.x - camera.x) * rTileSize + canvas.width / 2;
@@ -1275,14 +1366,12 @@ function draw() {
             ctx.arc(tScreenX, tScreenY, 30 * zoomLevel, -Math.PI/2, (-Math.PI/2) + (Math.PI*2 * (rescueTimer/RESCUE_DURATION)));
             ctx.stroke();
             
-            // Texto de indicação
             ctx.fillStyle = "#ffffff";
             ctx.font = `bold ${10 * zoomLevel}px sans-serif`;
             ctx.textAlign = "center";
             ctx.fillText("RESGATANDO...", tScreenX, tScreenY - (40 * zoomLevel));
         }
         
-        // Indicador de Imunidade
         if (invulnerabilityTimer > 0) {
              const pScreenX = canvas.width / 2;
              const pScreenY = canvas.height / 2;
@@ -1304,11 +1393,15 @@ function draw() {
 function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 window.onresize = resize;
 
-// [NOVO] Atalho de Teclado para Skills
+// [NOVO] Atalho de Teclado
 window.addEventListener('keydown', (e) => {
     if (e.key === 'k' || e.key === 'K') {
         if (localPlayer && localPlayer.skillTree) {
             localPlayer.skillTree.toggle();
         }
+    }
+    // Barra de Espaço para atacar
+    if (e.key === ' ' || e.code === 'Space') {
+        if (localPlayer) tryShoot();
     }
 });
