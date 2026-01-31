@@ -11,461 +11,209 @@
 
     <style>
         :root {
-            --primary: #FFD700; /* Mel Dourado */
+            --primary: #FFD700;
             --primary-dark: #F39C12;
-            --accent-green: #2ecc71; /* Folha Viva */
+            --accent-green: #2ecc71;
             --danger: #e74c3c;
-            --bg-dark: #2c3e50; /* Azul Noturno Suave */
-            --honey-glow: rgba(255, 215, 0, 0.5);
-            --text-dark: #5D4037; /* Marrom Terra */
+            --bg-dark: #1a1a1a;
+            --honey-glow: rgba(255, 215, 0, 0.4);
+            --glass: rgba(0, 0, 0, 0.7);
         }
 
         body { 
             margin: 0; overflow: hidden; background: var(--bg-dark); 
             font-family: 'Nunito', sans-serif; 
             touch-action: none; user-select: none; -webkit-user-select: none;
-            color: var(--text-dark); width: 100vw; height: 100vh;
+            width: 100vw; height: 100vh;
         }
 
-        /* Overlays de Ambiente */
+        canvas { display: block; }
+
+        /* --- Overlays de Efeito --- */
         #suffocation-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: radial-gradient(circle, transparent 40%, #000 150%);
-            pointer-events: none; z-index: 100;
-            opacity: 0; transition: opacity 0.5s ease;
+            pointer-events: none; z-index: 100; opacity: 0; transition: opacity 0.5s;
         }
 
         #day-night-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: #000022; 
-            pointer-events: none; z-index: 5; 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #000022; pointer-events: none; z-index: 50; 
             opacity: 0; transition: opacity 1s linear;
         }
 
-        /* Tela de Desmaio */
-        #faint-screen {
-            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); z-index: 500; flex-direction: column;
-            align-items: center; justify-content: center; text-align: center;
-            animation: fadeInBlack 1s forwards;
+        /* --- UI de Jogo (HUD) --- */
+        #rpg-hud {
+            position: fixed; top: 15px; left: 15px; z-index: 1000;
+            display: flex; flex-direction: column; gap: 8px; pointer-events: none;
         }
-        .faint-title { font-size: 32px; color: var(--primary); margin-bottom: 20px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; }
-        .faint-msg { font-size: 18px; max-width: 80%; line-height: 1.6; color: #eee; }
-        .faint-hint { margin-top: 25px; color: var(--accent-green); font-weight: bold; }
-        
-        .btn-respawn {
-            margin-top: 40px; padding: 15px 30px;
-            background: transparent; border: 3px solid var(--primary);
-            color: var(--primary); font-weight: 900; border-radius: 50px;
-            cursor: pointer; text-transform: uppercase; font-family: 'Nunito', sans-serif;
-            transition: all 0.2s;
+
+        #hud-info {
+            background: var(--glass); padding: 8px 15px; border-radius: 20px;
+            color: white; border-left: 4px solid var(--primary); backdrop-filter: blur(5px);
         }
-        .btn-respawn:active { background: var(--primary); color: #fff; transform: scale(0.95); }
 
-        @keyframes fadeInBlack { from { opacity: 0; } to { opacity: 1; } }
+        .hud-stat-row {
+            display: flex; align-items: center; gap: 10px; width: 200px;
+            background: rgba(0,0,0,0.5); padding: 4px 10px; border-radius: 12px;
+        }
 
-        /* --- LOBBY (TELA INICIAL) ATUALIZADO --- */
+        .hud-bar-bg { flex: 1; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; }
+        .hud-bar-fill { height: 100%; width: 0%; transition: width 0.3s ease; }
+        .hud-text { font-size: 11px; color: #eee; width: 45px; text-align: right; font-family: monospace; }
+
+        #hud-time {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background: var(--glass); color: var(--primary); padding: 5px 15px;
+            border-radius: 20px; font-weight: 900; z-index: 1000; font-size: 13px;
+        }
+
+        /* --- Ranking --- */
+        #ranking-container {
+            position: fixed; top: 15px; right: 15px; z-index: 1000;
+            background: var(--glass); padding: 12px; border-radius: 15px;
+            min-width: 140px; pointer-events: none; backdrop-filter: blur(5px);
+        }
+        .rank-item { display: flex; justify-content: space-between; font-size: 12px; color: #ccc; margin-top: 4px; }
+
+        /* --- Modais e Lobby --- */
         #lobby-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 200;
-            background-image: url('assets/background_lobby.png');
-            background-position: center 30%;
-            background-repeat: no-repeat;
-            background-size: cover;
-            display: flex; 
-            flex-direction: column;
-            align-items: center; 
-            justify-content: center; /* Centralizado agora */
-            padding-bottom: 0;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 5000;
+            background: url('assets/background_lobby.png') center/cover no-repeat;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
 
-        #lobby-overlay::before {
-            content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(to bottom, transparent 20%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.8) 100%);
-            z-index: -1; pointer-events: none;
+        .lobby-modal {
+            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(20, 20, 20, 0.95); border: 2px solid var(--primary);
+            width: 90%; max-width: 400px; padding: 30px; border-radius: 25px;
+            color: white; z-index: 6000; backdrop-filter: blur(10px);
         }
-        
-        /* Estilos do Novo Menu Principal */
-        .main-menu-container {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            width: 90%;
-            max-width: 350px;
-            animation: slideUp 0.5s ease-out;
+        .lobby-modal.active { display: block; }
+
+        .btn-action {
+            width: 100%; padding: 18px; border-radius: 15px; border: none;
+            background: var(--primary); color: #2c1e0f; font-weight: 900;
+            text-transform: uppercase; cursor: pointer; margin-top: 15px;
         }
 
-        .main-menu-btn {
-            padding: 25px;
-            font-size: 18px;
-            font-weight: 900;
-            text-transform: uppercase;
-            color: #2c1e0f;
-            background: linear-gradient(to bottom, #FFD700, #F39C12);
-            border: 3px solid #fff;
-            border-radius: 25px;
-            cursor: pointer;
-            box-shadow: 0 8px 0 #c77d00, 0 15px 25px rgba(0,0,0,0.4);
-            transition: all 0.1s;
-            font-family: 'Nunito', sans-serif;
-            position: relative;
-            text-shadow: 1px 1px 0 rgba(255,255,255,0.4);
+        input {
+            width: 100%; padding: 15px; margin-top: 8px; border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.4);
+            color: white; font-family: inherit; box-sizing: border-box;
         }
 
-        .main-menu-btn:active {
-            transform: translateY(5px);
-            box-shadow: 0 3px 0 #c77d00, 0 5px 10px rgba(0,0,0,0.4);
-        }
-
-        /* Estilos dos Modais (Atualizado para Mobile) */
-        .lobby-modal { 
-            display: none; /* Escondido por padrão */
-            position: fixed;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%) scale(0.9);
-            background: rgba(15, 15, 15, 0.9);
-            border: 2px solid var(--primary);
-            backdrop-filter: blur(15px);
-            border-radius: 25px;
-            box-shadow: 0 30px 80px rgba(0,0,0,0.8), inset 0 0 30px rgba(255, 215, 0, 0.1);
-            
-            /* Ajustes de Tamanho e Rolagem */
-            width: 90%; 
-            max-width: 400px;
-            max-height: 85vh; /* Evita que saia da tela verticalmente */
-            overflow-y: auto; /* Adiciona rolagem se o conteúdo for maior que a tela */
-            
-            padding: 25px;
-            color: white;
-            z-index: 300;
-            opacity: 0;
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-        
-        /* Estilo da barra de rolagem do modal */
-        .lobby-modal::-webkit-scrollbar { width: 5px; }
-        .lobby-modal::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); border-radius: 10px; }
-        .lobby-modal::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 10px; }
-
-        .lobby-modal.active {
-            display: block;
-            opacity: 1;
-            transform: translate(-50%, -50%) scale(1);
-        }
-
-        .modal-header {
-            font-size: 24px; font-weight: 900; color: var(--primary);
-            text-align: center; margin-bottom: 25px; text-transform: uppercase;
-            letter-spacing: 1px; text-shadow: 0 2px 10px var(--honey-glow);
-        }
-
-        .close-modal-btn {
-            position: absolute; top: 15px; right: 20px;
-            background: none; border: none; color: #777; font-size: 24px;
-            font-weight: bold; cursor: pointer; transition: color 0.2s;
-            z-index: 10;
-        }
-        .close-modal-btn:hover { color: var(--danger); }
-
-        .studio-footer { 
-            position: absolute; bottom: 20px; width: 100%;
-            text-align: center; color: rgba(255,255,255,0.4); 
-            font-size: 12px; letter-spacing: 3px; font-weight: 900;
-        }
-        
-        @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
-        
-        .input-group { margin-bottom: 20px; }
-        .input-label { display: block; color: var(--primary); font-size: 12px; margin-bottom: 8px; font-weight: 800; text-transform: uppercase; opacity: 0.9; letter-spacing: 1px; }
-        
-        input { 
-            padding: 15px; border-radius: 15px; 
-            border: 2px solid rgba(255,255,255,0.1); 
-            width: 100%; box-sizing: border-box; 
-            background: rgba(0,0,0,0.3); color: white; 
-            font-size: 16px; font-family: 'Nunito', sans-serif; outline: none; transition: all 0.3s;
-        }
-        input:focus { border-color: var(--primary); background: rgba(0,0,0,0.5); box-shadow: 0 0 15px rgba(255, 215, 0, 0.2); }
-        input::placeholder { color: rgba(255,255,255,0.2); }
-
-        .btn-action { 
-            padding: 18px; cursor: pointer; background: var(--primary); 
-            color: #2c1e0f; border: none; font-weight: 900; border-radius: 18px; 
-            width: 100%; margin-top: 10px; font-size: 16px; 
-            box-shadow: 0 8px 20px var(--honey-glow);
-            transition: all 0.2s; font-family: 'Nunito', sans-serif;
-            text-transform: uppercase;
-        }
-        .btn-action:active { transform: scale(0.96); opacity: 0.9; }
-
-        /* --- FIM DO LOBBY --- */
-
-        /* Modais Genéricos (Party, Convite) */
-        .modal-overlay {
-            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: white; border-radius: 25px; padding: 25px; z-index: 600;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3); width: 85%; max-width: 320px; text-align: center;
-        }
-        
-        .modal-title { font-weight: 900; color: var(--text-dark); font-size: 18px; margin-bottom: 15px; text-transform: uppercase; }
-        .modal-btn { 
-            width: 100%; padding: 15px; border-radius: 15px; border: none; 
-            font-weight: 900; cursor: pointer; margin-top: 10px; font-family: 'Nunito', sans-serif;
-        }
-
-        .icon-selector { display: flex; justify-content: center; gap: 10px; margin: 15px 0; }
-        .icon-btn { 
-            width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
-            background: #eee; border-radius: 50%; cursor: pointer; font-size: 20px; transition: all 0.2s;
-        }
-        .icon-btn.selected { background: var(--primary); color: white; transform: scale(1.1); }
-
-        /* PLACEHOLDERS PARA INJEÇÃO JS */
-        #rpg-hud, #ranking-container, #chat-container, #mobile-controls, #chat-toggle-btn {
-            /* Estilos são injetados pelo main.js e input.js */
-        }
-
-        @keyframes pulse { 
-            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(241, 196, 15, 0.7); } 
-            70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(241, 196, 15, 0); } 
-            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(241, 196, 15, 0); } 
-        }
-
-        #btn-skills {
-            display: flex !important;
-            justify-content: center;
-            align-items: center;
-            position: fixed;
-            top: 150px; 
-            left: 10px;
-            width: 45px;
-            height: 45px;
-            background: #8e44ad !important;
-            border: 2px solid white !important;
-            border-radius: 50% !important;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.4) !important;
-            z-index: 9000 !important;
-            font-size: 20px;
-            color: white;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-        #btn-skills:active { transform: scale(0.9); }
-
-        @media (max-width: 600px) {
-            #btn-skills { top: 120px; left: 5px; width: 40px; height: 40px; }
-            #lobby-overlay {
-                background-position: 50% 20%; /* Foca no logo da imagem no mobile */
-            }
-        }
-
-        /* [NOVO] Media Query para Telas Horizontais Pequenas (Landscape Mobile) */
-        @media (max-height: 500px) {
-            #lobby-overlay {
-                padding-top: 10px;
-                padding-bottom: 10px;
-                justify-content: center;
-            }
-            .main-menu-container {
-                gap: 10px; /* Reduz espaço entre botões */
-            }
-            .main-menu-btn {
-                padding: 15px; /* Botões menores */
-                font-size: 14px;
-            }
-            .lobby-modal {
-                padding: 15px;
-                max-height: 90vh; /* Máximo de altura */
-            }
-            .modal-header {
-                font-size: 18px;
-                margin-bottom: 15px;
-            }
-            .input-group { margin-bottom: 10px; }
-            input { padding: 10px; font-size: 14px; }
-        }
-
+        /* --- Toast Messages --- */
         #toast-msg {
             position: fixed; top: 10%; left: 50%; transform: translateX(-50%);
-            background: white; color: var(--text-dark);
-            padding: 12px 25px; border-radius: 30px;
-            font-weight: 800; z-index: 9999;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
-            opacity: 0; transition: opacity 0.3s;
-            pointer-events: none; font-size: 13px;
+            background: var(--primary); color: #000; padding: 12px 30px;
+            border-radius: 30px; font-weight: 900; z-index: 9999;
+            opacity: 0; transition: opacity 0.3s; pointer-events: none;
+        }
+
+        /* Popups de Jogo */
+        .modal-overlay {
+            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: white; border-radius: 20px; padding: 20px; z-index: 8000;
+            width: 80%; max-width: 300px; text-align: center; color: #333;
         }
     </style>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
 
-    <canvas id="gameCanvas" style="display:none;"></canvas>
+    <canvas id="gameCanvas"></canvas>
 
     <div id="suffocation-overlay"></div>
     <div id="day-night-overlay"></div> 
     <div id="toast-msg"></div>
 
-    <div id="faint-screen">
-        <div class="faint-title">Asas Caídas</div>
-        <div class="faint-msg">Suas asas pesam... A colmeia aguarda seu retorno.</div>
-        <div class="faint-hint">Um amigo pode te resgatar com Pólen!</div>
-        <button id="btn-immediate-respawn" class="btn-respawn">Voltar para a Base</button>
+    <div id="rpg-hud" style="display:none;">
+        <div id="hud-info">
+            <span id="hud-name">---</span> <small>LV <span id="hud-lvl">1</span></small>
+        </div>
+        <div class="hud-stat-row">
+            <div class="hud-bar-bg"><div id="bar-hp-fill" class="hud-bar-fill" style="background:var(--danger)"></div></div>
+            <div id="bar-hp-text" class="hud-text">0/0</div>
+        </div>
+        <div class="hud-stat-row">
+            <div class="hud-bar-bg"><div id="bar-xp-fill" class="hud-bar-fill" style="background:#3498db"></div></div>
+            <div id="bar-xp-text" class="hud-text">0/0</div>
+        </div>
+        <div class="hud-stat-row">
+            <div class="hud-bar-bg"><div id="bar-pollen-fill" class="hud-bar-fill" style="background:var(--primary)"></div></div>
+            <div id="bar-pollen-text" class="hud-text">0/0</div>
+        </div>
+    </div>
+
+    <div id="hud-time"></div>
+    <div id="hud-coords" style="display:none"></div>
+
+    <div id="ranking-container" style="display:none;">
+        <div style="font-size:10px; font-weight:900; color:var(--primary); margin-bottom:5px;">RANKING</div>
+        <div id="ranking-list"></div>
+        <div id="ranking-full-list" style="display:none"></div>
+    </div>
+
+    <div id="faint-screen" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:9000; flex-direction:column; align-items:center; justify-content:center; color:white;">
+        <h2 style="color:var(--primary)">ASAS CAÍDAS</h2>
+        <p>Aguarde um resgate ou retorne à base.</p>
+        <button id="btn-immediate-respawn" class="btn-action" style="width:auto; padding:15px 40px;">VOLTAR PARA BASE</button>
     </div>
 
     <div id="lobby-overlay">
-        
-        <div class="main-menu-container" id="main-menu">
-            <h1 style="text-align:center; color:var(--primary); font-weight:900; text-shadow: 0 2px 10px rgba(0,0,0,0.5); margin-bottom:10px;"></h1>
-            
+        <div id="main-menu" class="main-menu-container">
             <button class="main-menu-btn" onclick="openModal('modal-create')">✨ Criar Colmeia</button>
             <button class="main-menu-btn" onclick="openModal('modal-join')">🚀 Entrar na Colmeia</button>
-            <button class="main-menu-btn" onclick="openModal('modal-settings')" style="background: linear-gradient(to bottom, #95a5a6, #7f8c8d); box-shadow: 0 8px 0 #5e6b6b, 0 15px 25px rgba(0,0,0,0.4);">⚙️ Configurações</button>
         </div>
 
         <div id="modal-create" class="lobby-modal">
-            <button class="close-modal-btn" onclick="closeAllModals()">✕</button>
-            <div class="modal-header">Criar Colmeia</div>
-            <div class="input-group">
-                <label class="input-label">Seu Nome 🐝</label>
-                <input type="text" id="host-nickname" placeholder="Ex: RainhaMel" maxlength="12">
-            </div>
-            <div class="input-group">
-                <label class="input-label">Nome do Mundo 🍯</label>
-                <input type="text" id="create-id" placeholder="Ex: BosqueDourado">
-            </div>
-            <div class="input-group">
-                <label class="input-label">Senha (Opcional) 🔒</label>
-                <input type="password" id="create-pass" placeholder="***">
-            </div>
-            <div class="input-group">
-                <label class="input-label">Semente (Seed) 🌱</label>
-                <input type="text" id="world-seed" value="JARDIM_SOLAR">
-            </div>
-            <button id="btn-create" class="btn-action">INICIAR VOO</button>
+            <div class="modal-header">NOVA COLMEIA</div>
+            <input type="text" id="host-nickname" placeholder="Seu Nome">
+            <input type="text" id="create-id" placeholder="ID da Colmeia">
+            <input type="password" id="create-pass" placeholder="Senha (Opcional)">
+            <input type="text" id="world-seed" value="JARDIM_SOLAR" placeholder="Seed do Mundo">
+            <button id="btn-create" class="btn-action">CRIAR</button>
+            <button onclick="closeAllModals()" style="background:none; border:none; color:#777; width:100%; margin-top:10px; cursor:pointer;">VOLTAR</button>
         </div>
 
         <div id="modal-join" class="lobby-modal">
-            <button class="close-modal-btn" onclick="closeAllModals()">✕</button>
-            <div class="modal-header">Entrar na Colmeia</div>
-            <div class="input-group">
-                <label class="input-label">Seu Nome 🐝</label>
-                <input type="text" id="join-nickname" placeholder="Ex: ZangãoExplorador" maxlength="12">
-            </div>
-            <div class="input-group">
-                <label class="input-label">ID da Colmeia Alvo 🎯</label>
-                <input type="text" id="join-id" placeholder="Nome do mundo do amigo">
-            </div>
-            <div class="input-group">
-                <label class="input-label">Senha 🔑</label>
-                <input type="password" id="join-pass" placeholder="Se houver">
-            </div>
-            <button id="btn-join" class="btn-action">JUNTAR-SE AO ENXAME</button>
+            <div class="modal-header">ENTRAR</div>
+            <input type="text" id="join-nickname" placeholder="Seu Nome">
+            <input type="text" id="join-id" placeholder="ID da Colmeia">
+            <input type="password" id="join-pass" placeholder="Senha">
+            <button id="btn-join" class="btn-action">ENTRAR</button>
+            <button onclick="closeAllModals()" style="background:none; border:none; color:#777; width:100%; margin-top:10px; cursor:pointer;">VOLTAR</button>
         </div>
-
-        <div id="modal-settings" class="lobby-modal" style="text-align:center;">
-            <button class="close-modal-btn" onclick="closeAllModals()">✕</button>
-            <div class="modal-header">Configurações</div>
-            <p style="color:#aaa; margin-top:30px;">Em construção pela equipe de engenharia das abelhas. 🔧</p>
-            <div style="font-size:40px; margin-top:20px;">⚙️🐝</div>
-        </div>
-
-        <div class="studio-footer">FUN🍪COOK STUDIO</div>
     </div>
 
-    <div id="rpg-hud">
-        <div id="hud-info">
-            <span id="hud-name">Abelha</span> <small style="opacity:0.7">LV <span id="hud-lvl">1</span></small>
-        </div>
-        <div class="hud-stat-row"><div class="hud-icon">❤️</div><div class="hud-bar-bg"><div id="bar-hp-fill" class="hud-bar-fill" style="background:#ff6b6b; width:100%"></div></div><div id="bar-hp-text" class="hud-text">100</div></div>
-        <div class="hud-stat-row"><div class="hud-icon">💠</div><div class="hud-bar-bg"><div id="bar-xp-fill" class="hud-bar-fill" style="background:#4dabf7; width:0%"></div></div><div id="bar-xp-text" class="hud-text">0</div></div>
-        <div class="hud-stat-row"><div class="hud-icon">🌻</div><div class="hud-bar-bg"><div id="bar-pollen-fill" class="hud-bar-fill" style="background:#ffd43b; width:0%"></div></div><div id="bar-pollen-text" class="hud-text">0</div></div>
-        <div id="hud-time" style="display:none"></div> <div id="hud-coords" style="display:none"></div>
+    <button id="chat-toggle-btn" style="display:none;">💬</button>
+    <div id="chat-container"></div>
+
+    <div id="player-modal" class="modal-overlay">
+        <div id="modal-player-name" style="font-weight:900;">---</div>
+        <div id="modal-player-info">LV 1</div>
+        <button id="btn-party-action" class="btn-action">CONVIDAR</button>
+        <button id="btn-whisper-action" class="btn-action" style="background:#3498db">COCHICHAR</button>
+        <button onclick="document.getElementById('player-modal').style.display='none'">FECHAR</button>
     </div>
 
-    <div id="ranking-container">
-        <div style="font-weight:bold; margin-bottom:5px; font-size:10px; text-transform:uppercase; color:#aaa">Top Curadores</div>
-        <div id="ranking-list"></div>
-    </div>
-
-    <button id="chat-toggle-btn">💬</button>
-    <div id="chat-container"></div> <div id="player-modal" class="modal-overlay">
-        <div id="modal-player-name" class="modal-title">---</div>
-        <div id="modal-player-info" style="color:#666; margin-bottom:20px;">Nível: 1</div>
-        <button id="btn-party-action" class="modal-btn" style="background:var(--primary); color:white">CONVIDAR</button>
-        <button id="btn-whisper-action" class="modal-btn" style="background:#3498db; color:white">COCHICHAR</button>
-        <button class="modal-btn" style="background:#f0f0f0; color:#555" onclick="closePlayerModal()">FECHAR</button>
-    </div>
-
-    <div id="party-create-modal" class="modal-overlay">
-        <div class="modal-title">Novo Esquadrão</div>
-        <input type="text" id="party-name-input" placeholder="NOME (EX: ALFA)" maxlength="5" style="text-align:center; font-weight:bold; letter-spacing:2px; text-transform:uppercase;">
-        <div class="icon-selector">
-            <div class="icon-btn selected" onclick="selectPartyIcon(this)">🛡️</div>
-            <div class="icon-btn" onclick="selectPartyIcon(this)">⚔️</div>
-            <div class="icon-btn" onclick="selectPartyIcon(this)">🌿</div>
-            <div class="icon-btn" onclick="selectPartyIcon(this)">🐝</div>
-        </div>
-        <button id="btn-confirm-party-create" class="modal-btn" style="background:var(--accent-green); color:white">CRIAR</button>
-        <button class="modal-btn" style="background:#f0f0f0; color:#555" onclick="closePartyCreateModal()">VOLTAR</button>
-    </div>
-
-    <div id="party-invite-popup" class="modal-overlay" style="top:100px;">
-        <div class="modal-title" style="color:var(--accent-green)">Convite Recebido!</div>
-        <div id="invite-msg" style="margin-bottom:5px; font-weight:bold;"></div>
-        <div id="invite-party-details" style="color:#666; font-size:12px; margin-bottom:20px;"></div>
-        <div style="display:flex; gap:10px;">
-            <button id="btn-accept-invite" class="modal-btn" style="background:var(--accent-green); color:white; margin:0">ACEITAR</button>
-            <button class="modal-btn" style="background:#e74c3c; color:white; margin:0" onclick="closeInvitePopup()">RECUSAR</button>
-        </div>
+    <div id="party-invite-popup" class="modal-overlay">
+        <div class="modal-header" style="color:var(--accent-green)">CONVITE!</div>
+        <div id="invite-msg"></div>
+        <button id="btn-accept-invite" class="btn-action">ACEITAR</button>
+        <button onclick="document.getElementById('party-invite-popup').style.display='none'">RECUSAR</button>
     </div>
 
     <script>
-        // --- Lógica do Novo Menu Inicial ---
-        function openModal(modalId) {
-            // Fecha qualquer modal aberto
-            closeAllModals();
-            // Esconde o menu principal
+        function openModal(id) {
             document.getElementById('main-menu').style.display = 'none';
-            // Mostra o modal desejado com um pequeno delay para animação
-            setTimeout(() => {
-                document.getElementById(modalId).classList.add('active');
-            }, 50);
+            document.getElementById(id).classList.add('active');
         }
-
         function closeAllModals() {
-            // Remove a classe active de todos os modais do lobby
-            document.querySelectorAll('.lobby-modal').forEach(modal => {
-                modal.classList.remove('active');
-            });
-            // Mostra o menu principal de volta
+            document.querySelectorAll('.lobby-modal').forEach(m => m.classList.remove('active'));
             document.getElementById('main-menu').style.display = 'flex';
         }
-
-        // --- Funções de UI Auxiliares Existentes ---
-        function closePlayerModal() { document.getElementById('player-modal').style.display = 'none'; }
-        function closeInvitePopup() { document.getElementById('party-invite-popup').style.display = 'none'; }
-        function closePartyCreateModal() { document.getElementById('party-create-modal').style.display = 'none'; }
-        function selectPartyIcon(el) {
-            document.querySelectorAll('.icon-btn').forEach(b => b.classList.remove('selected'));
-            el.classList.add('selected');
-        }
-
-        // Fullscreen Helper
-        window.requestGameFullscreen = function() {
-            const doc = window.document;
-            const docEl = doc.documentElement;
-            const requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
-            if (requestFullScreen) requestFullScreen.call(docEl).catch(e => {});
-        };
-
-        // Bloqueio de Zoom/Scroll no Mobile
-        document.addEventListener('touchstart', function(e) {
-            if (e.touches.length > 1) e.preventDefault();
-        }, { passive: false });
-        
-        document.addEventListener('gesturestart', function(e) {
-            e.preventDefault();
-        });
     </script>
     <script type="module" src="src/main.js"></script>
 </body>
