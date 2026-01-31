@@ -71,89 +71,92 @@
             
             /* Background Image Logic */
             background-image: url('assets/background_lobby.png');
-            background-position: center center;
+            background-position: center 30%; /* Ajustado para mostrar o topo no mobile */
             background-repeat: no-repeat;
             background-size: cover;
             
-            /* Layout Layout */
+            /* Layout */
             display: flex; 
             flex-direction: column;
             align-items: center; 
-            justify-content: flex-end; /* Joga o card para baixo */
-            padding-bottom: 80px;
+            justify-content: flex-end; /* Card na base para não cobrir o título da imagem */
+            padding-bottom: 5vh;
         }
 
-        /* Overlay escuro para melhorar leitura sobre a imagem */
+        /* Overlay escuro progressivo */
         #lobby-overlay::before {
             content: "";
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(to bottom, transparent 50%, rgba(0,0,0,0.8) 100%);
+            background: linear-gradient(to bottom, transparent 20%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.8) 100%);
             z-index: -1;
             pointer-events: none;
         }
         
         .lobby-card { 
-            background: rgba(0, 0, 0, 0.75); /* Fundo Escuro Transparente */
-            border: 1px solid var(--primary);
-            backdrop-filter: blur(10px); /* Efeito de vidro */
-            border-radius: 30px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.5); 
-            width: 90%; max-width: 400px; overflow: hidden;
+            background: rgba(15, 15, 15, 0.7); /* Mais transparente para ver o fundo */
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            backdrop-filter: blur(12px); /* Blur mais forte */
+            border-radius: 25px;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.6); 
+            width: 85%; max-width: 380px; overflow: hidden;
             animation: cardPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
             color: white;
+            margin-bottom: 20px;
         }
 
-        @keyframes cardPop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes cardPop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
-        /* Oculta o header de texto pois a imagem já tem o logo */
         .lobby-header { display: none; }
-        .studio-footer { display: none; }
+        .studio-footer { 
+            position: absolute; bottom: 10px; width: 100%;
+            text-align: center; color: rgba(255,255,255,0.4); 
+            font-size: 10px; letter-spacing: 3px; font-weight: 900;
+        }
 
-        .tabs { display: flex; padding: 10px; gap: 10px; justify-content: center; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .tabs { display: flex; padding: 8px; gap: 8px; justify-content: center; }
         .tab-btn {
-            flex: 1; padding: 12px; cursor: pointer;
-            background: rgba(255,255,255,0.1); color: #ccc; border: none;
-            font-weight: 800; border-radius: 15px;
-            font-size: 14px; transition: all 0.3s;
+            flex: 1; padding: 10px; cursor: pointer;
+            background: rgba(255,255,255,0.05); color: #888; border: none;
+            font-weight: 800; border-radius: 12px;
+            font-size: 13px; transition: all 0.3s;
             font-family: 'Nunito', sans-serif;
         }
         .tab-btn.active { 
             background: var(--primary); color: #000;
-            box-shadow: 0 0 15px var(--honey-glow);
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
         }
 
-        .tab-content { display: none; padding: 25px; animation: slideUp 0.4s ease-out; }
+        .tab-content { display: none; padding: 20px; animation: slideUp 0.4s ease-out; }
         .tab-content.active { display: block; }
         
         @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         
-        .input-group { margin-bottom: 20px; }
-        .input-label { display: block; color: var(--primary); font-size: 12px; margin-bottom: 5px; font-weight: 800; text-transform: uppercase; }
+        .input-group { margin-bottom: 15px; }
+        .input-label { display: block; color: var(--primary); font-size: 11px; margin-bottom: 4px; font-weight: 800; text-transform: uppercase; opacity: 0.9; }
         
         input { 
-            padding: 15px; border-radius: 15px; 
-            border: 1px solid rgba(255,255,255,0.2); 
+            padding: 12px; border-radius: 12px; 
+            border: 1px solid rgba(255,255,255,0.15); 
             width: 100%; box-sizing: border-box; 
-            background: rgba(0,0,0,0.3); color: white; 
-            font-size: 16px; font-family: 'Nunito', sans-serif; outline: none; transition: border 0.3s;
-            -webkit-appearance: none;
+            background: rgba(0,0,0,0.4); color: white; 
+            font-size: 15px; font-family: 'Nunito', sans-serif; outline: none; transition: all 0.3s;
         }
-        input:focus { border-color: var(--primary); background: rgba(0,0,0,0.5); }
-        input::placeholder { color: rgba(255,255,255,0.3); }
+        input:focus { border-color: var(--primary); background: rgba(0,0,0,0.6); box-shadow: 0 0 10px rgba(255, 215, 0, 0.1); }
+        input::placeholder { color: rgba(255,255,255,0.2); }
 
         .btn-action { 
-            padding: 18px; cursor: pointer; background: var(--primary); 
-            color: #000; border: none; font-weight: 900; border-radius: 18px; 
-            width: 100%; margin-top: 10px; font-size: 16px; 
-            box-shadow: 0 8px 20px var(--honey-glow);
-            transition: transform 0.2s; font-family: 'Nunito', sans-serif;
+            padding: 15px; cursor: pointer; background: var(--primary); 
+            color: #000; border: none; font-weight: 900; border-radius: 15px; 
+            width: 100%; margin-top: 5px; font-size: 15px; 
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            transition: all 0.2s; font-family: 'Nunito', sans-serif;
+            text-transform: uppercase;
         }
-        .btn-action:active { transform: scale(0.98); }
+        .btn-action:active { transform: scale(0.96); opacity: 0.9; }
 
         /* --- FIM DO LOBBY --- */
 
-        /* Modais Genéricos (Party, Convite) */
         .modal-overlay {
             display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             background: white; border-radius: 25px; padding: 25px; z-index: 600;
@@ -173,12 +176,6 @@
         }
         .icon-btn.selected { background: var(--primary); color: white; transform: scale(1.1); }
 
-        /* PLACEHOLDERS PARA INJEÇÃO JS */
-        #rpg-hud, #ranking-container, #chat-container, #mobile-controls, #chat-toggle-btn {
-            /* Estilos são injetados pelo main.js e input.js */
-        }
-
-        /* [NOVO] Estilos para o Botão de Skill e Animação */
         @keyframes pulse { 
             0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(241, 196, 15, 0.7); } 
             70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(241, 196, 15, 0); } 
@@ -208,15 +205,13 @@
 
         @media (max-width: 600px) {
             #btn-skills { top: 120px; left: 5px; width: 40px; height: 40px; }
-            
-            /* Ajuste Mobile para o Lobby */
             #lobby-overlay {
-                background-position: center top; /* Prioriza o céu/titulo no mobile */
-                padding-bottom: 120px; /* Sobe os inputs para não ficar na borda */
+                background-position: 50% 20%; /* Foca no logo da imagem no mobile */
+                padding-bottom: 30px; 
             }
+            .lobby-card { width: 90%; }
         }
 
-        /* Notificação Toast */
         #toast-msg {
             position: fixed; top: 10%; left: 50%; transform: translateX(-50%);
             background: white; color: var(--text-dark);
@@ -340,7 +335,6 @@
     </div>
 
     <script>
-        // Funções de UI Auxiliares
         function openTab(t) {
             document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(e => e.classList.remove('active'));
@@ -355,7 +349,6 @@
             el.classList.add('selected');
         }
 
-        // Fullscreen Helper
         window.requestGameFullscreen = function() {
             const doc = window.document;
             const docEl = doc.documentElement;
@@ -363,7 +356,6 @@
             if (requestFullScreen) requestFullScreen.call(docEl).catch(e => {});
         };
 
-        // Bloqueio de Zoom/Scroll no Mobile
         document.addEventListener('touchstart', function(e) {
             if (e.touches.length > 1) e.preventDefault();
         }, { passive: false });
