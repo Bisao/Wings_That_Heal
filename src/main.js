@@ -13,6 +13,11 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const net = new NetworkManager();
 const input = new InputHandler(); 
+// [CORREÇÃO] Força o joystick a começar oculto caso o InputHandler o mostre por padrão
+if (input.isMobile && typeof input.hideJoystick === 'function') {
+    input.hideJoystick();
+}
+
 const worldState = new WorldState();
 const saveSystem = new SaveSystem();
 const chat = new ChatSystem();
@@ -148,7 +153,7 @@ function injectGameStyles() {
             
             /* Imagem de Fundo */
             background-image: url('assets/background_lobby.png');
-            background-position: center 30%; /* Ajuste para não cortar o topo no Desktop */
+            background-position: center 30%; 
             background-repeat: no-repeat;
             background-size: cover;
             
@@ -156,8 +161,8 @@ function injectGameStyles() {
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: flex-end; /* Card na parte inferior */
-            padding-bottom: 5vh;
+            justify-content: center;
+            padding-bottom: 0;
         }
 
         /* Overlay escuro */
@@ -170,39 +175,72 @@ function injectGameStyles() {
             pointer-events: none;
         }
 
-        /* Card com efeito Glassmorphism */
-        .lobby-card {
-            background: rgba(15, 15, 15, 0.7) !important;
-            border: 1px solid rgba(255, 215, 0, 0.3);
-            backdrop-filter: blur(12px);
-            border-radius: 25px;
-            box-shadow: 0 15px 50px rgba(0,0,0,0.6);
-            width: 85%; max-width: 380px; 
-            overflow: hidden;
-            color: white;
-            margin-bottom: 20px;
+        /* --- ATUALIZAÇÃO: ESTILOS PARA MODAIS E MENUS --- */
+        
+        /* Container dos Botões Principais */
+        .main-menu-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 90%;
+            max-width: 350px;
         }
 
-        /* Esconde elementos de texto que colidem com a arte */
-        .lobby-header, .studio-footer { display: none; }
+        .main-menu-btn {
+            padding: 25px;
+            font-size: 18px;
+            font-weight: 900;
+            text-transform: uppercase;
+            color: #2c1e0f;
+            background: linear-gradient(to bottom, #FFD700, #F39C12);
+            border: 3px solid #fff;
+            border-radius: 25px;
+            cursor: pointer;
+            box-shadow: 0 8px 0 #c77d00, 0 15px 25px rgba(0,0,0,0.4);
+            font-family: 'Nunito', sans-serif;
+            text-shadow: 1px 1px 0 rgba(255,255,255,0.4);
+        }
 
-        .lobby-card input {
+        /* Modal Genérico (Substitui o antigo card) */
+        .lobby-modal {
+            background: rgba(15, 15, 15, 0.9) !important;
+            border: 2px solid var(--primary);
+            backdrop-filter: blur(15px);
+            border-radius: 25px;
+            box-shadow: 0 30px 80px rgba(0,0,0,0.8), inset 0 0 30px rgba(255, 215, 0, 0.1);
+            width: 90%; max-width: 400px; 
+            
+            /* CORREÇÃO PARA MOBILE HORIZONTAL */
+            max-height: 85vh;
+            overflow-y: auto;
+            
+            padding: 25px;
+            color: white;
+            display: none; /* Controlado pelo HTML/JS */
+        }
+        
+        .lobby-modal.active { display: block; }
+
+        .lobby-modal input {
             background: rgba(0,0,0,0.4) !important;
             border: 1px solid rgba(255,255,255,0.15) !important;
             color: white !important;
             border-radius: 12px;
+            padding: 15px;
         }
-        .lobby-card input:focus {
+        .lobby-modal input:focus {
             background: rgba(0,0,0,0.6) !important;
             border-color: var(--primary) !important;
         }
 
-        .lobby-card button.btn-action {
+        .lobby-modal button.btn-action {
             background: var(--primary) !important;
-            color: #000 !important;
+            color: #2c1e0f !important;
             font-weight: 900;
             text-transform: uppercase;
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            padding: 18px;
+            border-radius: 18px;
         }
 
         /* --- HUD E GAMEPLAY --- */
@@ -353,9 +391,7 @@ function injectGameStyles() {
             /* Ajuste de background para telas verticais (Mobile) */
             #lobby-overlay {
                 background-position: 50% 20%; /* Foca no logo/céu no mobile */
-                padding-bottom: 30px; 
             }
-            .lobby-card { width: 90%; }
         }
     `;
     document.head.appendChild(style);
@@ -777,6 +813,9 @@ function updateRanking() {
 
 function startGame(seed, id, nick) {
     injectGameStyles();
+    
+    // [CORREÇÃO] Garante que joystick não apareça no loading screen
+    if (typeof input.hideJoystick === 'function') input.hideJoystick();
 
     let loader = document.getElementById('loading-screen');
     if (!loader) {
@@ -883,7 +922,12 @@ function startGame(seed, id, nick) {
         chatBtn.style.display = 'flex'; 
         
         canvas.style.display = 'block';
-        input.showJoystick(); 
+        
+        // [CORREÇÃO] Só mostra joystick se for mobile e após o loading
+        if (input.isMobile && typeof input.showJoystick === 'function') {
+            input.showJoystick(); 
+        }
+        
         resize(); 
     }, 15000);
 }
