@@ -12,38 +12,6 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     
     <link rel="stylesheet" href="css/style.css">
-
-    <style>
-        /* Variáveis de segurança caso o style.css falhe ou esteja incompleto */
-        :root {
-            --primary: #FFD700;
-            --primary-dark: #F39C12;
-            --accent-green: #2ecc71;
-            --danger: #e74c3c;
-        }
-
-        /* Garantia de que elementos críticos não quebrem o layout antes do JS */
-        #faint-screen {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.9);
-            z-index: 9000;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            color: white;
-        }
-
-        .lobby-modal {
-            display: none; /* Controlado pelas funções openModal/closeAllModals */
-        }
-        
-        .lobby-modal.active {
-            display: block;
-        }
-    </style>
 </head>
 <body>
 
@@ -61,7 +29,7 @@
         <div class="hud-stat-row">
             <span style="font-size:12px;">❤️</span>
             <div class="hud-bar-bg">
-                <div id="bar-hp-fill" class="hud-bar-fill" style="background:var(--danger); width: 0%;"></div>
+                <div id="bar-hp-fill" class="hud-bar-fill"></div>
             </div>
             <div id="bar-hp-text" class="hud-text">0/0</div>
         </div>
@@ -69,7 +37,7 @@
         <div class="hud-stat-row">
             <span style="font-size:12px;">💠</span>
             <div class="hud-bar-bg">
-                <div id="bar-xp-fill" class="hud-bar-fill" style="background:#3498db; width: 0%;"></div>
+                <div id="bar-xp-fill" class="hud-bar-fill"></div>
             </div>
             <div id="bar-xp-text" class="hud-text">0/0</div>
         </div>
@@ -77,7 +45,7 @@
         <div class="hud-stat-row">
             <span style="font-size:12px;">🌻</span>
             <div class="hud-bar-bg">
-                <div id="bar-pollen-fill" class="hud-bar-fill" style="background:var(--primary); width: 0%;"></div>
+                <div id="bar-pollen-fill" class="hud-bar-fill"></div>
             </div>
             <div id="bar-pollen-text" class="hud-text">0/0</div>
         </div>
@@ -92,7 +60,7 @@
         <div id="ranking-full-list" style="display:none"></div>
     </div>
 
-    <div id="faint-screen">
+    <div id="faint-screen" style="display:none;">
         <h2 style="color:var(--primary); font-size:28px; margin-bottom:10px;">ASAS CAÍDAS</h2>
         <p style="opacity:0.8; margin-bottom:30px;">Suas asas pesam... A colmeia aguarda.</p>
         <button id="btn-immediate-respawn" class="btn-action" style="background:transparent; border:2px solid var(--primary); color:var(--primary); width:auto; padding:10px 30px;">VOLTAR PARA BASE</button>
@@ -142,7 +110,7 @@
     <div id="chat-container"></div>
 
     <div id="player-modal" class="modal-overlay">
-        <div id="modal-player-name" style="font-weight:900; font-size:20px; margin-bottom:5px; color:var(--primary-dark)">---</div>
+        <div id="modal-player-name" style="font-weight:900; font-size:20px; margin-bottom:5px;">---</div>
         <div id="modal-player-info" style="color:#666; margin-bottom:20px;">LV 1</div>
         <button id="btn-party-action" class="btn-action" style="margin-top:5px;">CONVIDAR</button>
         <button id="btn-whisper-action" class="btn-action" style="background:#3498db; margin-top:10px;">COCHICHAR</button>
@@ -155,7 +123,7 @@
         <div id="invite-party-details" style="font-size:12px; color:#666; margin-bottom:15px;"></div>
         <div style="display:flex; gap:10px;">
             <button id="btn-accept-invite" class="btn-action" style="background:var(--accent-green); margin-top:0;">ACEITAR</button>
-            <button onclick="document.getElementById('party-invite-popup').style.display='none'" class="btn-action" style="background:var(--accent-green); margin-top:0; background-color: var(--danger) !important;">RECUSAR</button>
+            <button id="btn-decline-invite" onclick="document.getElementById('party-invite-popup').style.display='none'" class="btn-action" style="background:var(--danger); margin-top:0;">RECUSAR</button>
         </div>
     </div>
 
@@ -169,20 +137,13 @@
     </div>
 
     <script>
-        /**
-         * Abre um modal específico e esconde o menu principal
-         */
         function openModal(id) {
             const menu = document.getElementById('main-menu');
             if (menu) menu.style.display = 'none';
-            
             const modal = document.getElementById(id);
             if (modal) modal.classList.add('active');
         }
 
-        /**
-         * Fecha todos os modais e retorna ao menu principal
-         */
         function closeAllModals() {
             document.querySelectorAll('.lobby-modal').forEach(m => {
                 m.classList.remove('active');
@@ -191,7 +152,6 @@
             if (menu) menu.style.display = 'flex';
         }
 
-        // Prevenção de comportamentos padrão do navegador que atrapalham o jogo
         window.addEventListener('keydown', function(e) {
             if(e.code === 'Space' && e.target === document.body) {
                 e.preventDefault();
