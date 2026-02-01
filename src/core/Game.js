@@ -62,8 +62,12 @@ export class Game {
         this.RESCUE_POLLEN_COST = 20;
 
         // Assets
-        this.assets = { flower: new Image() };
+        this.assets = { 
+            flower: new Image(),
+            tree: new Image() // Nova imagem da Árvore Sakura
+        };
         this.assets.flower.src = 'assets/Flower.png';
+        this.assets.tree.src = 'assets/tree_base.png'; // Sprite da Sakura queimada
 
         // Configura Joystick Mobile
         if (this.input.isMobile && typeof this.input.hideJoystick === 'function') {
@@ -288,6 +292,15 @@ export class Game {
         this.checkRescue();
         this.checkEnvironmentDamage(gx, gy, moving);
 
+        // Lógica de Partículas Sakura na Base
+        if (this.localPlayer.homeBase && this.localPlayer.tilesCured >= 400) {
+            if (Math.random() < 0.05) {
+                 const bx = this.localPlayer.homeBase.x + (Math.random() * 4 - 2);
+                 const by = this.localPlayer.homeBase.y - (Math.random() * 3);
+                 this.particles.spawnSakuraPetal(bx, by);
+            }
+        }
+
         this.camera = { x: this.localPlayer.pos.x, y: this.localPlayer.pos.y };
     }
 
@@ -302,7 +315,12 @@ export class Game {
         const cY = Math.floor(this.localPlayer.pos.y / this.world.chunkSize);
         const range = this.zoomLevel < 0.8 ? 2 : 1;
 
-        // Desenha Terreno
+        // 1. Desenha a Árvore de Sakura na Base antes do resto
+        if (this.localPlayer.homeBase) {
+            this.drawHomeTree(this.ctx, rTileSize);
+        }
+
+        // 2. Desenha Terreno
         for(let x=-range; x<=range; x++) for(let y=-range; y<=range; y++) {
             this.world.getChunk(cX+x, cY+y).forEach(t => {
                 const sX = (t.x - this.camera.x)*rTileSize + this.canvas.width/2;
@@ -313,8 +331,13 @@ export class Game {
                     
                     if (type === 'TERRA_QUEIMADA' && Math.random() < 0.015) this.particles.spawnSmoke(t.x, t.y);
                     
-                    this.ctx.fillStyle = (type === 'COLMEIA') ? '#f1c40f' : (['GRAMA','GRAMA_SAFE','BROTO','MUDA','FLOR', 'FLOR_COOLDOWN'].includes(type) ? '#2ecc71' : '#34495e');
-                    this.ctx.fillRect(sX, sY, rTileSize + 1, rTileSize + 1);
+                    // Não desenha cor sólida se for o tile exato da colmeia (para não sobrepor a imagem da árvore)
+                    const isBaseTile = this.localPlayer.homeBase && Math.round(t.x) === Math.round(this.localPlayer.homeBase.x) && Math.round(t.y) === Math.round(this.localPlayer.homeBase.y);
+                    
+                    if (!isBaseTile || type !== 'COLMEIA') {
+                        this.ctx.fillStyle = (type === 'COLMEIA') ? '#f1c40f' : (['GRAMA','GRAMA_SAFE','BROTO','MUDA','FLOR', 'FLOR_COOLDOWN'].includes(type) ? '#2ecc71' : '#34495e');
+                        this.ctx.fillRect(sX, sY, rTileSize + 1, rTileSize + 1);
+                    }
                     
                     if (type === 'BROTO') { this.ctx.fillStyle = '#006400'; const sz = 12*this.zoomLevel; this.ctx.fillRect(sX+(rTileSize-sz)/2, sY+(rTileSize-sz)/2, sz, sz); }
                     else if (type === 'MUDA') { this.ctx.fillStyle = '#228B22'; const sz = 20*this.zoomLevel; this.ctx.fillRect(sX+(rTileSize-sz)/2, sY+(rTileSize-sz)/2, sz, sz); }
@@ -348,6 +371,39 @@ export class Game {
             const ay = this.canvas.height/2 + Math.sin(angle)*orbit;
             this.ctx.save(); this.ctx.translate(ax, ay); this.ctx.rotate(angle); this.ctx.fillStyle = "#f1c40f"; this.ctx.strokeStyle = "black"; this.ctx.lineWidth = 2; this.ctx.beginPath(); this.ctx.moveTo(0,0); this.ctx.lineTo(-10*this.zoomLevel, -5*this.zoomLevel); this.ctx.lineTo(-10*this.zoomLevel, 5*this.zoomLevel); this.ctx.closePath(); this.ctx.fill(); this.ctx.stroke(); this.ctx.restore();
         }
+    }
+
+    // --- MÉTODOS DE RENDERIZAÇÃO ESPECIAL ---
+
+    drawHomeTree(ctx, rTileSize) {
+        const pos = this.localPlayer.homeBase;
+        const sX = (pos.x - this.camera.x) * rTileSize + this.canvas.width / 2;
+        const sY = (pos.y - this.camera.y) * rTileSize + this.canvas.height / 2;
+
+        ctx.save();
+        
+        // Progresso de cura: 0 (queimada) a 1 (totalmente Sakura)
+        // Meta de 500 tiles curados para a árvore estar completa
+        const progress = Math.min(this.localPlayer.tilesCured / 500, 1);
+        
+        // Filtros dinâmicos: Grayscale diminui e Brilho aumenta com a cura
+        const gray = 100 - (progress * 100);
+        const bright = 0.7 + (progress * 0.3);
+        const saturation = 0.5 + (progress * 1.0);
+        
+        ctx.filter = `grayscale(${gray}%) brightness(${bright}) saturate(${saturation})`;
+
+        // Desenha a árvore (Sprite 128x128 ocupando 4x4 tiles)
+        // Centraliza a base do tronco no tile da colmeia
+        ctx.drawImage(
+            this.assets.tree,
+            sX - (rTileSize * 1.5), // Desloca para centralizar o tronco
+            sY - (rTileSize * 3.2), // Desloca para a colmeia ficar no chão
+            rTileSize * 4,
+            rTileSize * 4
+        );
+
+        ctx.restore();
     }
 
     // --- MÉTODOS AUXILIARES ---
@@ -622,21 +678,16 @@ export class Game {
     }
 
     setupPartyEvents() {
-        // Lógica de Party UI movida para métodos da classe ou mantida aqui simplificada
-        // (Por brevidade, mantive a lógica de click listener do DOM aqui, mas acessando this.partyMembers)
         window.addEventListener('playerClicked', e => {
             const targetNick = e.detail;
             let targetId = Object.keys(this.remotePlayers).find(id => this.remotePlayers[id].nickname === targetNick);
             if (targetId) {
-                this.selectedPlayerId = targetId; // Salvo em this
-                // ... lógica de abrir modal (pode ficar no UIManager ou aqui)
-                // Acesso via this.chat, this.remotePlayers etc.
+                this.selectedPlayerId = targetId; 
                 const p = this.remotePlayers[targetId];
                 document.getElementById('modal-player-name').innerText = p.nickname;
                 document.getElementById('modal-player-info').innerText = `Nível: ${p.level || 1}`;
                 document.getElementById('player-modal').style.display = 'block';
                 
-                // Configura botões dinamicamente
                 const btnWhisper = document.getElementById('btn-whisper-action') || document.createElement('button');
                 btnWhisper.id = 'btn-whisper-action'; btnWhisper.innerText = "COCHICHAR"; btnWhisper.className = 'modal-btn';
                 if(!btnWhisper.parentNode) document.getElementById('player-modal').appendChild(btnWhisper);
@@ -665,7 +716,7 @@ export class Game {
         
         document.getElementById('btn-confirm-party-create').onclick = () => {
             const pName = document.getElementById('party-name-input').value.toUpperCase().trim() || "ALFA";
-            const pIcon = "🛡️"; // Simplificado
+            const pIcon = "🛡️"; 
             this.localPartyName = pName; this.localPartyIcon = pIcon;
             this.partyMembers = [this.localPlayer.id];
             if (this.selectedPlayerId) {
