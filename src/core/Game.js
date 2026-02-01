@@ -5,10 +5,10 @@ import { Player } from '../entities/player.js';
 import { InputHandler } from './input.js';
 import { SaveSystem } from './saveSystem.js';
 import { ChatSystem } from './chatSystem.js';
-import { SkillTree } from '../player/skillTree.js'; 
-import { Ant } from '../entities/ant.js'; 
-import { Projectile } from '../entities/projectile.js'; 
-import { WaveEffect } from '../entities/WaveEffect.js'; 
+import { SkillTree } from '../player/skillTree.js';
+import { Ant } from '../entities/ant.js';
+import { Projectile } from '../entities/projectile.js';
+import { WaveEffect } from '../entities/WaveEffect.js';
 import { ParticleSystem } from '../utils/ParticleSystem.js';
 import { UIManager } from './UIManager.js';
 import { HostSimulation } from './HostSimulation.js';
@@ -144,10 +144,11 @@ export class Game {
         this.chat.addMessage('SYSTEM', null, `Abelha ${nick} pronta para o voo!`);
 
         // Botão de Skill
-        const skillBtn = document.createElement('button');
-        skillBtn.id = 'btn-skills'; skillBtn.innerText = '⚡'; 
+        const skillBtn = document.getElementById('btn-skills') || document.createElement('button');
+        skillBtn.id = 'btn-skills'; 
+        skillBtn.innerText = '⚡'; 
         skillBtn.onclick = () => this.localPlayer.skillTree.toggle(); 
-        document.body.appendChild(skillBtn);
+        if (!document.getElementById('btn-skills')) document.body.appendChild(skillBtn);
 
         // Inicia Loop e Simulação
         this.ui.updateHUD(this.localPlayer);
@@ -181,7 +182,7 @@ export class Game {
             this.canvas.style.display = 'block';
             if (this.input.isMobile && typeof this.input.showJoystick === 'function') this.input.showJoystick(); 
             this.resize(); 
-        }, 3000); // Reduzi para 3s para teste rápido, original era 15s
+        }, 3000); 
     }
 
     loop() {
