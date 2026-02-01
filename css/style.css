@@ -1,175 +1,395 @@
-<style>
-        :root {
-            --primary: #FFD700;       /* Amarelo Mel */
-            --primary-dark: #F39C12;
-            --accent-green: #2ecc71;  /* Verde Vida */
-            --danger: #e74c3c;        /* Vermelho Alerta */
-            --bg-dark: #1a1a1a;
-            --glass: rgba(0, 0, 0, 0.6);
-            --glass-border: rgba(255, 255, 255, 0.1);
-        }
+:root {
+    --primary: #FFD700;       /* Amarelo Mel */
+    --primary-dark: #F39C12;
+    --accent-green: #2ecc71;  /* Verde Vida */
+    --danger: #e74c3c;        /* Vermelho Alerta */
+    --bg-dark: #1a1a1a;
+    --glass: rgba(0, 0, 0, 0.6);
+    --glass-border: rgba(255, 255, 255, 0.1);
+}
 
-        body { 
-            margin: 0; overflow: hidden; background: var(--bg-dark); 
-            font-family: 'Nunito', sans-serif; 
-            touch-action: none; user-select: none; -webkit-user-select: none;
-            width: 100vw; height: 100vh;
-        }
+body { 
+    margin: 0; 
+    overflow: hidden; 
+    background: var(--bg-dark); 
+    font-family: 'Nunito', sans-serif; 
+    touch-action: none; 
+    user-select: none; 
+    -webkit-user-select: none;
+    width: 100vw; 
+    height: 100vh;
+}
 
-        canvas { display: block; }
+canvas { 
+    display: block; 
+}
 
-        /* --- Overlays de Ambiente (Visual) --- */
-        #suffocation-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: radial-gradient(circle, transparent 40%, #000 150%);
-            pointer-events: none; z-index: 100; opacity: 0; transition: opacity 0.5s;
-        }
+/* --- Overlays de Ambiente (Visual) --- */
+#suffocation-overlay {
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%;
+    background: radial-gradient(circle, transparent 40%, #000 150%);
+    pointer-events: none; 
+    z-index: 100; 
+    opacity: 0; 
+    transition: opacity 0.5s;
+}
 
-        #day-night-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: #000022; pointer-events: none; z-index: 50; 
-            opacity: 0; transition: opacity 1s linear;
-        }
+#day-night-overlay {
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%;
+    background-color: #000022; 
+    pointer-events: none; 
+    z-index: 50; 
+    opacity: 0; 
+    transition: opacity 1s linear;
+}
 
-        /* --- HUD (Interface de Jogo) --- */
-        #rpg-hud {
-            position: fixed; top: 15px; left: 15px; z-index: 1000;
-            display: flex; flex-direction: column; gap: 8px; pointer-events: none;
-        }
+/* --- HUD (Interface de Jogo) --- */
+#rpg-hud {
+    position: fixed; 
+    top: 15px; 
+    left: 15px; 
+    z-index: 1000;
+    display: flex; 
+    flex-direction: column; 
+    gap: 8px; 
+    pointer-events: none;
+}
 
-        #hud-info {
-            background: var(--glass); padding: 8px 15px; border-radius: 20px;
-            color: white; border-left: 4px solid var(--primary); backdrop-filter: blur(5px);
-            font-weight: 900; text-transform: uppercase; font-size: 14px;
-            text-shadow: 1px 1px 2px black;
-        }
+#hud-info {
+    background: var(--glass); 
+    padding: 8px 15px; 
+    border-radius: 20px;
+    color: white; 
+    border-left: 4px solid var(--primary); 
+    backdrop-filter: blur(5px);
+    font-weight: 900; 
+    text-transform: uppercase; 
+    font-size: 14px;
+    text-shadow: 1px 1px 2px black;
+}
 
-        .hud-stat-row {
-            display: flex; align-items: center; gap: 10px; width: 200px;
-            background: rgba(0,0,0,0.6); padding: 5px 10px; border-radius: 12px;
-            border: 1px solid var(--glass-border);
-        }
+.hud-stat-row {
+    display: flex; 
+    align-items: center; 
+    gap: 10px; 
+    width: 200px;
+    background: rgba(0,0,0,0.6); 
+    padding: 5px 10px; 
+    border-radius: 12px;
+    border: 1px solid var(--glass-border);
+}
 
-        .hud-bar-bg { flex: 1; height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; overflow: hidden; }
-        .hud-bar-fill { height: 100%; width: 0%; transition: width 0.3s ease; box-shadow: 0 0 5px rgba(255,255,255,0.5); }
-        .hud-text { font-size: 11px; color: #fff; width: 50px; text-align: right; font-family: monospace; font-weight: bold; }
+.hud-bar-bg { 
+    flex: 1; 
+    height: 10px; 
+    background: rgba(255,255,255,0.1); 
+    border-radius: 5px; 
+    overflow: hidden; 
+}
 
-        #hud-time {
-            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8); color: var(--primary); padding: 5px 20px;
-            border-radius: 20px; font-weight: 900; z-index: 1000; font-size: 14px;
-            border: 1px solid rgba(255, 215, 0, 0.3);
-        }
+.hud-bar-fill { 
+    height: 100%; 
+    width: 0%; 
+    transition: width 0.3s ease; 
+    box-shadow: 0 0 5px rgba(255,255,255,0.5); 
+}
 
-        #hud-coords {
-            position: fixed; bottom: 10px; right: 10px; 
-            color: rgba(255,255,255,0.5); font-size: 10px; pointer-events: none; z-index: 1000;
-        }
+.hud-text { 
+    font-size: 11px; 
+    color: #fff; 
+    width: 50px; 
+    text-align: right; 
+    font-family: monospace; 
+    font-weight: bold; 
+}
 
-        /* --- Ranking --- */
-        #ranking-container {
-            position: fixed; top: 15px; right: 15px; z-index: 1000;
-            background: var(--glass); padding: 12px; border-radius: 15px;
-            min-width: 140px; pointer-events: none; backdrop-filter: blur(5px);
-            border: 1px solid var(--glass-border);
-        }
-        .rank-item { display: flex; justify-content: space-between; font-size: 12px; color: #eee; margin-top: 4px; }
-        .rank-item b { color: var(--accent-green); }
+#hud-time {
+    position: fixed; 
+    top: 20px; 
+    left: 50%; 
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8); 
+    color: var(--primary); 
+    padding: 5px 20px;
+    border-radius: 20px; 
+    font-weight: 900; 
+    z-index: 1000; 
+    font-size: 14px;
+    border: 1px solid rgba(255, 215, 0, 0.3);
+}
 
-        /* --- Telas de Sistema (Toast, Faint) --- */
-        #toast-msg {
-            position: fixed; top: 15%; left: 50%; transform: translateX(-50%);
-            background: linear-gradient(135deg, #FFD700, #F39C12); color: #222; 
-            padding: 12px 30px; border-radius: 30px; font-weight: 900; z-index: 9999;
-            opacity: 0; transition: opacity 0.3s; pointer-events: none;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5); font-size: 14px; text-transform: uppercase;
-        }
+#hud-coords {
+    position: fixed; 
+    bottom: 10px; 
+    right: 10px; 
+    color: rgba(255,255,255,0.5); 
+    font-size: 10px; 
+    pointer-events: none; 
+    z-index: 1000;
+}
 
-        #faint-screen {
-            display: none; position: fixed; inset: 0; 
-            background: rgba(0,0,0,0.95); z-index: 9000; 
-            flex-direction: column; align-items: center; justify-content: center; 
-            color: white; text-align: center;
-        }
+/* --- Ranking --- */
+#ranking-container {
+    position: fixed; 
+    top: 15px; 
+    right: 15px; 
+    z-index: 1000;
+    background: var(--glass); 
+    padding: 12px; 
+    border-radius: 15px;
+    min-width: 140px; 
+    pointer-events: none; 
+    backdrop-filter: blur(5px);
+    border: 1px solid var(--glass-border);
+}
 
-        /* --- Lobby e Modais --- */
-        #lobby-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 5000;
-            background: url('assets/background_lobby.png') center/cover no-repeat;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-        }
-        #lobby-overlay::before {
-            content: ""; position: absolute; inset: 0;
-            background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.8)); z-index: -1;
-        }
+.rank-item { 
+    display: flex; 
+    justify-content: space-between; 
+    font-size: 12px; 
+    color: #eee; 
+    margin-top: 4px; 
+}
 
-        .lobby-modal {
-            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(20, 20, 20, 0.95); border: 2px solid var(--primary);
-            width: 90%; max-width: 380px; padding: 25px; border-radius: 25px;
-            color: white; z-index: 6000; backdrop-filter: blur(10px);
-            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
-        }
-        .lobby-modal.active { display: block; animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+.rank-item b { 
+    color: var(--accent-green); 
+}
 
-        .modal-header {
-            font-size: 20px; font-weight: 900; color: var(--primary); margin-bottom: 20px;
-            text-align: center; letter-spacing: 1px; text-transform: uppercase;
-        }
+/* --- Telas de Sistema (Toast, Faint) --- */
+#toast-msg {
+    position: fixed; 
+    top: 15%; 
+    left: 50%; 
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #FFD700, #F39C12); 
+    color: #222; 
+    padding: 12px 30px; 
+    border-radius: 30px; 
+    font-weight: 900; 
+    z-index: 9999;
+    opacity: 0; 
+    transition: opacity 0.3s; 
+    pointer-events: none;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5); 
+    font-size: 14px; 
+    text-transform: uppercase;
+}
 
-        /* --- Inputs e Botões --- */
-        .btn-action {
-            width: 100%; padding: 16px; border-radius: 12px; border: none;
-            background: linear-gradient(to bottom, var(--primary), var(--primary-dark)); 
-            color: #2c1e0f; font-weight: 900; font-size: 16px;
-            text-transform: uppercase; cursor: pointer; margin-top: 15px;
-            box-shadow: 0 4px 0 #c77d00, 0 10px 20px rgba(0,0,0,0.3);
-            transition: transform 0.1s;
-        }
-        .btn-action:active { transform: translateY(4px); box-shadow: 0 0 0 #c77d00; }
+#faint-screen {
+    display: none; 
+    position: fixed; 
+    inset: 0; 
+    background: rgba(0,0,0,0.95); 
+    z-index: 9000; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center; 
+    color: white; 
+    text-align: center;
+}
 
-        .main-menu-btn {
-            background: white; border: 3px solid var(--primary); color: #333;
-            margin-bottom: 15px; font-size: 18px;
-        }
+/* --- Lobby e Modais --- */
+#lobby-overlay {
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%; 
+    z-index: 5000;
+    /* ATENÇÃO: O caminho '../' volta uma pasta para sair do css/ e entrar em assets/ */
+    background-image: url('../assets/background_lobby.png');
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center;
+}
 
-        input {
-            width: 100%; padding: 14px; margin-top: 8px; border-radius: 12px;
-            border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.4);
-            color: white; font-family: inherit; box-sizing: border-box; outline: none;
-        }
-        input:focus { border-color: var(--primary); background: rgba(0,0,0,0.6); }
+#lobby-overlay::before {
+    content: ""; 
+    position: absolute; 
+    inset: 0;
+    background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.8)); 
+    z-index: -1;
+}
 
-        /* --- Modais In-Game --- */
-        .modal-overlay {
-            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: white; border-radius: 20px; padding: 20px; z-index: 8000;
-            width: 85%; max-width: 300px; text-align: center; color: #333;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-        }
+.lobby-modal {
+    display: none; 
+    position: fixed; 
+    top: 50%; 
+    left: 50%; 
+    transform: translate(-50%, -50%);
+    background: rgba(20, 20, 20, 0.95); 
+    border: 2px solid var(--primary);
+    width: 90%; 
+    max-width: 380px; 
+    
+    /* Melhoria para mobile horizontal */
+    max-height: 85vh;
+    overflow-y: auto;
+    
+    padding: 25px; 
+    border-radius: 25px;
+    color: white; 
+    z-index: 6000; 
+    backdrop-filter: blur(10px);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+}
 
-        #chat-toggle-btn {
-            position: fixed; bottom: 160px; right: 20px; width: 50px; height: 50px;
-            background: var(--primary); border: 3px solid white; border-radius: 50%;
-            font-size: 24px; display: flex; align-items: center; justify-content: center;
-            cursor: pointer; z-index: 9999; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-        }
+.lobby-modal.active { 
+    display: block; 
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+}
 
-        #btn-skills {
-            position: fixed; top: 150px; left: 10px; width: 45px; height: 45px;
-            background: #8e44ad; border: 2px solid white; border-radius: 50%;
-            color: white; font-size: 20px; cursor: pointer; z-index: 9000;
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-        }
+.modal-header {
+    font-size: 20px; 
+    font-weight: 900; 
+    color: var(--primary); 
+    margin-bottom: 20px;
+    text-align: center; 
+    letter-spacing: 1px; 
+    text-transform: uppercase;
+}
 
-        @keyframes popIn { from { transform: translate(-50%, -40%) scale(0.8); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
-        
-        @media (max-width: 600px) {
-            #rpg-hud { top: 5px; left: 5px; transform: scale(0.9); transform-origin: top left; }
-            #ranking-container { top: 50px; right: 5px; transform: scale(0.8); transform-origin: top right; }
-            #hud-time { top: 40px; font-size: 11px; } 
-            #btn-skills { top: 120px; }
-            #lobby-overlay { background-position: 50% 20%; }
-        }
-    </style>
+/* --- Inputs e Botões --- */
+.btn-action {
+    width: 100%; 
+    padding: 16px; 
+    border-radius: 12px; 
+    border: none;
+    background: linear-gradient(to bottom, var(--primary), var(--primary-dark)); 
+    color: #2c1e0f; 
+    font-weight: 900; 
+    font-size: 16px;
+    text-transform: uppercase; 
+    cursor: pointer; 
+    margin-top: 15px;
+    box-shadow: 0 4px 0 #c77d00, 0 10px 20px rgba(0,0,0,0.3);
+    transition: transform 0.1s;
+}
+
+.btn-action:active { 
+    transform: translateY(4px); 
+    box-shadow: 0 0 0 #c77d00; 
+}
+
+.main-menu-btn {
+    background: white; 
+    border: 3px solid var(--primary); 
+    color: #333;
+    margin-bottom: 15px; 
+    font-size: 18px;
+}
+
+input {
+    width: 100%; 
+    padding: 14px; 
+    margin-top: 8px; 
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.2); 
+    background: rgba(0,0,0,0.4);
+    color: white; 
+    font-family: inherit; 
+    box-sizing: border-box; 
+    outline: none;
+}
+
+input:focus { 
+    border-color: var(--primary); 
+    background: rgba(0,0,0,0.6); 
+}
+
+/* --- Modais In-Game --- */
+.modal-overlay {
+    display: none; 
+    position: fixed; 
+    top: 50%; 
+    left: 50%; 
+    transform: translate(-50%, -50%);
+    background: white; 
+    border-radius: 20px; 
+    padding: 20px; 
+    z-index: 8000;
+    width: 85%; 
+    max-width: 300px; 
+    text-align: center; 
+    color: #333;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+
+#chat-toggle-btn {
+    position: fixed; 
+    bottom: 160px; 
+    right: 20px; 
+    width: 50px; 
+    height: 50px;
+    background: var(--primary); 
+    border: 3px solid white; 
+    border-radius: 50%;
+    font-size: 24px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    cursor: pointer; 
+    z-index: 9999; 
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+#btn-skills {
+    position: fixed; 
+    top: 150px; 
+    left: 10px; 
+    width: 45px; 
+    height: 45px;
+    background: #8e44ad; 
+    border: 2px solid white; 
+    border-radius: 50%;
+    color: white; 
+    font-size: 20px; 
+    cursor: pointer; 
+    z-index: 9000;
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+@keyframes popIn { 
+    from { transform: translate(-50%, -40%) scale(0.8); opacity: 0; } 
+    to { transform: translate(-50%, -50%) scale(1); opacity: 1; } 
+}
+
+@media (max-width: 600px) {
+    #rpg-hud { 
+        top: 5px; 
+        left: 5px; 
+        transform: scale(0.9); 
+        transform-origin: top left; 
+    }
+    #ranking-container { 
+        top: 50px; 
+        right: 5px; 
+        transform: scale(0.8); 
+        transform-origin: top right; 
+    }
+    #hud-time { 
+        top: 40px; 
+        font-size: 11px; 
+    } 
+    #btn-skills { 
+        top: 120px; 
+    }
+    #lobby-overlay { 
+        background-position: 50% 20%; 
+    }
+}
