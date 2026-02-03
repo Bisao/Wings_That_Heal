@@ -12,6 +12,24 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        /* Overlay para pedir rotação em dispositivos que bloqueiam a API automática (iOS) */
+        #rotate-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #2c3e50;
+            color: #ecf0f1;
+            z-index: 100000;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            font-family: 'Nunito', sans-serif;
+        }
+        #rotate-overlay img { width: 64px; margin-bottom: 20px; animation: spin 2s infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 25% { transform: rotate(-90deg); } 100% { transform: rotate(-90deg); } }
+    </style>
 </head>
 <body>
 
@@ -20,6 +38,12 @@
     <div id="suffocation-overlay"></div>
     <div id="day-night-overlay"></div> 
     <div id="toast-msg"></div>
+
+    <div id="rotate-overlay">
+        <div style="font-size: 40px;">📱↔️</div>
+        <h1>Gire seu dispositivo</h1>
+        <p>A colmeia precisa de uma visão ampla para voar.</p>
+    </div>
 
     <div id="rpg-hud" style="display:none;">
         <div id="hud-info">
@@ -157,6 +181,43 @@
                 e.preventDefault();
             }
         });
+
+        // --- SISTEMA GLOBAL DE FULLSCREEN E ROTAÇÃO ---
+        window.requestGameFullscreen = async function() {
+            try {
+                if (document.documentElement.requestFullscreen) {
+                    await document.documentElement.requestFullscreen();
+                } else if (document.documentElement.webkitRequestFullscreen) {
+                    await document.documentElement.webkitRequestFullscreen();
+                }
+                
+                // Tenta forçar a orientação (Android/Chrome)
+                if (screen.orientation && screen.orientation.lock) {
+                    try {
+                        await screen.orientation.lock('landscape');
+                    } catch (e) {
+                        console.warn("Orientação automática não suportada:", e);
+                    }
+                }
+            } catch(err) {
+                console.warn("Fullscreen falhou:", err);
+            }
+        };
+
+        // Verifica orientação para mostrar o Overlay (Principalmente iOS)
+        function checkOrientation() {
+            const overlay = document.getElementById('rotate-overlay');
+            // Se for mobile e estiver em retrato (height > width)
+            if (window.innerHeight > window.innerWidth && /Mobi|Android/i.test(navigator.userAgent)) {
+                overlay.style.display = 'flex';
+            } else {
+                overlay.style.display = 'none';
+            }
+        }
+
+        window.addEventListener('resize', checkOrientation);
+        window.addEventListener('orientationchange', checkOrientation);
+        window.addEventListener('load', checkOrientation); // Verifica ao carregar
     </script>
     
     <script type="module" src="src/main.js"></script>
