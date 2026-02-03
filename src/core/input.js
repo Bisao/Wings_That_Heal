@@ -114,6 +114,11 @@ export class InputHandler {
         window.addEventListener('keydown', e => { if(e.key) this.keys[e.key.toLowerCase()] = true; });
         window.addEventListener('keyup', e => { if(e.key) this.keys[e.key.toLowerCase()] = false; });
 
+        // Tenta detectar orientação se já estiver em mobile
+        if (this.isMobile) {
+            this.handleOrientationLock();
+        }
+
         if (this.isMobile) {
             this.injectMobileStyles();
             this.injectMobileHTML();
@@ -128,8 +133,23 @@ export class InputHandler {
         }
     }
 
+    // Método melhorado de detecção Mobile
     detectMobile() {
-        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+        return (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent) || 
+                (navigator.maxTouchPoints && navigator.maxTouchPoints > 1)); // Suporte a iPadOS novos
+    }
+
+    // Tenta travar a orientação automaticamente ao iniciar
+    async handleOrientationLock() {
+        if (screen.orientation && screen.orientation.lock) {
+            try {
+                // Tenta travar, mas pode falhar se não estiver em fullscreen (interação do usuário necessária)
+                await screen.orientation.lock('landscape').catch(() => {});
+            } catch (e) {
+                // Silencioso, pois geralmente requer clique do usuário
+            }
+        }
     }
 
     setupMouseControls() {
@@ -163,6 +183,7 @@ export class InputHandler {
         return this.keys['e'] || this.keys[' '] || this.isMobileActionHeld;
     }
 
+    // Estilos CSS Injetados dinamicamente
     injectMobileStyles() {
         if (document.getElementById('joystick-styles')) return;
         const style = document.createElement('style');
@@ -171,56 +192,66 @@ export class InputHandler {
             /* Container geral para evitar que toques passem para o canvas */
             #mobile-controls-container {
                 position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-                pointer-events: none; z-index: 1000;
+                pointer-events: none; z-index: 9999; display: none; /* Escondido por padrão até o jogo começar */
             }
 
             /* Analógico Esquerdo (Movimento) */
             #stick-left-zone {
-                position: absolute; bottom: 40px; left: 40px; 
-                width: 120px; height: 120px; pointer-events: auto;
+                position: absolute; bottom: 30px; left: 30px; 
+                width: 140px; height: 140px; pointer-events: auto;
+                /* Safe area para telas com notch/curvas */
+                margin-left: env(safe-area-inset-left);
+                margin-bottom: env(safe-area-inset-bottom);
             }
 
             /* Analógico Direito (Mira) */
             #stick-right-zone {
-                position: absolute; bottom: 40px; right: 40px; 
-                width: 120px; height: 120px; pointer-events: auto;
+                position: absolute; bottom: 30px; right: 30px; 
+                width: 140px; height: 140px; pointer-events: auto;
+                margin-right: env(safe-area-inset-right);
+                margin-bottom: env(safe-area-inset-bottom);
             }
 
             .joystick-zone {
                 border-radius: 50%;
-                background: rgba(255,255,255,0.05); 
-                border: 2px solid rgba(255,255,255,0.1);
+                background: rgba(255,255,255,0.08); 
+                border: 2px solid rgba(255,255,255,0.15);
                 position: relative;
+                touch-action: none; /* Importante para prevenir zoom/scroll */
             }
             
             /* Estilo diferente para o analógico de mira (vermelho) */
             #stick-right-zone.joystick-zone {
-                border-color: rgba(255, 50, 50, 0.2);
+                border-color: rgba(255, 50, 50, 0.3);
             }
 
             .joystick-knob {
                 position: absolute; top: 50%; left: 50%;
-                width: 50px; height: 50px; background: rgba(255, 215, 0, 0.8);
+                width: 60px; height: 60px; background: rgba(255, 215, 0, 0.9);
                 border-radius: 50%; transform: translate(-50%, -50%);
-                box-shadow: 0 0 10px rgba(0,0,0,0.3); pointer-events: none;
+                box-shadow: 0 0 15px rgba(0,0,0,0.4); pointer-events: none;
             }
 
             /* Knob de mira vermelho */
             #stick-right-knob {
-                background: rgba(231, 76, 60, 0.8) !important;
+                background: rgba(231, 76, 60, 0.9) !important;
             }
 
+            /* Botão de Ação Flutuante */
             .mobile-action-btn {
-                position: fixed; bottom: 180px; /* Acima do analógico direito */
-                right: 60px;
+                position: absolute; 
+                bottom: 180px; right: 60px; /* Acima do stick direito */
                 background: #2ecc71; color: white; padding: 15px 25px; border-radius: 50px;
-                font-weight: 900; border: 3px solid white; z-index: 1001;
+                font-weight: 900; border: 3px solid white; z-index: 10000;
                 display: none; transition: transform 0.1s; pointer-events: auto;
-                box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-                font-family: sans-serif;
-                font-size: 14px;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                font-family: 'Nunito', sans-serif;
+                font-size: 16px;
+                text-transform: uppercase;
+                margin-right: env(safe-area-inset-right);
+                margin-bottom: env(safe-area-inset-bottom);
             }
-            .mobile-action-btn:active { transform: scale(0.9); }
+            .mobile-action-btn:active { transform: scale(0.95); background: #27ae60; }
         `;
         document.head.appendChild(style);
     }
@@ -275,11 +306,18 @@ export class InputHandler {
         }
     }
 
+    // Método chamado pelo Game.js ao iniciar o loop do jogo
     showJoystick() {
         if (this.isMobile) {
             const el = document.getElementById('mobile-controls-container');
             if (el) el.style.display = 'block';
         }
+    }
+    
+    // Método chamado pelo Game.js ao voltar ao menu
+    hideJoystick() {
+        const el = document.getElementById('mobile-controls-container');
+        if (el) el.style.display = 'none';
     }
 
     getMovement() {
@@ -305,7 +343,7 @@ export class InputHandler {
         return { x, y };
     }
 
-    // [NOVO] Retorna vetor de mira e se está atirando
+    // Retorna vetor de mira e se está atirando
     getAim() {
         // Modo Mobile: Analógico Direito
         if (this.isMobile && this.rightStick) {
