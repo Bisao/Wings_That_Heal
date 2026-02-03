@@ -12,24 +12,6 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     
     <link rel="stylesheet" href="css/style.css">
-    <style>
-        /* Overlay para pedir rotação em dispositivos que bloqueiam a API automática (iOS) */
-        #rotate-overlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: #2c3e50;
-            color: #ecf0f1;
-            z-index: 100000;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            font-family: 'Nunito', sans-serif;
-        }
-        #rotate-overlay img { width: 64px; margin-bottom: 20px; animation: spin 2s infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 25% { transform: rotate(-90deg); } 100% { transform: rotate(-90deg); } }
-    </style>
 </head>
 <body>
 
@@ -38,12 +20,6 @@
     <div id="suffocation-overlay"></div>
     <div id="day-night-overlay"></div> 
     <div id="toast-msg"></div>
-
-    <div id="rotate-overlay">
-        <div style="font-size: 40px;">📱↔️</div>
-        <h1>Gire seu dispositivo</h1>
-        <p>A colmeia precisa de uma visão ampla para voar.</p>
-    </div>
 
     <div id="rpg-hud" style="display:none;">
         <div id="hud-info">
@@ -110,7 +86,7 @@
             <div class="input-group">
                 <input type="text" id="world-seed" value="JARDIM_SOLAR" placeholder="Semente do Mundo">
             </div>
-            <button id="btn-create" class="btn-action">INICIAR VOO</button>
+            <button id="btn-create" class="btn-action" onpointerdown="forceGameOrientation()">INICIAR VOO</button>
             <button onclick="closeAllModals()" style="background:none; border:none; color:#aaa; width:100%; margin-top:15px; cursor:pointer; font-weight:bold;">VOLTAR</button>
         </div>
 
@@ -125,7 +101,7 @@
             <div class="input-group">
                 <input type="password" id="join-pass" placeholder="Senha da Sala">
             </div>
-            <button id="btn-join" class="btn-action">JUNTAR-SE</button>
+            <button id="btn-join" class="btn-action" onpointerdown="forceGameOrientation()">JUNTAR-SE</button>
             <button onclick="closeAllModals()" style="background:none; border:none; color:#aaa; width:100%; margin-top:15px; cursor:pointer; font-weight:bold;">VOLTAR</button>
         </div>
     </div>
@@ -182,42 +158,35 @@
             }
         });
 
-        // --- SISTEMA GLOBAL DE FULLSCREEN E ROTAÇÃO ---
-        window.requestGameFullscreen = async function() {
+        // --- FORÇA FULLSCREEN E ROTAÇÃO AUTOMÁTICA ---
+        // Esta função é chamada diretamente no 'pointerdown' dos botões de entrar
+        window.forceGameOrientation = async function() {
+            // 1. Solicita Fullscreen (Obrigatório para o lock funcionar no Android)
             try {
                 if (document.documentElement.requestFullscreen) {
                     await document.documentElement.requestFullscreen();
                 } else if (document.documentElement.webkitRequestFullscreen) {
-                    await document.documentElement.webkitRequestFullscreen();
+                    await document.documentElement.webkitRequestFullscreen(); // Safari/Chrome Antigo
                 }
-                
-                // Tenta forçar a orientação (Android/Chrome)
+            } catch (err) {
+                console.log("Fullscreen bloqueado ou cancelado:", err);
+            }
+
+            // 2. Tenta forçar o Landscape (Funciona no Android)
+            try {
                 if (screen.orientation && screen.orientation.lock) {
-                    try {
-                        await screen.orientation.lock('landscape');
-                    } catch (e) {
-                        console.warn("Orientação automática não suportada:", e);
-                    }
+                    // 'landscape' força horizontal independente do lado
+                    await screen.orientation.lock('landscape'); 
+                    console.log("Orientação travada em Landscape.");
                 }
-            } catch(err) {
-                console.warn("Fullscreen falhou:", err);
+            } catch (err) {
+                // Erro comum no Desktop ou iOS (não suportado)
+                console.warn("Rotação automática não suportada neste dispositivo:", err);
             }
         };
 
-        // Verifica orientação para mostrar o Overlay (Principalmente iOS)
-        function checkOrientation() {
-            const overlay = document.getElementById('rotate-overlay');
-            // Se for mobile e estiver em retrato (height > width)
-            if (window.innerHeight > window.innerWidth && /Mobi|Android/i.test(navigator.userAgent)) {
-                overlay.style.display = 'flex';
-            } else {
-                overlay.style.display = 'none';
-            }
-        }
-
-        window.addEventListener('resize', checkOrientation);
-        window.addEventListener('orientationchange', checkOrientation);
-        window.addEventListener('load', checkOrientation); // Verifica ao carregar
+        // Atalho global para o Game.js usar se precisar
+        window.requestGameFullscreen = window.forceGameOrientation;
     </script>
     
     <script type="module" src="src/main.js"></script>
