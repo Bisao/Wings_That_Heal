@@ -103,7 +103,7 @@ export class Game {
             [31, -1,  0], [33,  1,  0], [34,  2,  0], // Lados da base
             
             // TRONCO (Subindo)
-            [27,  0, -1], [22,  0, -2], [17,  0, -3], [12,  0, -4], [7, 0, -5], [2, 0, -6],
+            [27,  0, -1],
 
             // GALHOS E FOLHAS (Distribuídos ao redor do tronco)
             // Lado Esquerdo
