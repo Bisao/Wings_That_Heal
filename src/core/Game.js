@@ -100,7 +100,7 @@ export class Game {
         this.treeStructure = [
             // BASE (Chão)
             [32,  0,  0], // Colmeia - Centro
-            [31, -1,  0], [33,  1,  0], // Lados da base
+            [31, -1,  0], [33,  1,  0], [34,  2,  0], // Lados da base
             
             // TRONCO (Subindo)
             [27,  0, -1], [22,  0, -2], [17,  0, -3], [12,  0, -4], [7, 0, -5], [2, 0, -6],
