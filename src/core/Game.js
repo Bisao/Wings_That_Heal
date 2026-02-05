@@ -69,11 +69,11 @@ export class Game {
         this.assets.flower.src = 'assets/Flower.png';
 
         // Carregamento dos 34 frames da árvore (frame_000.png até frame_033.png)
+        // Correção: Adicionadas crases (backticks) para o template string funcionar
         for (let i = 0; i < 34; i++) {
             const img = new Image();
-            // Formata o número com 3 dígitos (000, 001, ..., 033)
             const frameNum = String(i).padStart(3, '0');
-            img.src = assets/cherryHive/frame_${frameNum}.png; 
+            img.src = `assets/cherryHive/frame_${frameNum}.png`; 
             this.assets.treeFrames.push(img);
         }
 
@@ -98,9 +98,7 @@ export class Game {
         const columns = 5;
         const totalFrames = 34;
         
-        // O frame 32 é a colmeia. Vamos calcular onde ele fica na grade original para usar como pivô.
-        // 32 // 5 = 6 (linha 6)
-        // 32 % 5 = 2 (coluna 2)
+        // O frame 32 é a colmeia (Pivô)
         const pivotRow = 6;
         const pivotCol = 2;
 
