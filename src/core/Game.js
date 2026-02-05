@@ -64,12 +64,11 @@ export class Game {
         // Assets
         this.assets = { 
             flower: new Image(),
-            treeFrames: [] // Array para armazenar os 34 frames da árvore
+            treeFrames: [] 
         };
         this.assets.flower.src = 'assets/Flower.png';
 
-        // Carregamento dos 34 frames da árvore (frame_000.png até frame_033.png)
-        // Correção: Adicionadas crases (backticks) para o template string funcionar
+        // Carregamento dos 34 frames da árvore
         for (let i = 0; i < 34; i++) {
             const img = new Image();
             const frameNum = String(i).padStart(3, '0');
@@ -90,28 +89,31 @@ export class Game {
     }
 
     /**
-     * Constrói o mapa de montagem da árvore.
-     * Assume que a imagem original foi fatiada em uma grade de 5 colunas.
-     * O frame 32 (Colmeia) deve ficar na posição (0,0) relativa à base.
+     * MAPEAMENTO MANUAL DA ÁRVORE
+     * Formato: [index_do_frame, offX, offY]
+     * Use offX para mover horizontalmente e offY para verticalmente.
+     * O frame 32 é a colmeia e está em 0,0.
      */
     _buildTreeStructure() {
-        const columns = 5;
-        const totalFrames = 34;
-        
-        // O frame 32 é a colmeia (Pivô)
-        const pivotRow = 6;
-        const pivotCol = 2;
+        // Exemplo de montagem manual para evitar o erro de "escada"
+        // Você pode ajustar estes números se as peças estiverem no lugar errado
+        this.treeStructure = [
+            // BASE (Chão)
+            [32,  0,  0], // Colmeia - Centro
+            [31, -1,  0], [33,  1,  0], // Lados da base
+            
+            // TRONCO (Subindo)
+            [27,  0, -1], [22,  0, -2], [17,  0, -3], [12,  0, -4], [7, 0, -5], [2, 0, -6],
 
-        for (let i = 0; i < totalFrames; i++) {
-            const col = i % columns;
-            const row = Math.floor(i / columns);
-            
-            // Calcula o offset relativo ao pivô (Frame 32)
-            const offX = col - pivotCol; 
-            const offY = row - pivotRow; 
-            
-            this.treeStructure.push([i, offX, offY]);
-        }
+            // GALHOS E FOLHAS (Distribuídos ao redor do tronco)
+            // Lado Esquerdo
+            [30, -2,  0], [25, -1, -1], [26, -2, -1], [20, -1, -2], [21, -2, -2],
+            [15, -1, -3], [16, -2, -3], [10, -1, -4], [11, -2, -4], [5, -1, -5], [6, -2, -5], [0, -1, -6], [1, -2, -6],
+
+            // Lado Direito
+            [28,  1, -1], [29,  2, -1], [23,  1, -2], [24,  2, -2], [18,  1, -3], [19,  2, -3],
+            [13,  1, -4], [14,  2, -4], [8,  1, -5], [9,  2, -5], [3,  1, -6], [4,  2, -6]
+        ];
     }
 
     start(seed, id, nick) {
@@ -326,7 +328,6 @@ export class Game {
         const cY = Math.floor(this.localPlayer.pos.y / this.world.chunkSize);
         const range = this.zoomLevel < 0.8 ? 2 : 1;
 
-        // 1. Desenha Terreno com Grid
         for(let x=-range; x<=range; x++) for(let y=-range; y<=range; y++) {
             this.world.getChunk(cX+x, cY+y).forEach(t => {
                 const sX = (t.x - this.camera.x)*rTileSize + this.canvas.width/2;
@@ -338,17 +339,14 @@ export class Game {
                     
                     const isBaseTile = this.localPlayer.homeBase && Math.round(t.x) === Math.round(this.localPlayer.homeBase.x) && Math.round(t.y) === Math.round(this.localPlayer.homeBase.y);
                     
-                    // Desenha o fundo do tile
                     if (!isBaseTile || type !== 'COLMEIA') {
                         this.ctx.fillStyle = (type === 'COLMEIA') ? '#f1c40f' : (['GRAMA','GRAMA_SAFE','BROTO','MUDA','FLOR', 'FLOR_COOLDOWN'].includes(type) ? '#2ecc71' : '#34495e');
                         this.ctx.fillRect(sX, sY, rTileSize + 1, rTileSize + 1);
                     }
 
-                    // --- ATIVAÇÃO DAS LINHAS DO GRID ---
-                    this.ctx.strokeStyle = "rgba(255, 255, 255, 0.05)"; // Branco 5% transparente
+                    this.ctx.strokeStyle = "rgba(255, 255, 255, 0.05)"; 
                     this.ctx.lineWidth = 1;
                     this.ctx.strokeRect(sX, sY, rTileSize, rTileSize);
-                    // -----------------------------------
                     
                     if (type === 'BROTO') { this.ctx.fillStyle = '#006400'; const sz = 12*this.zoomLevel; this.ctx.fillRect(sX+(rTileSize-sz)/2, sY+(rTileSize-sz)/2, sz, sz); }
                     else if (type === 'MUDA') { this.ctx.fillStyle = '#228B22'; const sz = 20*this.zoomLevel; this.ctx.fillRect(sX+(rTileSize-sz)/2, sY+(rTileSize-sz)/2, sz, sz); }
@@ -362,7 +360,6 @@ export class Game {
             });
         }
 
-        // 2. Renderiza a Árvore montada tile por tile
         if (this.localPlayer.homeBase) {
             this.drawFragmentedTree(this.ctx, rTileSize);
         }
@@ -389,7 +386,7 @@ export class Game {
     }
 
     /**
-     * Desenha a árvore usando os 34 frames mapeados no grid.
+     * DESENHA A ÁRVORE COLORIDA E FRAGMENTADA
      */
     drawFragmentedTree(ctx, rTileSize) {
         if (!this.localPlayer || !this.localPlayer.homeBase) return;
@@ -397,23 +394,14 @@ export class Game {
         const base = this.localPlayer.homeBase;
         const { x: camX, y: camY } = this.camera;
 
-        // Filtro visual de cura
-        const progress = Math.min(this.localPlayer.tilesCured / 500, 1);
-        
         ctx.save();
-        ctx.filter = `grayscale(${100 - (progress * 100)}%) brightness(${0.7 + (progress * 0.3)}) saturate(${0.5 + progress})`;
+        // FILTROS REMOVIDOS: A árvore agora é colorida desde o início.
 
-        // Percorre a estrutura e desenha cada pedaço de 32x32
         this.treeStructure.forEach(([frameIdx, offX, offY]) => {
             const img = this.assets.treeFrames[frameIdx];
-            
-            // Só desenha se a imagem já tiver carregado
             if (img && img.complete) {
-                // Calcula a posição do tile específico
                 const sX = (base.x + offX - camX) * rTileSize + this.canvas.width / 2;
                 const sY = (base.y + offY - camY) * rTileSize + this.canvas.height / 2;
-
-                // Desenha preenchendo exatamente 1 tile (com +1 px para evitar linhas pretas)
                 ctx.drawImage(img, sX, sY, rTileSize + 1, rTileSize + 1);
             }
         });
