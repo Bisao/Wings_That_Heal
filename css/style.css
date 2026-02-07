@@ -203,7 +203,6 @@ canvas {
     text-align: center;
 }
 
-/* --- Lobby e Menu Principal --- */
 #lobby-overlay {
     position: fixed; 
     top: 0; 
@@ -212,17 +211,15 @@ canvas {
     height: 100vh; 
     z-index: 5000;
     
-    /* CORREÇÃO: 
-       Usamos 'center top' para garantir que o título (topo da imagem) 
-       sempre apareça, independente do tamanho do monitor.
-    */
-    background: url('../assets/background_lobby.png') no-repeat center top;
+    /* Centraliza a imagem no meio da tela */
+    background: url('../assets/background_lobby.png') no-repeat center center;
     
-    /* 'cover' garante que não fiquem bordas pretas, 
-       mas agora o corte acontecerá apenas na parte de baixo (chão).
-    */
-    background-size: cover; 
+    /* A MUDANÇA: 'contain' impede o zoom e mostra a imagem inteira */
+    background-size: contain; 
     
+    /* Cor de fundo para as bordas que sobrarem no PC */
+    background-color: #1a1a1a; 
+
     display: flex; 
     flex-direction: column; 
     align-items: center; 
