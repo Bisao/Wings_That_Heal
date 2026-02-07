@@ -212,11 +212,15 @@ canvas {
     height: 100vh; 
     z-index: 5000;
     
-    /* CORREÇÃO APLICADA: */
-    /* Mudamos de 'center center' para 'center top'. */
-    /* Isso "prega" o título no topo da tela e impede que ele seja cortado. */
+    /* CORREÇÃO: 
+       Usamos 'center top' para garantir que o título (topo da imagem) 
+       sempre apareça, independente do tamanho do monitor.
+    */
     background: url('../assets/background_lobby.png') no-repeat center top;
     
+    /* 'cover' garante que não fiquem bordas pretas, 
+       mas agora o corte acontecerá apenas na parte de baixo (chão).
+    */
     background-size: cover; 
     
     display: flex; 
@@ -224,7 +228,6 @@ canvas {
     align-items: center; 
     justify-content: center;
 }
-
 #lobby-overlay::before {
     content: ""; 
     position: absolute; 
