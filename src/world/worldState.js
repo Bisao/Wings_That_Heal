@@ -30,9 +30,13 @@ export class WorldState {
         
         this.modifiedTiles[key] = type;
         
-        // Sincronização automática: Se o tile mudou para FLOR, 
-        // marcamos a planta como pronta para curar na lógica interna
-        if (type === 'FLOR' && this.growingPlants[key]) {
+        // CORREÇÃO CRÍTICA: Se o tile virou FLOR, garantimos que ele exista na lista de plantas.
+        // Isso conserta o bug onde flores geradas pelo mapa não pulsavam.
+        if (type === 'FLOR') {
+            if (!this.growingPlants[key]) {
+                // Se não existir dados da planta, cria agora
+                this.addGrowingPlant(x, y);
+            }
             this.growingPlants[key].isReadyToHeal = true;
         }
         
