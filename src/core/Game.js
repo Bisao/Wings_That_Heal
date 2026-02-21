@@ -12,6 +12,7 @@ import { WaveEffect } from '../entities/WaveEffect.js';
 import { ParticleSystem } from '../utils/ParticleSystem.js';
 import { UIManager } from './UIManager.js';
 import { HostSimulation } from './HostSimulation.js';
+import { Tree } from '../entities/tree.js'; // Importação da nova lógica de árvore
 
 export class Game {
     constructor() {
@@ -30,13 +31,14 @@ export class Game {
 
         // Estado do Jogo
         this.world = null;
-        this.currentWorldId = null; // Armazena o ID da sala atual para o SaveSystem
+        this.currentWorldId = null; 
         this.localPlayer = null;
         this.remotePlayers = {};
         this.camera = { x: 0, y: 0 };
         this.enemies = [];
         this.projectiles = [];
         this.activeWaves = [];
+        this.hiveTree = null; // Instância lógica da árvore
         
         // Estado de Grupo
         this.partyMembers = [];
@@ -69,7 +71,6 @@ export class Game {
         };
         this.assets.flower.src = 'assets/Flower.png';
 
-        // Carregamento dos 34 frames da árvore
         for (let i = 0; i < 34; i++) {
             const img = new Image();
             const frameNum = String(i).padStart(3, '0');
@@ -77,7 +78,6 @@ export class Game {
             this.assets.treeFrames.push(img);
         }
 
-        // Configuração da Estrutura da Árvore
         this.treeStructure = [];
         this._buildTreeStructure();
 
@@ -89,37 +89,17 @@ export class Game {
         this.setupDOMEvents();
     }
 
-    /**
-     * MAPEAMENTO MANUAL DA ÁRVORE
-     * Formato: [index_do_frame, offX, offY]
-     * Use offX para mover horizontalmente e offY para verticalmente.
-     * O frame 32 é a colmeia e está em 0,0.
-     */
     _buildTreeStructure() {
-        // Exemplo de montagem manual para evitar o erro de "escada"
-        // Você pode ajustar estes números se as peças estiverem no lugar errado
         this.treeStructure = [
-            // BASE (Chão)
-            [32,  0,  0], // Colmeia - Centro
-            [30, -2,  0], [31, -1,  0], [33,  1,  0], [34,  2,  0], // Lados da base
-            
-            // TRONCO (Subindo)
+            [32,  0,  0], [30, -2,  0], [31, -1,  0], [33,  1,  0], [34,  2,  0], 
             [27,  -1, -1], [28,  0, -1], [29,  1, -1],  
-
-            // GALHOS E FOLHAS (Distribuídos ao redor do tronco)
-            // Lado Esquerdo
             [23,  -1, -2], [24,  0, -2], [25,  1, -2], [26,  2, -2],  
-
-            // Lado Direito
             [16,  -1, -3], [17,  0, -3], [18,  1, -3], 
-            
         ];
     }
 
     start(seed, id, nick) {
         if (typeof this.input.hideJoystick === 'function') this.input.hideJoystick();
-        
-        // Armazena o ID da sala para usar no SaveSystem depois
         this.currentWorldId = id;
 
         let loader = document.getElementById('loading-screen');
@@ -142,9 +122,7 @@ export class Game {
         const hives = this.world.getHiveLocations();
 
         if (this.net.isHost) {
-            // ATUALIZADO: Passa o ID da sala para carregar o save específico deste mundo
             const saved = this.saveSystem.load(id);
-            
             if (saved) { 
                 this.hiveRegistry = saved.hiveRegistry || {}; 
                 if (this.hiveRegistry[nick] === undefined) this.hiveRegistry[nick] = 0;
@@ -177,14 +155,15 @@ export class Game {
             this.localPlayer.homeBase = { x: hives[spawnIdx].x, y: hives[spawnIdx].y }; 
             this.localPlayer.pos = { x: hives[spawnIdx].x, y: hives[spawnIdx].y }; 
             this.localPlayer.targetPos = { ...this.localPlayer.pos }; 
+            // Inicializa a árvore na base
+            this.hiveTree = new Tree(hives[spawnIdx].x, hives[spawnIdx].y, nick);
         }
 
         this.net.sendPayload({ type: 'SPAWN_INFO', id: this.localPlayer.id, nick: this.localPlayer.nickname, x: this.localPlayer.pos.x, y: this.localPlayer.pos.y });
         this.chat.addMessage('SYSTEM', null, `Abelha ${nick} pronta para o voo!`);
 
         const skillBtn = document.getElementById('btn-skills') || document.createElement('button');
-        skillBtn.id = 'btn-skills'; 
-        skillBtn.innerText = '⚡'; 
+        skillBtn.id = 'btn-skills'; skillBtn.innerText = '⚡'; 
         skillBtn.onclick = () => this.localPlayer.skillTree.toggle(); 
         if (!document.getElementById('btn-skills')) document.body.appendChild(skillBtn);
 
@@ -238,6 +217,11 @@ export class Game {
             this.ui.updateCoords(gx, gy);
         }
 
+        // Atualiza Árvore (apenas Host processa lógica de cura global)
+        if (this.hiveTree && this.net.isHost) {
+            this.hiveTree.updateAndHeal(this);
+        }
+
         Object.values(this.remotePlayers).forEach(p => p.update({}));
         this.projectiles.forEach((p, idx) => { if (!p.update()) this.projectiles.splice(idx, 1); });
 
@@ -274,10 +258,12 @@ export class Game {
             const stillAlive = wave.update();
             if (stillAlive && !wave.curedLocal) {
                 const d = Math.sqrt(Math.pow(this.localPlayer.pos.x - wave.x, 2) + Math.pow(this.localPlayer.pos.y - wave.y, 2));
+                // Se a onda encostar no player
                 if (Math.abs(d - wave.currentRadius) < 0.5) {
                     wave.curedLocal = true;
+                    // Lógica de Cura: ondas amarelas ou verdes curam
                     if (this.localPlayer.hp < this.localPlayer.maxHp) {
-                        this.localPlayer.applyHeal(wave.healAmount);
+                        this.localPlayer.applyHeal(wave.healAmount || 10);
                         this.ui.updateHUD(this.localPlayer);
                     }
                 }
@@ -390,18 +376,11 @@ export class Game {
         }
     }
 
-    /**
-     * DESENHA A ÁRVORE COLORIDA E FRAGMENTADA
-     */
     drawFragmentedTree(ctx, rTileSize) {
         if (!this.localPlayer || !this.localPlayer.homeBase) return;
-
         const base = this.localPlayer.homeBase;
         const { x: camX, y: camY } = this.camera;
-
         ctx.save();
-        // FILTROS REMOVIDOS: A árvore agora é colorida desde o início.
-
         this.treeStructure.forEach(([frameIdx, offX, offY]) => {
             const img = this.assets.treeFrames[frameIdx];
             if (img && img.complete) {
@@ -410,7 +389,6 @@ export class Game {
                 ctx.drawImage(img, sX, sY, rTileSize + 1, rTileSize + 1);
             }
         });
-
         ctx.restore();
     }
 
@@ -438,8 +416,6 @@ export class Game {
         hostStats.x = this.localPlayer.pos.x; hostStats.y = this.localPlayer.pos.y;
         hostStats.skillPoints = this.localPlayer.skillPoints; 
         hostStats.unlockedSkills = this.localPlayer.skillTree.serialize();
-        
-        // ATUALIZADO: Passa o currentWorldId para o SaveSystem salvar no slot correto
         this.saveSystem.save(this.currentWorldId, { 
             seed: this.world.seed, 
             world: this.worldState.getFullState(), 
@@ -714,12 +690,44 @@ export class Game {
         if (d.type === 'POLLEN_BURST') this.particles.spawnPollen(d.x, d.y);
         if (d.type === 'SHOOT') this.projectiles.push(new Projectile(d.x, d.y, d.vx, d.vy, d.ownerId, d.damage));
         if (d.type === 'SPAWN_ENEMY') this.enemies.push(new Ant(d.id, d.x, d.y, d.type));
-        if (d.type === 'WAVE_SPAWN') this.activeWaves.push(new WaveEffect(d.x, d.y, d.radius, d.color || "rgba(241, 196, 15, ALPHA)", d.amount));
+        
+        // NOVO: Recebimento de Ondas (WAVE_SPAWN) agora diferencia cura
+        if (d.type === 'WAVE_SPAWN') {
+            const wave = new WaveEffect(d.x, d.y, d.radius, d.color || "rgba(241, 196, 15, ALPHA)", d.amount);
+            // Se for amarela ou verde, consideramos cura
+            if (d.color && (d.color.includes('241, 196, 15') || d.color.includes('46, 204, 113'))) {
+                wave.isHeal = true;
+            }
+            this.activeWaves.push(wave);
+        }
+
+        // NOVO: Recebimento de Cura Direta
+        if (d.type === 'PLAYER_HEAL') {
+            this.localPlayer.applyHeal(d.amount || 10);
+            this.ui.updateHUD(this.localPlayer);
+            this.particles.spawnPollen(this.localPlayer.pos.x, this.localPlayer.pos.y);
+        }
+
         if (d.type === 'PARTY_INVITE') { this.pendingInviteFrom = d.fromId; this.pendingInviteData = d; document.getElementById('invite-msg').innerText = `${d.fromNick} convidou você!`; document.getElementById('party-invite-popup').style.display = 'block'; }
         if (d.type === 'PARTY_ACCEPT') { if (!this.partyMembers.includes(d.fromId)) this.partyMembers.push(d.fromId); this.localPartyName = d.pName; this.localPartyIcon = d.pIcon; this.chat.addMessage('SYSTEM', null, `${d.fromNick} aceitou.`); this.chat.openPartyTab(d.pName, d.pIcon); if (this.partyMembers.length > 1) this.net.sendPayload({ type: 'PARTY_SYNC', members: this.partyMembers, pName: d.pName, pIcon: d.pIcon }, d.fromId); }
         if (d.type === 'PARTY_SYNC') { this.localPartyName = d.pName; this.localPartyIcon = d.pIcon; d.members.forEach(id => { if (!this.partyMembers.includes(id)) this.partyMembers.push(id); }); this.chat.openPartyTab(d.pName, d.pIcon); this.ui.updateHUD(this.localPlayer); }
         if (d.type === 'PARTY_LEAVE') { this.chat.addMessage('SYSTEM', null, `Alguém saiu.`); this.partyMembers = this.partyMembers.filter(id => id !== d.fromId); if (this.partyMembers.length === 0) this.chat.closePartyTab(); }
-        if (d.type === 'PARTY_RESCUE' && this.isFainted) { clearTimeout(this.faintTimeout); this.isFainted = false; this.localPlayer.hp = 25; this.localPlayer.pollen = Math.max(0, this.localPlayer.pollen - 10); this.invulnerabilityTimer = 180; document.getElementById('faint-screen').style.display = 'none'; this.ui.updateHUD(this.localPlayer); }
+        
+        // NOVO: Atualização no Resgate para funcionar com cura global
+        if (d.type === 'PARTY_RESCUE') {
+            if (this.isFainted) {
+                clearTimeout(this.faintTimeout);
+                this.isFainted = false;
+                this.localPlayer.hp = 25;
+                this.localPlayer.pollen = Math.max(0, this.localPlayer.pollen - 10);
+                this.invulnerabilityTimer = 180;
+                document.getElementById('faint-screen').style.display = 'none';
+            } else {
+                this.localPlayer.applyHeal(d.amount || 15);
+            }
+            this.ui.updateHUD(this.localPlayer);
+        }
+
         if (d.type === 'SPAWN_INFO') { if (!this.remotePlayers[d.id]) this.remotePlayers[d.id] = new Player(d.id, d.nick || "Guest"); this.remotePlayers[d.id].pos = { x: d.x, y: d.y }; this.remotePlayers[d.id].targetPos = { x: d.x, y: d.y }; if (this.net.isHost && d.nick && this.guestDataDB[d.nick]) { const savedStats = this.guestDataDB[d.nick]; this.remotePlayers[d.id].deserialize({ stats: savedStats }); this.net.sendPayload({ type: 'RESTORE_STATS', stats: savedStats }, d.id); } }
         if (d.type === 'RESTORE_STATS') { if (this.localPlayer) { this.localPlayer.deserialize({ stats: d.stats }); if (d.stats.x !== undefined) { this.localPlayer.pos.x = d.stats.x; this.localPlayer.pos.y = d.stats.y; this.localPlayer.targetPos = { ...this.localPlayer.pos }; } this.ui.updateHUD(this.localPlayer); } }
         if (d.type === 'FLOWER_CURE') { if (this.localPlayer && d.ownerId === this.localPlayer.id) { this.localPlayer.tilesCured++; } if (this.remotePlayers[d.ownerId]) this.remotePlayers[d.ownerId].tilesCured++; }
