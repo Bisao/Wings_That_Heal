@@ -72,6 +72,8 @@ canvas {
     flex-direction: column; 
     gap: 8px; 
     pointer-events: none;
+    /* Adicionado maxWidth para segurar o HUD em telas super estreitas */
+    max-width: 50vw; 
 }
 
 #hud-info {
@@ -92,6 +94,7 @@ canvas {
     align-items: center; 
     gap: 10px; 
     width: 200px;
+    max-width: 100%;
     background: rgba(0,0,0,0.6); 
     padding: 5px 10px; 
     border-radius: 12px;
@@ -128,17 +131,18 @@ canvas {
 
 #hud-time {
     position: fixed; 
-    top: 20px; 
+    top: 15px; 
     left: 50%; 
     transform: translateX(-50%);
     background: rgba(0, 0, 0, 0.8); 
     color: var(--primary); 
-    padding: 5px 20px;
+    padding: 6px 15px;
     border-radius: 20px; 
     font-weight: 900; 
     z-index: 1000; 
     font-size: 14px;
     border: 1px solid rgba(255, 215, 0, 0.3);
+    pointer-events: none;
 }
 
 #hud-coords {
@@ -154,7 +158,7 @@ canvas {
 /* --- Ranking --- */
 #ranking-container {
     position: fixed; 
-    top: 15px; 
+    top: 60px; /* Desceu um pouco para desktop também */
     right: 15px; 
     z-index: 1000;
     background: var(--glass); 
@@ -239,7 +243,7 @@ canvas {
     z-index: -1;
 }
 
-/* [ATUALIZADO] Modal de Lobby Responsivo */
+/* Modal de Lobby Responsivo */
 .lobby-modal {
     display: none; 
     position: fixed; 
@@ -373,7 +377,7 @@ input:focus {
     padding: 20px; 
     z-index: 8000;
     
-    /* [ATUALIZADO] Largura segura no mobile */
+    /* Largura segura no mobile */
     width: 90%; 
     max-width: 320px; 
     
@@ -383,7 +387,7 @@ input:focus {
     border: 4px solid var(--wood-dark);
 }
 
-/* [ATUALIZADO] Container do Modal de Confirmação de Exclusão */
+/* Container do Modal de Confirmação de Exclusão */
 #delete-confirm-popup {
     display: none; 
     position: fixed; 
@@ -427,20 +431,24 @@ input:focus {
 #btn-skills {
     position: fixed; 
     top: 150px; 
-    left: 10px; 
-    width: 40px; 
-    height: 40px;
+    left: 15px; 
+    width: 45px; 
+    height: 45px;
     background: #8e44ad; 
     border: 2px solid white; 
     border-radius: 50%;
     color: white; 
-    font-size: 18px; 
+    font-size: 22px; 
     cursor: pointer; 
     z-index: 9000;
     display: flex; 
     align-items: center; 
     justify-content: center;
     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    transition: transform 0.1s;
+}
+#btn-skills:active {
+    transform: scale(0.9);
 }
 
 /* --- Gerenciador de Colmeias (Cards) --- */
@@ -534,43 +542,59 @@ input:focus {
 }
 
 /* --- Media Queries (Responsividade Pura) --- */
-@media (max-width: 600px) {
+@media (max-width: 768px) {
+    /* Diminui e reposiciona o HUD para não colar na borda nem brigar com joysticks */
     #rpg-hud { 
-        top: 5px; 
-        left: 5px; 
-        transform: scale(0.85); 
+        top: 10px; 
+        left: 10px; 
+        transform: scale(0.80); 
         transform-origin: top left; 
     }
+    
+    /* O relógio vai para o canto superior direito no celular para liberar o meio */
+    #hud-time { 
+        top: 10px; 
+        left: auto;
+        right: 10px; 
+        transform: none;
+        font-size: 12px; 
+        padding: 4px 10px;
+    } 
+    
+    /* Ranking desce abaixo do relógio */
     #ranking-container { 
-        top: 50px; 
-        right: 5px; 
-        transform: scale(0.8); 
+        top: 45px; 
+        right: 10px; 
+        transform: scale(0.75); 
         transform-origin: top right; 
     }
-    #hud-time { 
-        top: 40px; 
-        font-size: 11px; 
-    } 
+    
+    /* Botão de skills desce para ficar acima do joystick de andar, mas sem tocá-lo */
     #btn-skills { 
-        top: 120px; 
+        top: 200px; 
+        left: 10px;
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
     }
+    
     #lobby-overlay { 
         background-position: center; 
     }
     
     /* Ajustes específicos para as listas no celular */
     .lobby-modal {
-        padding: 20px 15px; /* Menos padding lateral para caber mais conteúdo */
-        width: 95%; /* Ocupa quase a tela toda */
+        padding: 20px 15px; 
+        width: 95%; 
     }
     
     #save-list-container {
-        max-height: 50vh !important; /* Em vez de pixels fixos, usa altura da tela */
-        padding-right: 5px; /* Espaço para o scrollbar nativo */
+        max-height: 50vh !important; 
+        padding-right: 5px; 
     }
     
     .save-detail-row {
-        flex-direction: column; /* No celular a seed e senha ficam embaixo do texto, não do lado */
+        flex-direction: column; 
         align-items: flex-start;
         gap: 5px;
     }
