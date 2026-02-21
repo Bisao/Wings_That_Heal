@@ -114,6 +114,15 @@ export class InputHandler {
         window.addEventListener('keydown', e => { if(e.key) this.keys[e.key.toLowerCase()] = true; });
         window.addEventListener('keyup', e => { if(e.key) this.keys[e.key.toLowerCase()] = false; });
 
+        // Escuta eventos customizados de UI para ocultar os joysticks em modais
+        window.addEventListener('skillTreeToggled', (e) => {
+            if (e.detail.isOpen) {
+                this.hideJoystick();
+            } else {
+                this.showJoystick();
+            }
+        });
+
         // Tenta detectar orientação se já estiver em mobile
         if (this.isMobile) {
             this.handleOrientationLock();
@@ -192,7 +201,9 @@ export class InputHandler {
             /* Container geral para evitar que toques passem para o canvas */
             #mobile-controls-container {
                 position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-                pointer-events: none; z-index: 9999; display: none; /* Escondido por padrão até o jogo começar */
+                pointer-events: none; 
+                z-index: 8500; /* [ATUALIZADO] Z-index abaixado para ficar atrás da SkillTree (10000) e Modais */
+                display: none; /* Escondido por padrão até o jogo começar */
             }
 
             /* Analógico Esquerdo (Movimento) */
@@ -242,7 +253,7 @@ export class InputHandler {
                 position: absolute; 
                 bottom: 180px; right: 60px; /* Acima do stick direito */
                 background: #2ecc71; color: white; padding: 15px 25px; border-radius: 50px;
-                font-weight: 900; border: 3px solid white; z-index: 10000;
+                font-weight: 900; border: 3px solid white; z-index: 8600; /* [ATUALIZADO] Atrás dos modais */
                 display: none; transition: transform 0.1s; pointer-events: auto;
                 box-shadow: 0 5px 15px rgba(0,0,0,0.3);
                 font-family: 'Nunito', sans-serif;
@@ -252,6 +263,21 @@ export class InputHandler {
                 margin-bottom: env(safe-area-inset-bottom);
             }
             .mobile-action-btn:active { transform: scale(0.95); background: #27ae60; }
+            
+            /* Ajustes para telas muito pequenas no formato Paisagem */
+            @media (max-width: 768px) and (orientation: landscape) {
+                #stick-left-zone, #stick-right-zone {
+                    width: 110px; height: 110px;
+                    bottom: 15px;
+                }
+                .joystick-knob {
+                    width: 50px; height: 50px;
+                }
+                .mobile-action-btn {
+                    bottom: 140px; right: 40px;
+                    padding: 10px 20px; font-size: 14px;
+                }
+            }
         `;
         document.head.appendChild(style);
     }
@@ -318,6 +344,10 @@ export class InputHandler {
     hideJoystick() {
         const el = document.getElementById('mobile-controls-container');
         if (el) el.style.display = 'none';
+        
+        // Reseta os joysticks ao ocultar, evitando travamento de vetor
+        if (this.leftStick) this.leftStick.reset();
+        if (this.rightStick) this.rightStick.reset();
     }
 
     getMovement() {
