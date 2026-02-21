@@ -8,8 +8,12 @@ export class HostSimulation {
         this.net = net;
 
         this.hiveWaveTick = 0;
-        this.enemySpawnTick = 0;
+        this.hordeSpawnTick = 0;
+        this.hordeWarningSent = false;
         this.simulationInterval = null;
+
+        // Tempo de início fixo do jogo para calcular os Dias corretamente
+        this.START_TIME = new Date('2074-02-09T06:00:00').getTime();
 
         // Constantes de Simulação
         this.GROWTH_TIMES = { BROTO: 5000, MUDA: 10000, FLOR: 15000 };
@@ -19,20 +23,46 @@ export class HostSimulation {
 
     /**
      * Inicia o loop de simulação do Host
-     * @param {Object} refs - Referências para objetos do jogo (enemies, players, callbacks, etc)
      */
     start(refs) {
         if (this.simulationInterval) clearInterval(this.simulationInterval);
 
         this.simulationInterval = setInterval(() => {
             this.update(refs);
-        }, 1000); // Roda a cada 1 segundo
+        }, 1000); // Roda a cada 1 segundo real (1 minuto no jogo)
     }
 
     stop() {
         if (this.simulationInterval) {
             clearInterval(this.simulationInterval);
             this.simulationInterval = null;
+        }
+    }
+
+    /**
+     * Função auxiliar para spawnar uma formiga da horda
+     */
+    _spawnHordeAnt(target, enemies) {
+        // Tenta achar um espaço de terra queimada próximo ao jogador, mas não tão perto (15 a 25 blocos)
+        for (let i = 0; i < 10; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 15 + Math.random() * 10; 
+            const spawnX = target.pos.x + Math.cos(angle) * dist;
+            const spawnY = target.pos.y + Math.sin(angle) * dist;
+            
+            const tileX = Math.round(spawnX);
+            const tileY = Math.round(spawnY);
+            const tile = this.worldState.getModifiedTile(tileX, tileY) || this.world.getTileAt(tileX, tileY);
+            
+            if (tile === 'TERRA_QUEIMADA') {
+                // 50% de chance de ser Caçadora (hunter) ou Invasora (invader)
+                const antClass = Math.random() < 0.5 ? 'hunter' : 'invader';
+                const enemyId = `ant_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+                
+                enemies.push(new Ant(enemyId, spawnX, spawnY, antClass));
+                this.net.sendPayload({ type: 'SPAWN_ENEMY', id: enemyId, x: spawnX, y: spawnY, type: antClass });
+                break; // Spawna apenas 1 por chamada com sucesso
+            }
         }
     }
 
@@ -50,6 +80,53 @@ export class HostSimulation {
         let changed = false;
         const now = Date.now();
 
+        // --- SISTEMA DE HORDA (A CADA 7 DIAS) ---
+        const elapsedMs = this.worldState.worldTime - this.START_TIME;
+        const currentDay = Math.floor(elapsedMs / 86400000) + 1; // 1 dia = 86.400.000 ms
+        
+        const date = new Date(this.worldState.worldTime);
+        const hours = date.getHours();
+
+        // É noite de horda se for Dia 7, 14, 21... após as 22h OU madrugada do dia seguinte (Dia 8, 15...) antes das 4h.
+        const isHordeNight = (currentDay % 7 === 0 && hours >= 22) || (currentDay > 1 && (currentDay - 1) % 7 === 0 && hours < 4);
+
+        // Aviso Assustador às 18:00 do dia da horda
+        if (currentDay % 7 === 0 && hours === 18 && !this.hordeWarningSent) {
+            this.hordeWarningSent = true;
+            this.net.sendPayload({ type: 'CHAT_MSG', nick: 'SISTEMA', text: '⚠️ As sombras se agitam na Terra Queimada... Preparem-se para defender a Colmeia!' });
+        }
+        // Reseta o aviso na manhã seguinte
+        if (hours >= 6) this.hordeWarningSent = false;
+
+        const players = [localPlayer, ...Object.values(remotePlayers)];
+        const alivePlayers = players.filter(p => p.hp > 0);
+
+        // Lógica de Spawn Inimigo (Substitui o spawn antigo)
+        if (isHordeNight) {
+            const maxEnemies = players.length * 6; // Limite: 6 por jogador conectado
+            
+            if (enemies.length < maxEnemies) {
+                this.hordeSpawnTick++;
+                
+                // Nasce rápido no início (a cada 2s), depois diminui para repor as mortas (a cada 10s)
+                const spawnDelay = (enemies.length < players.length * 2) ? 2 : 10;
+                
+                if (this.hordeSpawnTick >= spawnDelay) {
+                    this.hordeSpawnTick = 0;
+                    if (alivePlayers.length > 0) {
+                        const target = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
+                        this._spawnHordeAnt(target, enemies);
+                    }
+                }
+            }
+        } else {
+            // Se amanheceu (04:00 em diante) e ainda há formigas vivas, a luz do sol as queima!
+            if (enemies.length > 0 && hours >= 4 && hours < 22) {
+                enemies.forEach(ant => ant.hp = 0); // O loop do Game.js cuidará de explodi-las em pólen
+                this.hordeSpawnTick = 0;
+            }
+        }
+
         // 2. Ondas da Colmeia Naturais (Ondas passivas do mapa)
         this.hiveWaveTick++;
         if (this.hiveWaveTick >= 3) {
@@ -61,42 +138,7 @@ export class HostSimulation {
             });
         }
 
-        // 3. Spawn de Inimigos (A cada 10 segundos)
-        this.enemySpawnTick++;
-        if (this.enemySpawnTick >= 10) {
-            this.enemySpawnTick = 0;
-            const players = [localPlayer, ...Object.values(remotePlayers)];
-            
-            // Escolhe um jogador aleatório para ser o alvo do spawn
-            if (players.length > 0) {
-                const target = players[Math.floor(Math.random() * players.length)];
-                
-                // Tenta spawnar inimigos perto dele (GARANTIA DE NÃO SPAWNAR NA BASE)
-                for(let i=0; i<5; i++) {
-                    let spawnX = target.pos.x + (Math.random() * 30 - 15);
-                    let spawnY = target.pos.y + (Math.random() * 30 - 15);
-                    
-                    const distToPlayer = Math.sqrt(Math.pow(spawnX - target.pos.x, 2) + Math.pow(spawnY - target.pos.y, 2));
-                    const tile = this.worldState.getModifiedTile(Math.round(spawnX), Math.round(spawnY)) || this.world.getTileAt(Math.round(spawnX), Math.round(spawnY));
-                    
-                    // Só nasce em Terra Queimada e a pelo menos 10 blocos de distância
-                    if (tile === 'TERRA_QUEIMADA' && distToPlayer > 10) {
-                        const groupSize = 2 + Math.floor(Math.random() * 3);
-                        for(let j=0; j < groupSize; j++) {
-                            const enemyId = `ant_${Date.now()}_${j}`;
-                            const ox = spawnX + (Math.random() * 2 - 1);
-                            const oy = spawnY + (Math.random() * 2 - 1);
-                            
-                            enemies.push(new Ant(enemyId, ox, oy, 'worker'));
-                            this.net.sendPayload({ type: 'SPAWN_ENEMY', id: enemyId, x: ox, y: oy, type: 'worker' });
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-
-        // 4. Registro de Spawn Points para novos jogadores
+        // 3. Registro de Spawn Points para novos jogadores
         Object.values(remotePlayers).forEach(p => {
             if (p.nickname && hiveRegistry[p.nickname] === undefined) {
                 const usedIndices = Object.values(hiveRegistry);
@@ -109,13 +151,12 @@ export class HostSimulation {
             }
         });
 
-        // 5. Crescimento de Plantas e Cura (LÓGICA GLOBAL DE CURA APLICADA)
+        // 4. Crescimento de Plantas e Cura
         for (const [key, rawData] of Object.entries(this.worldState.growingPlants)) {
-            // Garante que o dado seja um objeto para podermos salvar o 'lastHealTime'
             let plantData = rawData;
             if (typeof rawData === 'number') {
                 plantData = { time: rawData, lastHealTime: rawData, owner: null };
-                this.worldState.growingPlants[key] = plantData; // Atualiza no estado
+                this.worldState.growingPlants[key] = plantData; 
             }
 
             const startTime = plantData.time;
@@ -127,7 +168,6 @@ export class HostSimulation {
             const elapsedSinceHeal = now - lastHeal;
             const currentType = this.worldState.getModifiedTile(x, y);
 
-            // Estágios de crescimento
             if (currentType === 'GRAMA' && elapsedSinceStart > this.GROWTH_TIMES.BROTO) { fnChangeTile(x, y, 'BROTO', ownerId); changed = true; }
             else if (currentType === 'BROTO' && elapsedSinceStart > this.GROWTH_TIMES.MUDA) { fnChangeTile(x, y, 'MUDA', ownerId); changed = true; }
             else if (currentType === 'MUDA' && elapsedSinceStart > this.GROWTH_TIMES.FLOR) { fnChangeTile(x, y, 'FLOR', ownerId); changed = true; }
@@ -137,30 +177,23 @@ export class HostSimulation {
             if (currentType === 'FLOR' && elapsedSinceHeal >= 3000) {
                 plantData.lastHealTime = now;
                 
-                // 1. Efeito visual de cura (Onda Verde espalhada pela rede)
                 this.net.sendPayload({ type: 'WAVE_SPAWN', x: x, y: y, radius: 2.0, color: "rgba(46, 204, 113, ALPHA)", amount: 10 });
                 activeWaves.push(new WaveEffect(x, y, 2.0, "rgba(46, 204, 113, ALPHA)", 10));
 
-                // 2. [NOVO] Cura Explícita dos Jogadores Próximos (Garante o HP para todos)
-                const allPlayers = [localPlayer, ...Object.values(remotePlayers)];
-                allPlayers.forEach(p => {
-                    // Só cura se o player não estiver desmaiado e precisar de HP
+                players.forEach(p => {
                     if (p.hp > 0 && p.hp < p.maxHp) {
                         const distToFlower = Math.sqrt(Math.pow(p.pos.x - x, 2) + Math.pow(p.pos.y - y, 2));
-                        if (distToFlower <= 2.5) { // Raio de efeito da flor
+                        if (distToFlower <= 2.5) { 
                             if (p.id === localPlayer.id) {
-                                // Cura o Host localmente
                                 localPlayer.applyHeal(10);
-                                fnGainXp(this.XP_PASSIVE_CURE); // Bônus passivo para o host
+                                fnGainXp(this.XP_PASSIVE_CURE); 
                             } else {
-                                // Comando de rede: Diz para o Guest recuperar HP
                                 this.net.sendPayload({ type: 'PLAYER_HEAL', amount: 10 }, p.id);
                             }
                         }
                     }
                 });
 
-                // 3. Cura tiles ao redor (Transforma Terra Queimada em Grama)
                 for (let dx = -1; dx <= 1; dx++) {
                     for (let dy = -1; dy <= 1; dy++) {
                         if (dx === 0 && dy === 0) continue;
@@ -174,7 +207,6 @@ export class HostSimulation {
                             if (ownerId) {
                                 this.net.sendPayload({ type: 'FLOWER_CURE', ownerId: ownerId, x: tx, y: ty });
                                 
-                                // Recompensa o dono da flor pela cura do terreno
                                 if (localPlayer && ownerId === localPlayer.id) {
                                     localPlayer.tilesCured++;
                                     fnGainXp(this.XP_PASSIVE_CURE);
