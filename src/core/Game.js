@@ -416,12 +416,14 @@ export class Game {
         hostStats.x = this.localPlayer.pos.x; hostStats.y = this.localPlayer.pos.y;
         hostStats.skillPoints = this.localPlayer.skillPoints; 
         hostStats.unlockedSkills = this.localPlayer.skillTree.serialize();
+        
         this.saveSystem.save(this.currentWorldId, { 
             seed: this.world.seed, 
             world: this.worldState.getFullState(), 
             host: hostStats, 
             guests: this.guestDataDB, 
-            hiveRegistry: this.hiveRegistry 
+            hiveRegistry: this.hiveRegistry,
+            pass: this.currentPass || "" // Salva a senha para o meta do SaveSystem
         });
     }
 
@@ -600,11 +602,35 @@ export class Game {
             const pass = document.getElementById('create-pass').value.trim();
             const seed = document.getElementById('world-seed').value.trim() || Date.now().toString();
             if(!id) return this.ui.showError("ID Obrigatório!");
+            
+            // Armazena a senha para salvar no meta depois
+            this.currentPass = pass;
+            
             localStorage.setItem('wings_nick', nick);
             this.net.init(id, (ok) => {
                 if(ok) { this.net.hostRoom(id, pass, seed, () => this.worldState.getFullState(), (n) => this.guestDataDB[n], () => this.guestDataDB); this.start(seed, id, nick); }
             });
         };
+
+        // GATILHO PARA RENDERIZAR A LISTA DE SAVES
+        const btnOpenLoadMenu = document.querySelector('button[onclick*="modal-load"]');
+        if (btnOpenLoadMenu) {
+            btnOpenLoadMenu.addEventListener('click', () => {
+                this.ui.renderSaveList(this.saveSystem, (id, pass, seed, nick) => {
+                    localStorage.setItem('wings_nick', nick);
+                    this.currentPass = pass; // Define a senha para o contexto atual
+                    this.net.init(id, (ok) => {
+                        if(ok) { 
+                            this.net.hostRoom(id, pass, seed, () => this.worldState.getFullState(), (n) => this.guestDataDB[n], () => this.guestDataDB); 
+                            this.start(seed, id, nick); 
+                        } else {
+                            this.ui.showError("Falha ao inicializar conexão.");
+                        }
+                    });
+                });
+            });
+        }
+
         this.setupPartyEvents();
     }
 
@@ -691,17 +717,14 @@ export class Game {
         if (d.type === 'SHOOT') this.projectiles.push(new Projectile(d.x, d.y, d.vx, d.vy, d.ownerId, d.damage));
         if (d.type === 'SPAWN_ENEMY') this.enemies.push(new Ant(d.id, d.x, d.y, d.type));
         
-        // NOVO: Recebimento de Ondas (WAVE_SPAWN) agora diferencia cura
         if (d.type === 'WAVE_SPAWN') {
             const wave = new WaveEffect(d.x, d.y, d.radius, d.color || "rgba(241, 196, 15, ALPHA)", d.amount);
-            // Se for amarela ou verde, consideramos cura
             if (d.color && (d.color.includes('241, 196, 15') || d.color.includes('46, 204, 113'))) {
                 wave.isHeal = true;
             }
             this.activeWaves.push(wave);
         }
 
-        // NOVO: Recebimento de Cura Direta
         if (d.type === 'PLAYER_HEAL') {
             this.localPlayer.applyHeal(d.amount || 10);
             this.ui.updateHUD(this.localPlayer);
@@ -713,7 +736,6 @@ export class Game {
         if (d.type === 'PARTY_SYNC') { this.localPartyName = d.pName; this.localPartyIcon = d.pIcon; d.members.forEach(id => { if (!this.partyMembers.includes(id)) this.partyMembers.push(id); }); this.chat.openPartyTab(d.pName, d.pIcon); this.ui.updateHUD(this.localPlayer); }
         if (d.type === 'PARTY_LEAVE') { this.chat.addMessage('SYSTEM', null, `Alguém saiu.`); this.partyMembers = this.partyMembers.filter(id => id !== d.fromId); if (this.partyMembers.length === 0) this.chat.closePartyTab(); }
         
-        // NOVO: Atualização no Resgate para funcionar com cura global
         if (d.type === 'PARTY_RESCUE') {
             if (this.isFainted) {
                 clearTimeout(this.faintTimeout);
