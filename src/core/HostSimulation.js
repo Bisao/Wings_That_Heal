@@ -50,7 +50,7 @@ export class HostSimulation {
         let changed = false;
         const now = Date.now();
 
-        // 2. Ondas da Colmeia (A cada 3 segundos)
+        // 2. Ondas da Colmeia Naturais (Ondas passivas do mapa)
         this.hiveWaveTick++;
         if (this.hiveWaveTick >= 3) {
             this.hiveWaveTick = 0;
@@ -71,7 +71,7 @@ export class HostSimulation {
             if (players.length > 0) {
                 const target = players[Math.floor(Math.random() * players.length)];
                 
-                // Tenta spawnar inimigos perto dele (em terra queimada)
+                // Tenta spawnar inimigos perto dele (GARANTIA DE NÃO SPAWNAR NA BASE)
                 for(let i=0; i<5; i++) {
                     let spawnX = target.pos.x + (Math.random() * 30 - 15);
                     let spawnY = target.pos.y + (Math.random() * 30 - 15);
@@ -79,6 +79,7 @@ export class HostSimulation {
                     const distToPlayer = Math.sqrt(Math.pow(spawnX - target.pos.x, 2) + Math.pow(spawnY - target.pos.y, 2));
                     const tile = this.worldState.getModifiedTile(Math.round(spawnX), Math.round(spawnY)) || this.world.getTileAt(Math.round(spawnX), Math.round(spawnY));
                     
+                    // Só nasce em Terra Queimada e a pelo menos 10 blocos de distância
                     if (tile === 'TERRA_QUEIMADA' && distToPlayer > 10) {
                         const groupSize = 2 + Math.floor(Math.random() * 3);
                         for(let j=0; j < groupSize; j++) {
@@ -108,10 +109,9 @@ export class HostSimulation {
             }
         });
 
-        // 5. Crescimento de Plantas e Cura
+        // 5. Crescimento de Plantas e Cura (LÓGICA GLOBAL DE CURA APLICADA)
         for (const [key, rawData] of Object.entries(this.worldState.growingPlants)) {
-            // CORREÇÃO: Garante que o dado seja um objeto para podermos salvar o 'lastHealTime'
-            // Se for número (saves antigos), converte para objeto.
+            // Garante que o dado seja um objeto para podermos salvar o 'lastHealTime'
             let plantData = rawData;
             if (typeof rawData === 'number') {
                 plantData = { time: rawData, lastHealTime: rawData, owner: null };
@@ -134,15 +134,33 @@ export class HostSimulation {
             else if (currentType === 'FLOR_COOLDOWN' && elapsedSinceStart > this.FLOWER_COOLDOWN_TIME) { fnChangeTile(x, y, 'FLOR', ownerId); changed = true; }
 
             // Lógica de Cura da Flor
-            // CORREÇÃO: Removida a verificação 'plantData.isReadyToHeal' que impedia o pulso
             if (currentType === 'FLOR' && elapsedSinceHeal >= 3000) {
                 plantData.lastHealTime = now;
                 
-                // Efeito visual de cura
-                this.net.sendPayload({ type: 'WAVE_SPAWN', x: x, y: y, radius: 2.0, color: "rgba(46, 204, 113, ALPHA)", amount: 2 });
-                activeWaves.push(new WaveEffect(x, y, 2.0, "rgba(46, 204, 113, ALPHA)", 2));
+                // 1. Efeito visual de cura (Onda Verde espalhada pela rede)
+                this.net.sendPayload({ type: 'WAVE_SPAWN', x: x, y: y, radius: 2.0, color: "rgba(46, 204, 113, ALPHA)", amount: 10 });
+                activeWaves.push(new WaveEffect(x, y, 2.0, "rgba(46, 204, 113, ALPHA)", 10));
 
-                // Cura tiles ao redor
+                // 2. [NOVO] Cura Explícita dos Jogadores Próximos (Garante o HP para todos)
+                const allPlayers = [localPlayer, ...Object.values(remotePlayers)];
+                allPlayers.forEach(p => {
+                    // Só cura se o player não estiver desmaiado e precisar de HP
+                    if (p.hp > 0 && p.hp < p.maxHp) {
+                        const distToFlower = Math.sqrt(Math.pow(p.pos.x - x, 2) + Math.pow(p.pos.y - y, 2));
+                        if (distToFlower <= 2.5) { // Raio de efeito da flor
+                            if (p.id === localPlayer.id) {
+                                // Cura o Host localmente
+                                localPlayer.applyHeal(10);
+                                fnGainXp(this.XP_PASSIVE_CURE); // Bônus passivo para o host
+                            } else {
+                                // Comando de rede: Diz para o Guest recuperar HP
+                                this.net.sendPayload({ type: 'PLAYER_HEAL', amount: 10 }, p.id);
+                            }
+                        }
+                    }
+                });
+
+                // 3. Cura tiles ao redor (Transforma Terra Queimada em Grama)
                 for (let dx = -1; dx <= 1; dx++) {
                     for (let dy = -1; dy <= 1; dy++) {
                         if (dx === 0 && dy === 0) continue;
@@ -156,7 +174,7 @@ export class HostSimulation {
                             if (ownerId) {
                                 this.net.sendPayload({ type: 'FLOWER_CURE', ownerId: ownerId, x: tx, y: ty });
                                 
-                                // Recompensa o dono da flor
+                                // Recompensa o dono da flor pela cura do terreno
                                 if (localPlayer && ownerId === localPlayer.id) {
                                     localPlayer.tilesCured++;
                                     fnGainXp(this.XP_PASSIVE_CURE);
