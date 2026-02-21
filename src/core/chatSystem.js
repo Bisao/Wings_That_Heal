@@ -17,7 +17,7 @@ export class ChatSystem {
         
         // Vamos recriar a estrutura interna do chat via JS para garantir o novo layout
         if (this.container) {
-            this.rebuildDOM(); // [NOVO] Reconstrói o HTML interno para o novo layout
+            this.rebuildDOM(); // Reconstrói o HTML interno para o novo layout
             
             this.headerTitle = document.getElementById('chat-header-title');
             this.dropdown = document.getElementById('chat-channel-dropdown');
@@ -32,7 +32,7 @@ export class ChatSystem {
         }
     }
 
-    // [NOVO] Reconstrói a estrutura HTML para suportar o Menu Dropdown e o novo design
+    // Reconstrói a estrutura HTML para suportar o Menu Dropdown e o novo design
     rebuildDOM() {
         this.container.innerHTML = `
             <div id="chat-header-area">
@@ -41,7 +41,7 @@ export class ChatSystem {
             </div>
             
             <div id="chat-channel-dropdown" class="hidden">
-                </div>
+            </div>
 
             <div id="chat-messages"></div>
             
@@ -65,28 +65,30 @@ export class ChatSystem {
                 --leaf: #8BC34A;
                 --wax: #FFF8E1;
                 --text-dark: #5D4037;
-                --danger: #FF6B6B;
+                --danger: #e74c3c;
             }
 
             /* Container Flutuante com Bordas Arredondadas (Orgânico) */
             #chat-container {
                 position: fixed;
-                bottom: 100px; /* Acima do joystick */
+                bottom: 110px; /* Acima do joystick no PC/Tablet */
                 left: 20px;
-                width: 300px; /* Largura base */
-                height: 40vh; /* Altura responsiva */
+                width: 320px; /* Largura base */
+                height: 45vh; /* Altura responsiva */
+                max-height: 400px;
                 background: rgba(255, 248, 225, 0.95); /* Cor de Cera translúcida */
                 border: 2px solid var(--honey);
                 border-radius: 20px;
                 display: flex;
                 flex-direction: column;
                 z-index: 9000;
-                box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-                transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s;
                 transform: scale(0); /* Começa oculto */
+                transform-origin: bottom left;
                 opacity: 0;
                 pointer-events: none;
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                font-family: 'Nunito', Tahoma, Geneva, Verdana, sans-serif;
                 overflow: hidden;
             }
 
@@ -107,11 +109,11 @@ export class ChatSystem {
             }
 
             #chat-header-title {
-                background: rgba(255,255,255,0.2);
+                background: rgba(255,255,255,0.3);
                 border: none;
                 border-radius: 12px;
                 padding: 5px 15px;
-                font-weight: bold;
+                font-weight: 900;
                 color: var(--text-dark);
                 font-size: 14px;
                 cursor: pointer;
@@ -127,15 +129,15 @@ export class ChatSystem {
                 border: none;
                 color: var(--text-dark);
                 font-weight: bold;
-                font-size: 16px;
+                font-size: 18px;
                 cursor: pointer;
-                padding: 5px;
+                padding: 5px 10px;
             }
 
             /* Menu Dropdown (A Colmeia de Abas) */
             #chat-channel-dropdown {
                 position: absolute;
-                top: 50px; /* Logo abaixo do header */
+                top: 45px; /* Logo abaixo do header */
                 left: 0;
                 width: 100%;
                 background: var(--wax);
@@ -155,17 +157,18 @@ export class ChatSystem {
                 background: transparent;
                 border: none;
                 text-align: left;
-                font-weight: 600;
+                font-weight: 800;
                 color: var(--text-dark);
                 cursor: pointer;
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
+                font-family: 'Nunito', sans-serif;
             }
             .channel-item:hover { background: rgba(255, 215, 0, 0.2); }
             .channel-item.active { background: rgba(139, 195, 74, 0.2); color: #33691E; }
             .channel-notify {
-                width: 8px; height: 8px; background: var(--danger); border-radius: 50%;
+                width: 10px; height: 10px; background: var(--danger); border-radius: 50%;
                 box-shadow: 0 0 5px var(--danger);
             }
 
@@ -186,7 +189,7 @@ export class ChatSystem {
                 padding: 10px;
                 background: white;
                 display: flex;
-                gap: 5px;
+                gap: 8px;
                 border-top: 1px solid rgba(0,0,0,0.05);
             }
 
@@ -194,56 +197,59 @@ export class ChatSystem {
                 flex: 1;
                 border: 2px solid #EEE;
                 border-radius: 20px;
-                padding: 8px 12px;
+                padding: 10px 15px;
                 font-size: 14px;
+                font-family: 'Nunito', sans-serif;
                 outline: none;
                 transition: border-color 0.2s;
+                background: #f9f9f9;
+                color: #333;
+                width: 100%; /* Resolve problemas flex no mobile */
             }
-            #chat-input:focus { border-color: var(--leaf); }
+            #chat-input:focus { border-color: var(--leaf); background: white; }
 
             #chat-send-btn {
                 background: var(--leaf);
                 color: white;
                 border: none;
-                width: 40px;
-                height: 40px;
+                width: 42px;
+                height: 42px;
                 border-radius: 50%;
                 font-weight: bold;
                 cursor: pointer;
                 box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                display: flex; align-items: center; justify-content: center;
+                font-size: 18px;
             }
             #chat-send-btn:active { transform: scale(0.9); }
-
-            /* Botão Toggle (A Bolha Flutuante Principal) */
-            #chat-toggle-btn {
-                width: 50px; height: 50px;
-                border-radius: 50%;
-                border: 3px solid white;
-                background: var(--honey);
-                box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-                font-size: 24px;
-                display: flex; justify-content: center; align-items: center;
-                transition: all 0.3s;
-                z-index: 8999;
-            }
-            #chat-toggle-btn:active { transform: scale(0.9); }
 
             /* Responsividade Mobile Horizontal */
             @media (max-width: 900px) and (orientation: landscape) {
                 #chat-container {
-                    width: 40%;
-                    height: 80vh;
-                    left: 20px; top: 20px; bottom: auto;
+                    width: 45vw;
+                    height: 85vh;
+                    left: 15px; top: 15px; bottom: auto;
                 }
             }
 
-            /* Responsividade Mobile Vertical */
-            @media (max-width: 600px) {
+            /* [ATUALIZADO] Responsividade Mobile Vertical (Retrato) */
+            @media (max-width: 600px) and (orientation: portrait) {
                 #chat-container {
-                    width: 85%;
-                    left: 7.5%;
-                    bottom: 150px; /* Espaço para controles */
-                    height: 35vh;
+                    width: calc(100% - 30px); /* Ocupa a tela com margem de 15px dos lados */
+                    left: 15px;
+                    bottom: 120px; /* Sobe o suficiente para liberar os joysticks base */
+                    height: 50vh; /* Usa metade da tela */
+                    max-height: none;
+                    transform-origin: bottom center;
+                }
+                
+                #chat-input-area {
+                    padding: 8px;
+                }
+                
+                #chat-input {
+                    padding: 12px; /* Maior para facilitar o toque */
+                    font-size: 16px; /* Evita o zoom automático agressivo do iOS ao focar num input */
                 }
             }
         `;
@@ -262,12 +268,26 @@ export class ChatSystem {
         
         // Input
         this.input.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.triggerSend();
+            if (e.key === 'Enter') {
+                e.preventDefault(); // Evita pular linha caso o input vire textarea no futuro
+                this.triggerSend();
+            }
         });
-        // Impede que as teclas do jogo (WASD) movam o boneco enquanto digita
+        
+        // Impede que as teclas do jogo (WASD) movam o boneco enquanto digita no PC
         this.input.addEventListener('keydown', (e) => e.stopPropagation());
+        
+        // Retira o foco do input ao rolar a lista de mensagens (esconde o teclado no celular)
+        this.messagesBox.addEventListener('touchstart', () => {
+            if (this.isMobile() && document.activeElement === this.input) {
+                this.input.blur();
+            }
+        }, {passive: true});
 
-        this.sendBtn.onclick = () => this.triggerSend();
+        this.sendBtn.onclick = () => {
+            this.triggerSend();
+            if (this.isMobile()) this.input.focus(); // Tenta manter o teclado aberto para próxima mensagem
+        };
     }
 
     // --- LÓGICA DE INTERFACE ---
@@ -283,10 +303,10 @@ export class ChatSystem {
 
         // Adiciona um indicador visual (bolinha vermelha) no header se houver mensagens em OUTROS canais
         const hasExternalNotify = Object.entries(this.notifications).some(([key, val]) => val === true && key !== this.activeTab);
-        const notifyDot = hasExternalNotify ? `<span style="color:var(--danger); font-size:20px; line-height:0">•</span>` : '';
+        const notifyDot = hasExternalNotify ? `<span style="color:var(--danger); font-size:24px; line-height:0; margin-left: 5px;">•</span>` : '';
 
         this.headerTitle.innerHTML = `${label} ${notifyDot} ▾`;
-        this.headerTitle.style.background = (this.activeTab === 'PARTY') ? 'rgba(46, 204, 113, 0.3)' : 'rgba(255,255,255,0.2)';
+        this.headerTitle.style.background = (this.activeTab === 'PARTY') ? 'rgba(46, 204, 113, 0.4)' : 'rgba(255,255,255,0.3)';
     }
 
     // Renderiza a lista vertical de canais (O Menu Colmeia)
@@ -342,20 +362,28 @@ export class ChatSystem {
     toggleChat() {
         this.isVisible = !this.isVisible;
         
+        // [NOVO] Dispara evento global para o InputHandler pausar os joysticks
+        window.dispatchEvent(new CustomEvent('chatToggled', { detail: { isOpen: this.isVisible } }));
+        
         if (this.isVisible) {
             this.container.classList.add('open');
-            this.toggleBtn.style.opacity = '0'; // Esconde o botão flutuante quando aberto
+            this.toggleBtn.style.opacity = '0'; // Esconde a bolha enquanto o chat estiver aberto
+            this.toggleBtn.style.pointerEvents = 'none';
             this.unreadCount = 0;
             this.updateNotification();
             
-            // Foca no input apenas se não for mobile (para não abrir teclado virtual na cara)
-            if (!this.isMobile()) this.input.focus();
+            // Foca no input apenas se não for mobile (para não abrir o teclado virtual na cara)
+            if (!this.isMobile()) {
+                setTimeout(() => this.input.focus(), 100);
+            }
             
             this.scrollToBottom();
         } else {
             this.container.classList.remove('open');
             this.toggleBtn.style.opacity = '1';
-            this.toggleDropdown(false); // Fecha o menu se fechar o chat
+            this.toggleBtn.style.pointerEvents = 'auto';
+            this.toggleDropdown(false); // Garante que o dropdown feche
+            this.input.blur(); // Garante que o teclado feche
         }
     }
 
@@ -365,10 +393,12 @@ export class ChatSystem {
         
         if (tab === 'SYSTEM') {
             this.input.disabled = true;
-            this.input.placeholder = "Log do Sistema (Apenas Leitura)";
+            this.input.placeholder = "Log (Apenas Leitura)";
+            this.input.style.opacity = '0.5';
         } else {
             this.input.disabled = false;
-            if (tab === 'GLOBAL') this.input.placeholder = "Enviar para todos...";
+            this.input.style.opacity = '1';
+            if (tab === 'GLOBAL') this.input.placeholder = "Zumbir para todos...";
             else if (tab === 'PARTY') this.input.placeholder = `Falar com ${this.currentPartyName}...`;
             else this.input.placeholder = `Sussurrar para ${tab}...`;
         }
@@ -430,37 +460,38 @@ export class ChatSystem {
 
         const msgDiv = document.createElement('div');
         msgDiv.dataset.channel = targetChannel;
-        msgDiv.style.padding = "8px 12px";
-        msgDiv.style.borderRadius = "10px";
-        msgDiv.style.marginBottom = "5px";
-        msgDiv.style.fontSize = "13px";
+        msgDiv.style.padding = "10px 12px";
+        msgDiv.style.borderRadius = "12px";
+        msgDiv.style.marginBottom = "8px";
+        msgDiv.style.fontSize = "14px";
         msgDiv.style.lineHeight = "1.4";
-        msgDiv.style.background = "rgba(255,255,255,0.6)"; // Fundo suave nas mensagens
+        msgDiv.style.background = "rgba(255,255,255,0.7)"; 
+        msgDiv.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)";
         
         const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         if (type === 'SYSTEM') {
             msgDiv.style.borderLeft = "4px solid var(--honey)";
-            msgDiv.style.background = "rgba(255, 215, 0, 0.1)";
-            msgDiv.innerHTML = `<small style="color:#888">${time}</small> <span style="color:#F39C12; font-weight:bold;">🐝 SISTEMA:</span> ${text}`;
+            msgDiv.style.background = "rgba(255, 215, 0, 0.15)";
+            msgDiv.innerHTML = `<small style="color:#888; display:block; margin-bottom:2px;">${time}</small> <span style="color:#F39C12; font-weight:900;">🐝 SISTEMA:</span> ${text}`;
         } else {
             const isSelf = type === 'SELF' || type === 'WHISPER_SELF' || (type === 'PARTY' && sender === 'Você');
             const senderDisplayName = isSelf ? 'Você' : sender;
             
             // Cores Temáticas
             let nickColor = "#F39C12"; // Padrão
-            if (type === 'PARTY') nickColor = "#2ecc71"; // Verde Folha
-            if (type === 'WHISPER' || type === 'WHISPER_SELF') nickColor = "#9b59b6"; // Roxo Flor
+            if (type === 'PARTY') nickColor = "#27ae60"; // Verde Folha
+            if (type === 'WHISPER' || type === 'WHISPER_SELF') nickColor = "#8e44ad"; // Roxo Flor
             if (isSelf) nickColor = "#5D4037"; // Terra
 
             const iconPrefix = (type === 'PARTY' && this.currentPartyIcon) ? `${this.currentPartyIcon} ` : '';
 
             msgDiv.innerHTML = `
-                <div style="display:flex; gap:5px; align-items:baseline;">
-                    <b style="color:${nickColor}; cursor:pointer; white-space:nowrap;" class="chat-nick">${iconPrefix}${senderDisplayName}:</b> 
-                    <span style="color:#333;">${this.escapeHTML(text)}</span>
+                <div style="display:flex; flex-wrap: wrap; gap:5px; align-items:baseline;">
+                    <b style="color:${nickColor}; cursor:pointer; font-weight:900;" class="chat-nick">${iconPrefix}${senderDisplayName}:</b> 
+                    <span style="color:#333; word-break: break-word;">${this.escapeHTML(text)}</span>
                 </div>
-                <div style="font-size:10px; color:#aaa; text-align:right; margin-top:2px;">${time}</div>
+                <div style="font-size:10px; color:#aaa; text-align:right; margin-top:4px;">${time}</div>
             `;
 
             if (!isSelf && type !== 'SYSTEM') {
@@ -473,7 +504,7 @@ export class ChatSystem {
         }
 
         this.messagesBox.appendChild(msgDiv);
-        this.limitMessages(this.isMobile() ? 50 : 100);
+        this.limitMessages(this.isMobile() ? 50 : 100); // Economiza memória no mobile
 
         // Notificações
         if (this.activeTab !== targetChannel) {
@@ -505,7 +536,10 @@ export class ChatSystem {
     }
 
     scrollToBottom() {
-        this.messagesBox.scrollTop = this.messagesBox.scrollHeight;
+        // Pequeno delay garante que a DOM calculou a nova div antes de rolar
+        setTimeout(() => {
+            if (this.messagesBox) this.messagesBox.scrollTop = this.messagesBox.scrollHeight;
+        }, 10);
     }
 
     updateNotification() {
@@ -513,11 +547,11 @@ export class ChatSystem {
         if (this.unreadCount > 0) {
             this.toggleBtn.style.background = "var(--danger)";
             this.toggleBtn.style.borderColor = "white";
-            this.toggleBtn.innerHTML = `<span style="font-size:14px">💬</span> <b style="font-size:12px">${this.unreadCount}</b>`;
+            this.toggleBtn.innerHTML = `<span style="font-size:18px; margin-right:2px;">💬</span> <b style="font-size:14px">${this.unreadCount > 9 ? '9+' : this.unreadCount}</b>`;
             
-            // Pequena animação de pulso
-            this.toggleBtn.style.transform = "scale(1.1)";
-            setTimeout(() => this.toggleBtn.style.transform = "scale(1)", 200);
+            // Animação forte
+            this.toggleBtn.style.transform = "scale(1.2)";
+            setTimeout(() => this.toggleBtn.style.transform = "scale(1)", 300);
         } else {
             this.toggleBtn.style.background = "var(--honey)";
             this.toggleBtn.style.borderColor = "white";
@@ -529,9 +563,6 @@ export class ChatSystem {
         const text = this.input.value.trim();
         if (!text) return;
         this.input.value = '';
-        
-        // Mantém foco se não for mobile
-        if (!this.isMobile()) this.input.focus();
 
         if (text === '/sair' && this.channels.includes('PARTY')) {
             window.dispatchEvent(new CustomEvent('chatSend', { detail: { type: 'LEAVE_PARTY_CMD' } }));
