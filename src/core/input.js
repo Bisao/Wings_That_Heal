@@ -32,7 +32,6 @@ class VirtualJoystick {
             const centerY = rect.top + rect.height / 2;
             const dist = Math.sqrt(Math.pow(touch.clientX - centerX, 2) + Math.pow(touch.clientY - centerY, 2));
 
-            // Aumentei um pouco a tolerância do toque inicial para facilitar
             if (dist <= rect.width / 1.5) {
                 e.preventDefault();
                 this.touchId = touch.identifier;
@@ -95,11 +94,16 @@ export class InputHandler {
         this.isMobile = this.detectMobile();
         
         // Joysticks Virtuais
-        this.leftStick = null;  // Movimento
-        this.rightStick = null; // Mira/Tiro
+        this.leftStick = null;  
+        this.rightStick = null; 
         
-        this.isMobileActionHeld = false;
-        this.actionBtn = null;
+        // Novos Botões de Ação (Mobile)
+        this.btnCollect = null;
+        this.btnPollinate = null;
+        
+        // Estados de Input
+        this.isCollectingHeld = false;
+        this.isPollinatingHeld = false;
 
         // Controle de Mouse (PC)
         this.mousePos = { x: 0, y: 0 };
@@ -110,29 +114,20 @@ export class InputHandler {
     }
 
     init() {
-        // Eventos de Teclado
+        // Eventos de Teclado (PC)
         window.addEventListener('keydown', e => { if(e.key) this.keys[e.key.toLowerCase()] = true; });
         window.addEventListener('keyup', e => { if(e.key) this.keys[e.key.toLowerCase()] = false; });
 
-        // Escuta eventos customizados de UI para ocultar os joysticks em modais
         window.addEventListener('skillTreeToggled', (e) => {
-            if (e.detail.isOpen) {
-                this.hideJoystick();
-            } else {
-                this.showJoystick();
-            }
+            if (e.detail.isOpen) this.hideJoystick();
+            else this.showJoystick();
         });
 
-        // Tenta detectar orientação se já estiver em mobile
         if (this.isMobile) {
             this.handleOrientationLock();
-        }
-
-        if (this.isMobile) {
             this.injectMobileStyles();
             this.injectMobileHTML();
             
-            // Inicializa os dois analógicos
             this.leftStick = new VirtualJoystick('stick-left-zone', 'stick-left-knob');
             this.rightStick = new VirtualJoystick('stick-right-zone', 'stick-right-knob');
             
@@ -142,22 +137,15 @@ export class InputHandler {
         }
     }
 
-    // Método melhorado de detecção Mobile
     detectMobile() {
         const userAgent = navigator.userAgent || navigator.vendor || window.opera;
         return (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent) || 
-                (navigator.maxTouchPoints && navigator.maxTouchPoints > 1)); // Suporte a iPadOS novos
+                (navigator.maxTouchPoints && navigator.maxTouchPoints > 1));
     }
 
-    // Tenta travar a orientação automaticamente ao iniciar
     async handleOrientationLock() {
         if (screen.orientation && screen.orientation.lock) {
-            try {
-                // Tenta travar, mas pode falhar se não estiver em fullscreen (interação do usuário necessária)
-                await screen.orientation.lock('landscape').catch(() => {});
-            } catch (e) {
-                // Silencioso, pois geralmente requer clique do usuário
-            }
+            try { await screen.orientation.lock('landscape').catch(() => {}); } catch (e) {}
         }
     }
 
@@ -165,57 +153,47 @@ export class InputHandler {
         window.addEventListener('mousemove', e => {
             this.mousePos.x = e.clientX;
             this.mousePos.y = e.clientY;
-            
-            // Calcula vetor de mira baseado no centro da tela (onde o player sempre está)
             const centerX = window.innerWidth / 2;
             const centerY = window.innerHeight / 2;
             const dx = this.mousePos.x - centerX;
             const dy = this.mousePos.y - centerY;
             const dist = Math.sqrt(dx*dx + dy*dy);
-            
             if (dist > 0) {
                 this.aimVectorPC.x = dx / dist;
                 this.aimVectorPC.y = dy / dist;
             }
         });
-
-        window.addEventListener('mousedown', e => {
-            if (e.button === 0) this.isMouseDown = true; // Botão esquerdo
-        });
-
-        window.addEventListener('mouseup', e => {
-            if (e.button === 0) this.isMouseDown = false;
-        });
+        window.addEventListener('mousedown', e => { if (e.button === 0) this.isMouseDown = true; });
+        window.addEventListener('mouseup', e => { if (e.button === 0) this.isMouseDown = false; });
     }
 
-    isActionActive() {
-        return this.keys['e'] || this.keys[' '] || this.isMobileActionHeld;
+    // [NOVO] Verifica se o jogador quer coletar pólen (Teclado: E ou Clique no Botão)
+    isCollecting() {
+        return this.keys['e'] || this.isCollectingHeld;
     }
 
-    // Estilos CSS Injetados dinamicamente
+    // [NOVO] Verifica se o jogador quer polinizar (Teclado: F ou Clique no Botão)
+    isPollinating() {
+        return this.keys['f'] || this.isPollinatingHeld;
+    }
+
     injectMobileStyles() {
         if (document.getElementById('joystick-styles')) return;
         const style = document.createElement('style');
         style.id = 'joystick-styles';
         style.innerHTML = `
-            /* Container geral para evitar que toques passem para o canvas */
             #mobile-controls-container {
                 position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-                pointer-events: none; 
-                z-index: 8500; /* [ATUALIZADO] Z-index abaixado para ficar atrás da SkillTree (10000) e Modais */
-                display: none; /* Escondido por padrão até o jogo começar */
+                pointer-events: none; z-index: 8500; display: none;
             }
 
-            /* Analógico Esquerdo (Movimento) */
             #stick-left-zone {
                 position: absolute; bottom: 30px; left: 30px; 
                 width: 140px; height: 140px; pointer-events: auto;
-                /* Safe area para telas com notch/curvas */
                 margin-left: env(safe-area-inset-left);
                 margin-bottom: env(safe-area-inset-bottom);
             }
 
-            /* Analógico Direito (Mira) */
             #stick-right-zone {
                 position: absolute; bottom: 30px; right: 30px; 
                 width: 140px; height: 140px; pointer-events: auto;
@@ -228,13 +206,10 @@ export class InputHandler {
                 background: rgba(255,255,255,0.08); 
                 border: 2px solid rgba(255,255,255,0.15);
                 position: relative;
-                touch-action: none; /* Importante para prevenir zoom/scroll */
+                touch-action: none;
             }
             
-            /* Estilo diferente para o analógico de mira (vermelho) */
-            #stick-right-zone.joystick-zone {
-                border-color: rgba(255, 50, 50, 0.3);
-            }
+            #stick-right-zone.joystick-zone { border-color: rgba(255, 50, 50, 0.3); }
 
             .joystick-knob {
                 position: absolute; top: 50%; left: 50%;
@@ -243,40 +218,41 @@ export class InputHandler {
                 box-shadow: 0 0 15px rgba(0,0,0,0.4); pointer-events: none;
             }
 
-            /* Knob de mira vermelho */
-            #stick-right-knob {
-                background: rgba(231, 76, 60, 0.9) !important;
-            }
+            #stick-right-knob { background: rgba(231, 76, 60, 0.9) !important; }
 
-            /* Botão de Ação Flutuante */
-            .mobile-action-btn {
-                position: absolute; 
-                bottom: 180px; right: 60px; /* Acima do stick direito */
-                background: #2ecc71; color: white; padding: 15px 25px; border-radius: 50px;
-                font-weight: 900; border: 3px solid white; z-index: 8600; /* [ATUALIZADO] Atrás dos modais */
-                display: none; transition: transform 0.1s; pointer-events: auto;
-                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-                font-family: 'Nunito', sans-serif;
-                font-size: 16px;
-                text-transform: uppercase;
+            /* [NOVO] Container para botões de ação acima do stick direito */
+            .mobile-action-group {
+                position: absolute;
+                bottom: 180px; right: 30px;
+                display: flex; flex-direction: column; gap: 15px;
+                pointer-events: none;
                 margin-right: env(safe-area-inset-right);
                 margin-bottom: env(safe-area-inset-bottom);
             }
-            .mobile-action-btn:active { transform: scale(0.95); background: #27ae60; }
+
+            .btn-bee-action {
+                width: 70px; height: 70px;
+                border-radius: 50%; border: 3px solid white;
+                color: white; font-weight: 900; font-size: 12px;
+                display: flex; flex-direction: column; align-items: center; justify-content: center;
+                pointer-events: auto; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                transition: transform 0.1s, opacity 0.3s;
+                text-shadow: 1px 1px 2px black;
+                font-family: 'Nunito', sans-serif;
+            }
             
-            /* Ajustes para telas muito pequenas no formato Paisagem */
+            .btn-bee-action span { font-size: 20px; }
+            .btn-bee-action:active { transform: scale(0.9); }
+
+            #btn-collect { background: #3498db; display: none; } /* Azul Coleta */
+            #btn-pollinate { background: #2ecc71; opacity: 0.4; } /* Verde Polinizar */
+
             @media (max-width: 768px) and (orientation: landscape) {
-                #stick-left-zone, #stick-right-zone {
-                    width: 110px; height: 110px;
-                    bottom: 15px;
-                }
-                .joystick-knob {
-                    width: 50px; height: 50px;
-                }
-                .mobile-action-btn {
-                    bottom: 140px; right: 40px;
-                    padding: 10px 20px; font-size: 14px;
-                }
+                #stick-left-zone, #stick-right-zone { width: 110px; height: 110px; bottom: 15px; }
+                .joystick-knob { width: 50px; height: 50px; }
+                .mobile-action-group { bottom: 135px; right: 20px; gap: 10px; }
+                .btn-bee-action { width: 55px; height: 55px; font-size: 10px; }
+                .btn-bee-action span { font-size: 16px; }
             }
         `;
         document.head.appendChild(style);
@@ -291,48 +267,65 @@ export class InputHandler {
                 <div id="stick-left-knob" class="joystick-knob"></div>
             </div>
 
+            <div class="mobile-action-group">
+                <button id="btn-pollinate" class="btn-bee-action">
+                    <span>✨</span>SOLTAR
+                </button>
+                <button id="btn-collect" class="btn-bee-action">
+                    <span>🍯</span>COLHER
+                </button>
+            </div>
+
             <div id="stick-right-zone" class="joystick-zone">
                 <div id="stick-right-knob" class="joystick-knob"></div>
             </div>
-
-            <button id="mobile-action-btn" class="mobile-action-btn">AÇÃO</button>
         `;
         document.body.appendChild(div);
-        this.actionBtn = document.getElementById('mobile-action-btn');
+        this.btnCollect = document.getElementById('btn-collect');
+        this.btnPollinate = document.getElementById('btn-pollinate');
     }
 
     bindMobileActionEvents() {
-        if (!this.actionBtn) return;
-        
-        const setHeld = (s) => { 
-            this.isMobileActionHeld = s;
-            if(s) {
-                this.actionBtn.style.transform = "scale(0.9)";
+        const setupBtn = (btn, heldVar) => {
+            if (!btn) return;
+            btn.addEventListener('pointerdown', (e) => { 
+                e.preventDefault(); 
+                this[heldVar] = true; 
                 window.dispatchEvent(new CustomEvent('joystickInteract'));
-            } else {
-                this.actionBtn.style.transform = "scale(1.0)";
-            }
+            });
+            btn.addEventListener('pointerup', (e) => { e.preventDefault(); this[heldVar] = false; });
+            btn.addEventListener('pointerleave', (e) => { e.preventDefault(); this[heldVar] = false; });
         };
 
-        this.actionBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); setHeld(true); });
-        this.actionBtn.addEventListener('pointerup', (e) => { e.preventDefault(); setHeld(false); });
-        this.actionBtn.addEventListener('pointerleave', (e) => { e.preventDefault(); setHeld(false); });
-        this.actionBtn.addEventListener('contextmenu', e => e.preventDefault());
+        setupBtn(this.btnCollect, 'isCollectingHeld');
+        setupBtn(this.btnPollinate, 'isPollinatingHeld');
     }
 
-    updateActionButton(visible, text = "AÇÃO", color = "#2ecc71") {
-        if (!this.actionBtn) return;
-        
-        if (visible) {
-            this.actionBtn.style.display = 'block';
-            this.actionBtn.innerText = text;
-            this.actionBtn.style.background = color;
-        } else {
-            this.actionBtn.style.display = 'none';
+    /**
+     * [NOVO] Gerencia a visibilidade e estado dos botões de ação
+     * @param {Object} state - { canCollect: bool, hasPollen: bool, overBurntGround: bool }
+     */
+    updateBeeActions(state) {
+        if (!this.isMobile) return;
+
+        // Botão de Coleta só aparece perto de flores
+        if (this.btnCollect) {
+            this.btnCollect.style.display = state.canCollect ? 'flex' : 'none';
+        }
+
+        // Botão de Polinização: Visível se tem pólen, Brilhante se sobre terra queimada
+        if (this.btnPollinate) {
+            this.btnPollinate.style.opacity = state.hasPollen ? "1.0" : "0.4";
+            if (state.hasPollen && state.overBurntGround) {
+                this.btnPollinate.style.boxShadow = "0 0 20px #2ecc71";
+                this.btnPollinate.style.border = "3px solid #fff";
+            } else {
+                this.btnPollinate.style.boxShadow = "0 5px 15px rgba(0,0,0,0.3)";
+                this.btnPollinate.style.border = "3px solid rgba(255,255,255,0.5)";
+            }
         }
     }
 
-    // Método chamado pelo Game.js ao iniciar o loop do jogo
     showJoystick() {
         if (this.isMobile) {
             const el = document.getElementById('mobile-controls-container');
@@ -340,60 +333,37 @@ export class InputHandler {
         }
     }
     
-    // Método chamado pelo Game.js ao voltar ao menu
     hideJoystick() {
         const el = document.getElementById('mobile-controls-container');
         if (el) el.style.display = 'none';
-        
-        // Reseta os joysticks ao ocultar, evitando travamento de vetor
         if (this.leftStick) this.leftStick.reset();
         if (this.rightStick) this.rightStick.reset();
+        this.isCollectingHeld = false;
+        this.isPollinatingHeld = false;
     }
 
     getMovement() {
-        // Prioridade para Touch Esquerdo
         if (this.isMobile && this.leftStick && this.leftStick.touchId !== null) {
             return { x: this.leftStick.vector.x, y: this.leftStick.vector.y };
         }
-
-        // Fallback para Teclado (PC)
         let x = 0, y = 0;
         if (this.keys['w'] || this.keys['arrowup']) y -= 1;
         if (this.keys['s'] || this.keys['arrowdown']) y += 1;
         if (this.keys['a'] || this.keys['arrowleft']) x -= 1;
         if (this.keys['d'] || this.keys['arrowright']) x += 1;
-        
-        // Normaliza para evitar velocidade dobrada na diagonal
         if (x !== 0 && y !== 0) { 
             const len = Math.sqrt(x*x + y*y);
-            x /= len; 
-            y /= len; 
+            x /= len; y /= len; 
         }
-        
         return { x, y };
     }
 
-    // Retorna vetor de mira e se está atirando
     getAim() {
-        // Modo Mobile: Analógico Direito
         if (this.isMobile && this.rightStick) {
             const vec = this.rightStick.vector;
             const mag = Math.sqrt(vec.x*vec.x + vec.y*vec.y);
-            // Considera "atirando" se empurrar o analógico um pouco (deadzone 0.2)
-            const isFiring = mag > 0.2;
-            
-            return { 
-                x: vec.x, 
-                y: vec.y, 
-                isFiring: isFiring 
-            };
+            return { x: vec.x, y: vec.y, isFiring: mag > 0.2 };
         }
-
-        // Modo PC: Mouse
-        return {
-            x: this.aimVectorPC.x,
-            y: this.aimVectorPC.y,
-            isFiring: this.isMouseDown
-        };
+        return { x: this.aimVectorPC.x, y: this.aimVectorPC.y, isFiring: this.isMouseDown };
     }
 }
