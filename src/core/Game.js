@@ -275,14 +275,14 @@ export class Game {
         this.localPlayer.update(m);
         this.processShooting();
 
-        // [NOVO] Verifica qual é o bloco atual embaixo da abelha
+        // Verifica qual é o bloco atual embaixo da abelha
         const currentTile = this.worldState.getModifiedTile(gx, gy) || this.world.getTileAt(gx, gy);
 
         const moving = m.x !== 0 || m.y !== 0;
         if(moving || Math.random() < 0.05) {
             let speedMod = this.invulnerabilityTimer > 0 ? 1.5 : 1.0;
             
-            // [ATUALIZADO] Aplica freio de 25% se o chão estiver queimado
+            // Aplica freio de 25% se o chão estiver queimado
             if (currentTile === 'TERRA_QUEIMADA') {
                 speedMod *= 0.75; 
             }
@@ -339,9 +339,16 @@ export class Game {
                     
                     const isBaseTile = this.localPlayer.homeBase && Math.round(t.x) === Math.round(this.localPlayer.homeBase.x) && Math.round(t.y) === Math.round(this.localPlayer.homeBase.y);
                     
-                    if (!isBaseTile || type !== 'COLMEIA') {
-                        this.ctx.fillStyle = (type === 'COLMEIA') ? '#f1c40f' : (['GRAMA','GRAMA_SAFE','BROTO','MUDA','FLOR', 'FLOR_COOLDOWN'].includes(type) ? '#2ecc71' : '#34495e');
-                        this.ctx.fillRect(sX, sY, rTileSize + 1, rTileSize + 1);
+                    // [CORREÇÃO] Pinta o chão de verde mesmo se for a tile base, tapando o buraco
+                    if (isBaseTile) {
+                         this.ctx.fillStyle = '#2ecc71'; // Grama
+                         this.ctx.fillRect(sX, sY, rTileSize + 1, rTileSize + 1);
+                    } else if (type === 'COLMEIA') {
+                         this.ctx.fillStyle = '#f1c40f';
+                         this.ctx.fillRect(sX, sY, rTileSize + 1, rTileSize + 1);
+                    } else {
+                         this.ctx.fillStyle = (['GRAMA','GRAMA_SAFE','BROTO','MUDA','FLOR', 'FLOR_COOLDOWN'].includes(type) ? '#2ecc71' : '#34495e');
+                         this.ctx.fillRect(sX, sY, rTileSize + 1, rTileSize + 1);
                     }
 
                     this.ctx.strokeStyle = "rgba(255, 255, 255, 0.05)"; 
