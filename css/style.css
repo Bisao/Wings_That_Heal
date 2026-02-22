@@ -542,7 +542,7 @@ input:focus {
    ========================================================================= */
 
 /* --- 1. AJUSTES EXCLUSIVOS PARA DESKTOP E TELAS GRANDES --- */
-@media (min-width: 769px) {
+@media (min-width: 1024px) {
     
     /* Ancora a imagem no topo para não cortar o título em monitores 16:9 */
     #lobby-overlay {
