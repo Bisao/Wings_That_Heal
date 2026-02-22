@@ -72,7 +72,6 @@ canvas {
     flex-direction: column; 
     gap: 8px; 
     pointer-events: none;
-    /* Adicionado maxWidth para segurar o HUD em telas super estreitas */
     max-width: 50vw; 
 }
 
@@ -158,7 +157,7 @@ canvas {
 /* --- Ranking --- */
 #ranking-container {
     position: fixed; 
-    top: 60px; /* Desceu um pouco para desktop também */
+    top: 60px; 
     right: 15px; 
     z-index: 1000;
     background: var(--glass); 
@@ -243,7 +242,7 @@ canvas {
     z-index: -1;
 }
 
-/* Modal de Lobby Responsivo */
+/* Modal de Lobby Base */
 .lobby-modal {
     display: none; 
     position: fixed; 
@@ -253,12 +252,10 @@ canvas {
     background: rgba(20, 20, 20, 0.95); 
     border: 3px solid var(--wood-dark);
     
-    /* Garante que o modal não vaze da tela */
     width: 90%; 
     max-width: 400px; 
-    max-height: 85vh; /* Evita que o modal passe da altura da tela */
+    max-height: 85vh; 
     
-    /* Permite rolagem se o conteúdo for maior que a tela (muitos saves) */
     overflow-y: auto;
     overflow-x: hidden;
     
@@ -357,7 +354,7 @@ input {
     font-family: inherit; 
     font-size: 14px;
     outline: none;
-    -webkit-appearance: none; /* Remove estilos padrão do iOS */
+    -webkit-appearance: none; 
 }
 
 input:focus { 
@@ -377,7 +374,6 @@ input:focus {
     padding: 20px; 
     z-index: 8000;
     
-    /* Largura segura no mobile */
     width: 90%; 
     max-width: 320px; 
     
@@ -391,7 +387,7 @@ input:focus {
 #delete-confirm-popup {
     display: none; 
     position: fixed; 
-    inset: 0; /* Preenche a tela toda */
+    inset: 0; 
     background: rgba(0,0,0,0.8); 
     z-index: 100000; 
     justify-content: center; 
@@ -461,7 +457,7 @@ input:focus {
     cursor: pointer;
     transition: all 0.2s ease;
     text-align: left;
-    width: 100%; /* Garante que ocupe todo o container interno */
+    width: 100%; 
 }
 .save-card:hover {
     border-color: var(--primary);
@@ -476,7 +472,7 @@ input:focus {
     font-weight: 900;
     font-size: 15px;
     color: var(--primary);
-    word-break: break-all; /* Evita que nomes gigantes quebrem o card */
+    word-break: break-all; 
 }
 .save-card-subtitle {
     font-size: 11px;
@@ -489,7 +485,7 @@ input:focus {
     color: #e74c3c;
     font-size: 20px;
     cursor: pointer;
-    padding: 10px; /* Área de toque maior pro mobile */
+    padding: 10px; 
     border-radius: 6px;
     display: flex;
     align-items: center;
@@ -541,7 +537,73 @@ input:focus {
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* --- Media Queries (Responsividade Pura) --- */
+/* =========================================================================
+   MEDIA QUERIES - SEPARAÇÃO PERFEITA DE DISPOSITIVOS
+   ========================================================================= */
+
+/* --- 1. AJUSTES EXCLUSIVOS PARA DESKTOP E TELAS GRANDES --- */
+@media (min-width: 769px) {
+    
+    /* Trava o HUD para não "espalhar" na tela esticada */
+    #rpg-hud {
+        max-width: 300px;
+        transform: scale(1.1); /* Leve upscale para ficar vistoso no monitor */
+        transform-origin: top left;
+    }
+
+    /* Ranking com proporção boa no canto direito */
+    #ranking-container {
+        transform: scale(1.1);
+        transform-origin: top right;
+    }
+
+    /* Menu Principal não fica gigante */
+    .main-menu-container {
+        max-width: 360px;
+    }
+
+    .main-menu-btn {
+        padding: 18px;
+        font-size: 16px;
+    }
+
+    /* Modais do Lobby mais confortáveis e largos no PC */
+    .lobby-modal {
+        max-width: 550px;
+        padding: 30px;
+    }
+
+    #save-list-container {
+        max-height: 400px; /* Mais espaço para rolagem no PC */
+        padding-right: 10px;
+    }
+
+    /* Textos de saves mais legíveis em monitores */
+    .save-detail-row {
+        font-size: 14px;
+    }
+    .save-detail-val {
+        font-size: 13px;
+        max-width: 60%;
+    }
+
+    /* Botão de Evolução / Skills ganha o tamanho correto */
+    #btn-skills {
+        width: 55px;
+        height: 55px;
+        font-size: 26px;
+        top: 180px;
+    }
+
+    /* Painel de Exclusão ganha um respiro melhor */
+    #delete-confirm-popup > div {
+        max-width: 420px;
+        padding: 30px;
+    }
+}
+
+
+/* --- 2. AJUSTES EXCLUSIVOS PARA MOBILE (Retrato e Telas Pequenas) --- */
 @media (max-width: 768px) {
     /* Diminui e reposiciona o HUD para não colar na borda nem brigar com joysticks */
     #rpg-hud { 
