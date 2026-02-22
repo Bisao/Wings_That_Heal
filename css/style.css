@@ -406,24 +406,6 @@ input:focus {
 }
 
 /* --- Botões HUD --- */
-#chat-toggle-btn {
-    position: fixed; 
-    bottom: 160px; 
-    right: 20px; 
-    width: 50px; 
-    height: 50px;
-    background: var(--primary); 
-    border: 3px solid white; 
-    border-radius: 50%;
-    font-size: 20px; 
-    display: flex; 
-    align-items: center; 
-    justify-content: center;
-    cursor: pointer; 
-    z-index: 9999; 
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-}
-
 #btn-skills {
     position: fixed; 
     top: 150px; 
@@ -444,6 +426,28 @@ input:focus {
     transition: transform 0.1s;
 }
 #btn-skills:active {
+    transform: scale(0.9);
+}
+
+#chat-toggle-btn {
+    position: fixed; 
+    top: 210px; /* Logo abaixo do botão de skills */
+    left: 15px; /* Mesma margem do botão de skills */
+    width: 45px; /* Mesmo tamanho do botão de skills */
+    height: 45px;
+    background: var(--primary); 
+    border: 2px solid white; 
+    border-radius: 50%;
+    font-size: 20px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    cursor: pointer; 
+    z-index: 9000; 
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    transition: transform 0.1s;
+}
+#chat-toggle-btn:active {
     transform: scale(0.9);
 }
 
@@ -600,6 +604,14 @@ input:focus {
         top: 180px;
     }
 
+    /* Botão do Chat acompanha as medidas do desktop */
+    #chat-toggle-btn {
+        width: 55px;
+        height: 55px;
+        font-size: 24px;
+        top: 250px; 
+    }
+
     /* Painel de Exclusão ganha um respiro melhor */
     #delete-confirm-popup > div {
         max-width: 420px;
@@ -639,6 +651,15 @@ input:focus {
     /* Botão de skills desce para ficar acima do joystick de andar, mas sem tocá-lo */
     #btn-skills { 
         top: 200px; 
+        left: 10px;
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+    }
+
+    /* Botão do Chat acompanha o mobile, logo abaixo das skills */
+    #chat-toggle-btn {
+        top: 255px; 
         left: 10px;
         width: 40px;
         height: 40px;
