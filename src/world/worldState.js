@@ -129,6 +129,51 @@ export class WorldState {
     }
 
     /**
+     * Calcula um padrão orgânico de espalhamento para a cura do solo.
+     * @returns {Array} Array de coordenadas {x, y} a serem curadas, em ordem de "crescimento".
+     */
+    getOrganicSpreadShape(startX, startY, minCells = 5, maxCells = 11) {
+        // Decide aleatoriamente quantas células serão curadas
+        const count = Math.floor(Math.random() * (maxCells - minCells + 1)) + minCells;
+        const result = [];
+        const visited = new Set();
+        
+        // Fila para simular o crescimento (Flood Fill aleatório)
+        const frontier = [{ x: Math.round(startX), y: Math.round(startY) }];
+        visited.add(`${this._wrap(frontier[0].x)},${this._wrap(frontier[0].y)}`);
+
+        while (frontier.length > 0 && result.length < count) {
+            // Sorteia um bloco da fronteira para expandir (isso quebra o formato de quadrado)
+            const randomIndex = Math.floor(Math.random() * frontier.length);
+            const current = frontier.splice(randomIndex, 1)[0];
+            
+            result.push(current);
+
+            // Olha os 4 vizinhos adjacentes (Cima, Baixo, Esquerda, Direita)
+            const neighbors = [
+                { x: current.x, y: current.y - 1 },
+                { x: current.x, y: current.y + 1 },
+                { x: current.x - 1, y: current.y },
+                { x: current.x + 1, y: current.y }
+            ];
+
+            for (const n of neighbors) {
+                const wx = this._wrap(n.x);
+                const wy = this._wrap(n.y);
+                const key = `${wx},${wy}`;
+                
+                if (!visited.has(key)) {
+                    visited.add(key);
+                    // Adiciona na fronteira de crescimento
+                    frontier.push(n);
+                }
+            }
+        }
+        
+        return result;
+    }
+
+    /**
      * Exporta o estado do mundo para o SaveSystem
      */
     getFullState() {
