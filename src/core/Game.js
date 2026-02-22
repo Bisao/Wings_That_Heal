@@ -276,7 +276,6 @@ export class Game {
 
         if(moving || Math.random() < 0.05) {
             let speedMod = this.invulnerabilityTimer > 0 ? 1.5 : 1.0;
-            // Se polinização estiver ativa, abelha fica 20% mais lenta (foco na semeadura)
             if (this.input.isPollinating()) speedMod *= 0.8; 
             if (currentTile === 'TERRA_QUEIMADA') speedMod *= 0.75; 
 
@@ -451,7 +450,6 @@ export class Game {
     processShooting() {
         const aim = this.input.getAim();
         if (aim.isFiring) {
-            // Se o player disparar, o InputHandler já cuida de resetar o toggle da polinização.
             const proj = this.localPlayer.shootPollen(aim.x, aim.y);
             if (proj) {
                 this.projectiles.push(new Projectile(proj.x, proj.y, proj.vx, proj.vy, proj.ownerId, proj.damage));
@@ -463,7 +461,6 @@ export class Game {
     tryShoot() {
         const proj = this.localPlayer.shootPollen();
         if (proj) {
-            // Se atirar manualmente (Espaço no PC), desativa o toggle
             this.input.resetPollinationToggle();
             this.projectiles.push(new Projectile(proj.x, proj.y, proj.vx, proj.vy, proj.ownerId, proj.damage));
             this.net.sendPayload({ type: 'SHOOT', ownerId: proj.ownerId, x: proj.x, y: proj.y, vx: proj.vx, vy: proj.vy, damage: proj.damage });
@@ -472,7 +469,6 @@ export class Game {
 
     processFaint() {
         this.isFainted = true;
-        // Desativa polinização automática ao desmaiar
         this.input.resetPollinationToggle();
         document.getElementById('faint-screen').style.display = 'flex';
         this.faintTimeout = setTimeout(() => { this.performRespawn(); }, 60000);
@@ -512,7 +508,6 @@ export class Game {
             });
 
             if (this.input.isCollecting() && canAfford) {
-                // Ao iniciar resgate, desativa polinização automática para economizar pólen
                 this.input.resetPollinationToggle();
                 this.rescueTimer++;
                 if (this.rescueTimer >= this.RESCUE_DURATION) {
@@ -528,17 +523,16 @@ export class Game {
     }
 
     /**
-     * Lógica de interação manual/automática com o ambiente
+     * Lógica imersiva de interação com o ambiente (Probabilidade e Cura Lenta)
      */
     checkEnvironmentInteraction(gx, gy, tile) {
-        // Envia estado atual para o HUD (visibilidade do botão coletar e brilho do polinizador)
         this.input.updateBeeActions({
             canCollect: tile === 'FLOR' && this.localPlayer.pollen < this.localPlayer.maxPollen,
             hasPollen: this.localPlayer.pollen > 0,
             overBurntGround: tile === 'TERRA_QUEIMADA'
         });
 
-        // 1. Coleta Manual (Botão Azul): Continua via HOLD (segurar)
+        // 1. Coleta Manual: Continua via HOLD
         if (this.input.isCollecting()) {
             if (this.localPlayer.collectPollen(tile)) {
                 this.gainXp(0.2);
@@ -549,26 +543,32 @@ export class Game {
             }
         }
 
-        // 2. Polinização: Agora via TOGGLE (alternar)
+        // 2. Polinização: Agora com probabilidade e espalhamento lento
         if (this.input.isPollinating()) {
-            // Chama o método de polinização do player (que agora lida com o gasto contínuo)
             if (this.localPlayer.pollinate(tile)) {
-                // Gera o padrão orgânico gradual de cura
-                const spreadShape = this.worldState.getOrganicSpreadShape(gx, gy, 5, 11);
-                spreadShape.forEach((pos, index) => {
-                    setTimeout(() => {
-                        const tx = pos.x;
-                        const ty = pos.y;
-                        const target = this.worldState.getModifiedTile(tx, ty) || this.world.getTileAt(tx, ty);
-                        if (target === 'TERRA_QUEIMADA') {
-                            this.changeTile(tx, ty, 'GRAMA', this.localPlayer.id);
-                            this.localPlayer.tilesCured++;
-                            this.gainXp(15);
-                        }
-                    }, index * 200);
-                });
-                this.ui.updateHUD(this.localPlayer);
-                this.saveProgress();
+                // Tenta curar o tile central baseado na sorte definida no WorldState
+                if (this.worldState.attemptPollination(gx, gy) === 'CURED') {
+                    // Se curou, obtém a forma de espalhamento com delays embutidos
+                    const spreadShape = this.worldState.getOrganicSpreadShape(gx, gy);
+                    spreadShape.forEach((data) => {
+                        setTimeout(() => {
+                            const target = this.worldState.getModifiedTile(data.x, data.y) || this.world.getTileAt(data.x, data.y);
+                            if (target === 'TERRA_QUEIMADA') {
+                                this.changeTile(data.x, data.y, 'GRAMA', this.localPlayer.id);
+                                this.localPlayer.tilesCured++;
+                                this.gainXp(15);
+
+                                // Se for o tile central (gx, gy), existe uma chance rara de brotar uma FLOR
+                                if (data.x === gx && data.y === gy && Math.random() < 0.2) {
+                                     // Brota após a grama se estabilizar
+                                     setTimeout(() => this.changeTile(gx, gy, 'FLOR', this.localPlayer.id), 2000);
+                                }
+                            }
+                        }, data.delay); // Delay imersivo vindo do WorldState
+                    });
+                    this.ui.updateHUD(this.localPlayer);
+                    this.saveProgress();
+                }
             }
         }
     }
