@@ -7,6 +7,7 @@ export class Projectile {
         this.ownerId = ownerId; // ID de quem atirou (para não se acertar)
         this.damage = damage;
         this.life = 60; // Duração em frames (aprox 1 segundo a 60fps)
+        this.maxLife = 60; // Referência fixa para calcular o desvanecimento (fade out)
         this.radius = 0.2; // Tamanho da Hitbox (em tiles)
     }
 
@@ -34,20 +35,27 @@ export class Projectile {
         ctx.save();
         ctx.translate(sX, sY);
 
+        // Calcula a opacidade baseada na vida restante (dá o efeito de se desfazer no ar)
+        const alpha = Math.max(0, this.life / this.maxLife);
+        ctx.globalAlpha = alpha;
+
         // Efeito de Brilho (Pólen Energizado)
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 8 * alpha; // O brilho também diminui junto com a opacidade
         ctx.shadowColor = "#f1c40f"; // Amarelo brilhante
         ctx.fillStyle = "#f39c12";   // Laranja suave
 
+        // Leve efeito de dispersão: o pólen "espalha" (aumenta de tamanho) um pouquinho antes de sumir
+        const spread = 1 + (1 - alpha) * 0.5; 
+
         // Desenho do corpo principal
         ctx.beginPath();
-        ctx.arc(0, 0, 5 * zoom, 0, Math.PI * 2);
+        ctx.arc(0, 0, 5 * zoom * spread, 0, Math.PI * 2);
         ctx.fill();
 
         // Núcleo branco para dar sensação de energia
         ctx.fillStyle = "#ffffff";
         ctx.beginPath();
-        ctx.arc(0, 0, 2.5 * zoom, 0, Math.PI * 2);
+        ctx.arc(0, 0, 2.5 * zoom * spread, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.restore();
