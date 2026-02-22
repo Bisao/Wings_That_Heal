@@ -14,7 +14,7 @@ export class Player {
         this.radius = 0.4; // Raio da hitbox circular (em tiles)
         this.pollenDamage = 10; // Dano base do tiro
         this.attackCooldown = 0.5; // Timer entre tiros
-        this.attackSpeed = 30; // Frames entre cada tiro (30 frames = 0.5s a 60fps)
+        this.attackSpeed = 60; // Frames entre cada tiro (30 frames = 0.5s a 60fps)
         this.isAttacking = false; // Estado visual de ataque
 
         // --- SISTEMA DE RPG (Sincronizado com SaveSystem) ---
