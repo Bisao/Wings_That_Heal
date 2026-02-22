@@ -362,7 +362,7 @@ input:focus {
     background: rgba(0,0,0,0.8); 
 }
 
-/* --- Modais In-Game (Ex: Party, Info Jogador) --- */
+/* --- Modais In-Game --- */
 .modal-overlay {
     display: none; 
     position: fixed; 
@@ -383,27 +383,19 @@ input:focus {
     border: 4px solid var(--wood-dark);
 }
 
-/* Container do Modal de Confirmação de Exclusão */
-#delete-confirm-popup {
-    display: none; 
-    position: fixed; 
-    inset: 0; 
-    background: rgba(0,0,0,0.8); 
-    z-index: 100000; 
-    justify-content: center; 
-    align-items: center; 
+/* Botões de Ação Mobile (Injetados via Input.js) */
+.btn-bee-action {
+    width: 70px; height: 70px;
+    border-radius: 50%; border: 3px solid white;
+    color: white; font-weight: 900; font-size: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    pointer-events: auto; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    transition: transform 0.1s, opacity 0.3s;
+    text-shadow: 1px 1px 2px black;
+    font-family: 'Nunito', sans-serif;
 }
-
-#delete-confirm-popup > div {
-    background: #2c3e50; 
-    padding: 20px; 
-    border-radius: 12px; 
-    border: 2px solid #e74c3c; 
-    text-align: center; 
-    width: 90%;
-    max-width: 320px; 
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-}
+#btn-collect { background: #3498db; }
+#btn-pollinate { background: var(--accent-green); }
 
 /* --- Botões HUD --- */
 #btn-skills {
@@ -425,15 +417,12 @@ input:focus {
     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
     transition: transform 0.1s;
 }
-#btn-skills:active {
-    transform: scale(0.9);
-}
 
 #chat-toggle-btn {
     position: fixed; 
-    top: 210px; /* Logo abaixo do botão de skills */
-    left: 15px; /* Mesma margem do botão de skills */
-    width: 45px; /* Mesmo tamanho do botão de skills */
+    top: 210px; 
+    left: 15px; 
+    width: 45px; 
     height: 45px;
     background: var(--primary); 
     border: 2px solid white; 
@@ -445,10 +434,6 @@ input:focus {
     cursor: pointer; 
     z-index: 9000; 
     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-    transition: transform 0.1s;
-}
-#chat-toggle-btn:active {
-    transform: scale(0.9);
 }
 
 /* --- Gerenciador de Colmeias (Cards) --- */
@@ -459,76 +444,8 @@ input:focus {
     padding: 12px;
     margin-bottom: 12px;
     cursor: pointer;
-    transition: all 0.2s ease;
     text-align: left;
     width: 100%; 
-}
-.save-card:hover {
-    border-color: var(--primary);
-    background: rgba(0, 0, 0, 0.7);
-}
-.save-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.save-card-title {
-    font-weight: 900;
-    font-size: 15px;
-    color: var(--primary);
-    word-break: break-all; 
-}
-.save-card-subtitle {
-    font-size: 11px;
-    color: #aaa;
-    margin-top: 4px;
-}
-.btn-delete-save {
-    background: transparent;
-    border: none;
-    color: #e74c3c;
-    font-size: 20px;
-    cursor: pointer;
-    padding: 10px; 
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.save-card-details {
-    display: none; 
-    margin-top: 15px;
-    padding-top: 15px;
-    border-top: 1px solid #34495e;
-    animation: slideDown 0.3s ease forwards;
-}
-.save-card.expanded .save-card-details {
-    display: block;
-}
-.save-detail-row {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 10px;
-    font-size: 12px;
-    color: #ccc;
-    align-items: center;
-}
-.save-detail-val {
-    font-family: monospace;
-    background: rgba(0,0,0,0.5);
-    padding: 4px 8px;
-    border-radius: 4px;
-    color: #fff;
-    font-size: 11px;
-    max-width: 50%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.pass-toggle {
-    cursor: pointer;
-    margin-left: 8px;
-    font-size: 16px;
 }
 
 @keyframes popIn { 
@@ -536,159 +453,20 @@ input:focus {
     to { transform: translate(-50%, -50%) scale(1); opacity: 1; } 
 }
 
-@keyframes slideDown {
-    from { opacity: 0; transform: translateY(-5px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
 /* =========================================================================
-   MEDIA QUERIES - SEPARAÇÃO PERFEITA DE DISPOSITIVOS
+   MEDIA QUERIES 
    ========================================================================= */
 
-/* --- 1. AJUSTES EXCLUSIVOS PARA DESKTOP E TELAS GRANDES --- */
 @media (min-width: 1024px) {
-    
-    /* Ancora a imagem no topo para não cortar o título em monitores 16:9 */
-    #lobby-overlay {
-        background-position: center top; 
-    }
-
-    /* Trava o HUD para não "espalhar" na tela esticada */
-    #rpg-hud {
-        max-width: 300px;
-        transform: scale(1.1); /* Leve upscale para ficar vistoso no monitor */
-        transform-origin: top left;
-    }
-
-    /* Ranking com proporção boa no canto direito */
-    #ranking-container {
-        transform: scale(1.1);
-        transform-origin: top right;
-    }
-
-    /* Menu Principal não fica gigante */
-    .main-menu-container {
-        max-width: 360px;
-    }
-
-    .main-menu-btn {
-        padding: 18px;
-        font-size: 16px;
-    }
-
-    /* Modais do Lobby mais confortáveis e largos no PC */
-    .lobby-modal {
-        max-width: 550px;
-        padding: 30px;
-    }
-
-    #save-list-container {
-        max-height: 400px; /* Mais espaço para rolagem no PC */
-        padding-right: 10px;
-    }
-
-    /* Textos de saves mais legíveis em monitores */
-    .save-detail-row {
-        font-size: 14px;
-    }
-    .save-detail-val {
-        font-size: 13px;
-        max-width: 60%;
-    }
-
-    /* Botão de Evolução / Skills ganha o tamanho correto */
-    #btn-skills {
-        width: 55px;
-        height: 55px;
-        font-size: 26px;
-        top: 180px;
-    }
-
-    /* Botão do Chat acompanha as medidas do desktop */
-    #chat-toggle-btn {
-        width: 55px;
-        height: 55px;
-        font-size: 24px;
-        top: 250px; 
-    }
-
-    /* Painel de Exclusão ganha um respiro melhor */
-    #delete-confirm-popup > div {
-        max-width: 420px;
-        padding: 30px;
-    }
+    #rpg-hud { max-width: 300px; transform: scale(1.1); transform-origin: top left; }
+    #ranking-container { transform: scale(1.1); transform-origin: top right; }
+    .lobby-modal { max-width: 550px; padding: 30px; }
 }
 
-
-/* --- 2. AJUSTES EXCLUSIVOS PARA MOBILE (Retrato e Telas Pequenas) --- */
 @media (max-width: 768px) {
-    /* Diminui e reposiciona o HUD para não colar na borda nem brigar com joysticks */
-    #rpg-hud { 
-        top: 10px; 
-        left: 10px; 
-        transform: scale(0.80); 
-        transform-origin: top left; 
-    }
-    
-    /* O relógio vai para o canto superior direito no celular para liberar o meio */
-    #hud-time { 
-        top: 10px; 
-        left: auto;
-        right: 10px; 
-        transform: none;
-        font-size: 12px; 
-        padding: 4px 10px;
-    } 
-    
-    /* Ranking desce abaixo do relógio */
-    #ranking-container { 
-        top: 45px; 
-        right: 10px; 
-        transform: scale(0.75); 
-        transform-origin: top right; 
-    }
-    
-    /* Botão de skills desce para ficar acima do joystick de andar, mas sem tocá-lo */
-    #btn-skills { 
-        top: 200px; 
-        left: 10px;
-        width: 40px;
-        height: 40px;
-        font-size: 18px;
-    }
-
-    /* Botão do Chat acompanha o mobile, logo abaixo das skills */
-    #chat-toggle-btn {
-        top: 255px; 
-        left: 10px;
-        width: 40px;
-        height: 40px;
-        font-size: 18px;
-    }
-    
-    #lobby-overlay { 
-        background-position: center; 
-    }
-    
-    /* Ajustes específicos para as listas no celular */
-    .lobby-modal {
-        padding: 20px 15px; 
-        width: 95%; 
-    }
-    
-    #save-list-container {
-        max-height: 50vh !important; 
-        padding-right: 5px; 
-    }
-    
-    .save-detail-row {
-        flex-direction: column; 
-        align-items: flex-start;
-        gap: 5px;
-    }
-    
-    .save-detail-val {
-        max-width: 100%;
-        width: 100%;
-    }
+    #rpg-hud { top: 10px; left: 10px; transform: scale(0.80); transform-origin: top left; }
+    #hud-time { top: 10px; left: auto; right: 10px; transform: none; font-size: 12px; } 
+    #ranking-container { top: 45px; right: 10px; transform: scale(0.75); transform-origin: top right; }
+    #btn-skills { top: 200px; left: 10px; width: 40px; height: 40px; font-size: 18px; }
+    #chat-toggle-btn { top: 255px; left: 10px; width: 40px; height: 40px; font-size: 18px; }
 }
