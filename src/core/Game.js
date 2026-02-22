@@ -581,6 +581,29 @@ export class Game {
 
     resize() { this.canvas.width = window.innerWidth; this.canvas.height = window.innerHeight; }
 
+    // NOVO MÉTODO: Lida de forma segura com o Fullscreen em múltiplos navegadores e dispositivos
+    forceFullscreen() {
+        try {
+            const elem = document.documentElement;
+            // Verifica se já não estamos em fullscreen
+            const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+            
+            if (!isFullscreen) {
+                if (elem.requestFullscreen) {
+                    elem.requestFullscreen().catch(err => console.warn("Erro ao entrar em fullscreen:", err));
+                } else if (elem.webkitRequestFullscreen) {
+                    elem.webkitRequestFullscreen(); // Safari / iOS
+                } else if (elem.mozRequestFullScreen) {
+                    elem.mozRequestFullScreen(); // Firefox
+                } else if (elem.msRequestFullscreen) {
+                    elem.msRequestFullscreen(); // IE / Edge antigo
+                }
+            }
+        } catch (e) {
+            console.warn("Fullscreen API bloqueada ou não suportada no dispositivo.");
+        }
+    }
+
     setupEventListeners() {
         window.addEventListener('joined', e => this.onJoined(e.detail));
         window.addEventListener('peerDisconnected', e => this.onPeerDisconnected(e.detail));
@@ -598,11 +621,19 @@ export class Game {
             if (e.deltaY < 0) this.zoomLevel = Math.min(2.0, this.zoomLevel + 0.1);
             else this.zoomLevel = Math.max(0.5, this.zoomLevel - 0.1);
         }, { passive: true });
+        
+        // Garante que qualquer toque no canvas mantenha o jogo em tela cheia (excelente para mobile)
+        this.canvas.addEventListener('pointerdown', () => {
+            this.forceFullscreen();
+        });
+
         const btnRespawn = document.getElementById('btn-immediate-respawn');
         if (btnRespawn) btnRespawn.onclick = (e) => { e.preventDefault(); if (this.isFainted) this.performRespawn(); };
+        
         const btnJoin = document.getElementById('btn-join');
         if (btnJoin) btnJoin.onpointerdown = (e) => {
             e.preventDefault();
+            this.forceFullscreen(); // Força tela cheia no clique de Entrar
             const nick = document.getElementById('join-nickname').value.trim() || "Guest";
             const id = document.getElementById('join-id').value.trim();
             const pass = document.getElementById('join-pass').value.trim();
@@ -610,9 +641,11 @@ export class Game {
             localStorage.setItem('wings_nick', nick);
             this.net.init(null, (ok) => { if(ok) this.net.joinRoom(id, pass, nick); });
         };
+        
         const btnCreate = document.getElementById('btn-create');
         if (btnCreate) btnCreate.onpointerdown = (e) => {
             e.preventDefault();
+            this.forceFullscreen(); // Força tela cheia no clique de Criar
             const nick = document.getElementById('host-nickname').value.trim() || "Host";
             const id = document.getElementById('create-id').value.trim();
             const pass = document.getElementById('create-pass').value.trim();
@@ -633,6 +666,7 @@ export class Game {
         if (btnOpenLoadMenu) {
             btnOpenLoadMenu.addEventListener('click', () => {
                 this.ui.renderSaveList(this.saveSystem, (id, pass, seed, nick) => {
+                    this.forceFullscreen(); // Força tela cheia no clique de Carregar Mundo (Voar)
                     localStorage.setItem('wings_nick', nick);
                     this.currentPass = pass; // Define a senha para o contexto atual
                     this.net.init(id, (ok) => {
