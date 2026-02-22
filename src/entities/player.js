@@ -14,7 +14,7 @@ export class Player {
         this.radius = 0.4; // Raio da hitbox circular (em tiles)
         this.pollenDamage = 10; // Dano base do tiro
         this.attackCooldown = 0.5; // Timer entre tiros
-        this.attackSpeed = 30; // Frames entre cada tiro (30 frames = 0.5s a 60fps)
+        this.attackSpeed = 60; // Frames entre cada tiro (30 frames = 0.5s a 60fps)
         this.isAttacking = false; // Estado visual de ataque
 
         // --- SISTEMA DE RPG (Sincronizado com SaveSystem) ---
@@ -77,12 +77,17 @@ export class Player {
 
         let vx = 0;
         let vy = 0;
-        const speed = 1; // Velocidade do tiro
+        
+        // Agora essa velocidade será respeitada com precisão! 
+        // 0.1 é lento e cadenciado. Se ainda achar rápido, mude para 0.08 ou 0.05.
+        const speed = 0.1; 
 
         // 1. Prioridade: Vetor de Mira (Mouse ou Joystick Direito)
         if (aimX !== 0 || aimY !== 0) {
-            vx = aimX * speed;
-            vy = aimY * speed;
+            // [CORREÇÃO] Normalização do vetor: impede que clicar mais longe faça o tiro ir mais rápido
+            const magnitude = Math.sqrt(aimX * aimX + aimY * aimY);
+            vx = (aimX / magnitude) * speed;
+            vy = (aimY / magnitude) * speed;
         } else {
             // 2. Fallback: Usa a direção atual do corpo (WASD/Seta)
             if (this.currentDir.includes('Up')) vy = -speed;
