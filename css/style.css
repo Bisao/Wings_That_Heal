@@ -543,6 +543,46 @@ input:focus {
 }
 
 /* =========================================================================
+   ASSINATURA DO ESTÚDIO (COM BRILHO SUTIL)
+   ========================================================================= */
+.studio-signature {
+    position: absolute;
+    bottom: 20px;
+    font-weight: 900;
+    font-size: 14px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+
+    /* Cria o degradê do brilho: Começa apagado, fica brilhante no meio, e apaga de novo */
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.3) 0%,
+        rgba(255, 255, 255, 0.9) 50%,
+        rgba(255, 255, 255, 0.3) 100%
+    );
+    
+    background-size: 200% auto;
+    
+    /* Aplica o fundo como cor do texto */
+    color: #000; /* Fallback */
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    
+    /* Configura a animação infinita */
+    animation: shineMove 4s linear infinite;
+}
+
+@keyframes shineMove {
+    0% {
+        background-position: 0% center;
+    }
+    100% {
+        background-position: 200% center;
+    }
+}
+
+/* =========================================================================
    MEDIA QUERIES 
    ========================================================================= */
 
