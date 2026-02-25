@@ -98,7 +98,7 @@ export class Game {
         ];
     }
 
-    start(seed, id, nick) {
+    start(seed, id, nick, providedHomeBase = null) {
         if (typeof this.input.hideJoystick === 'function') this.input.hideJoystick();
         this.currentWorldId = id;
 
@@ -121,6 +121,7 @@ export class Game {
 
         const hives = this.world.getHiveLocations();
 
+        // LÓGICA DO HOST
         if (this.net.isHost) {
             const saved = this.saveSystem.load(id);
             if (saved) { 
@@ -148,14 +149,35 @@ export class Game {
                     setTimeout(() => this.changeTile(fx, fy, 'FLOR'), 1000); 
                 }
             }
-        }
-
-        let spawnIdx = this.hiveRegistry[nick] !== undefined ? this.hiveRegistry[nick] : (Math.abs(id.split('').reduce((a,b)=>a+b.charCodeAt(0),0)) % (hives.length-1))+1;
-        if (hives[spawnIdx]) { 
-            this.localPlayer.homeBase = { x: hives[spawnIdx].x, y: hives[spawnIdx].y }; 
-            this.localPlayer.pos = { x: hives[spawnIdx].x, y: hives[spawnIdx].y }; 
-            this.localPlayer.targetPos = { ...this.localPlayer.pos }; 
-            this.hiveTree = new Tree(hives[spawnIdx].x, hives[spawnIdx].y, nick);
+            
+            // O Host decide sua colmeia
+            let spawnIdx = this.hiveRegistry[nick] !== undefined ? this.hiveRegistry[nick] : (Math.abs(id.split('').reduce((a,b)=>a+b.charCodeAt(0),0)) % (hives.length-1))+1;
+            if (hives[spawnIdx]) { 
+                this.localPlayer.homeBase = { x: hives[spawnIdx].x, y: hives[spawnIdx].y }; 
+                
+                // Se não tem save de posição, nasce na colmeia
+                if (!saved || !saved.host || saved.host.x === undefined) {
+                    this.localPlayer.pos = { x: hives[spawnIdx].x, y: hives[spawnIdx].y }; 
+                    this.localPlayer.targetPos = { ...this.localPlayer.pos }; 
+                }
+                
+                // O Host também cria a árvore que vai pulsar cura
+                this.hiveTree = new Tree(hives[spawnIdx].x, hives[spawnIdx].y, nick);
+            }
+        } 
+        // LÓGICA DO GUEST
+        else {
+            if (providedHomeBase) {
+                this.localPlayer.homeBase = { x: providedHomeBase.x, y: providedHomeBase.y };
+                // O Guest sempre nasce na Home Base compartilhada inicialmente, a menos que tenha pacote de restore vindo
+                this.localPlayer.pos = { x: providedHomeBase.x, y: providedHomeBase.y };
+                this.localPlayer.targetPos = { ...this.localPlayer.pos };
+                
+                // O Guest instancia a árvore baseada na Home Base fornecida
+                this.hiveTree = new Tree(providedHomeBase.x, providedHomeBase.y, "Colmeia Mestra");
+            } else {
+                console.warn("[Game] Iniciando como Guest, mas nenhuma Home Base foi fornecida pelo Host!");
+            }
         }
 
         this.net.sendPayload({ type: 'SPAWN_INFO', id: this.localPlayer.id, nick: this.localPlayer.nickname, x: this.localPlayer.pos.x, y: this.localPlayer.pos.y });
@@ -216,6 +238,7 @@ export class Game {
             this.ui.updateCoords(gx, gy);
         }
 
+        // A árvore mestra continua sob gerência do Host para emitir as ondas de cura
         if (this.hiveTree && this.net.isHost) {
             this.hiveTree.updateAndHeal(this);
         }
@@ -522,9 +545,6 @@ export class Game {
         }
     }
 
-    /**
-     * Lógica imersiva de interação com o ambiente (Probabilidade e Cura Lenta)
-     */
     checkEnvironmentInteraction(gx, gy, tile) {
         this.input.updateBeeActions({
             canCollect: tile === 'FLOR' && this.localPlayer.pollen < this.localPlayer.maxPollen,
@@ -532,7 +552,6 @@ export class Game {
             overBurntGround: tile === 'TERRA_QUEIMADA'
         });
 
-        // 1. Coleta Manual: Continua via HOLD
         if (this.input.isCollecting()) {
             if (this.localPlayer.collectPollen(tile)) {
                 this.gainXp(0.2);
@@ -543,12 +562,9 @@ export class Game {
             }
         }
 
-        // 2. Polinização: Agora com probabilidade e espalhamento lento
         if (this.input.isPollinating()) {
             if (this.localPlayer.pollinate(tile)) {
-                // Tenta curar o tile central baseado na sorte definida no WorldState
                 if (this.worldState.attemptPollination(gx, gy) === 'CURED') {
-                    // Se curou, obtém a forma de espalhamento com delays embutidos
                     const spreadShape = this.worldState.getOrganicSpreadShape(gx, gy);
                     spreadShape.forEach((data) => {
                         setTimeout(() => {
@@ -558,13 +574,11 @@ export class Game {
                                 this.localPlayer.tilesCured++;
                                 this.gainXp(15);
 
-                                // Se for o tile central (gx, gy), existe uma chance rara de brotar uma FLOR
                                 if (data.x === gx && data.y === gy && Math.random() < 0.2) {
-                                     // Brota após a grama se estabilizar
                                      setTimeout(() => this.changeTile(gx, gy, 'FLOR', this.localPlayer.id), 2000);
                                 }
                             }
-                        }, data.delay); // Delay imersivo vindo do WorldState
+                        }, data.delay); 
                     });
                     this.ui.updateHUD(this.localPlayer);
                     this.saveProgress();
@@ -631,6 +645,7 @@ export class Game {
     }
 
     setupEventListeners() {
+        // Alteração importante aqui para aceitar a homeBase do evento 'joined'
         window.addEventListener('joined', e => this.onJoined(e.detail));
         window.addEventListener('peerDisconnected', e => this.onPeerDisconnected(e.detail));
         window.addEventListener('netData', e => this.onNetData(e.detail));
@@ -679,7 +694,7 @@ export class Game {
             this.currentPass = pass;
             localStorage.setItem('wings_nick', nick);
             this.net.init(id, (ok) => {
-                if(ok) { this.net.hostRoom(id, pass, seed, () => this.worldState.getFullState(), (n) => this.guestDataDB[n], () => this.guestDataDB); this.start(seed, id, nick); }
+                if(ok) { this.net.hostRoom(id, pass, seed, () => this.worldState.getFullState(), (n) => this.guestDataDB[n], () => this.guestDataDB, () => this.localPlayer.homeBase); this.start(seed, id, nick); }
             });
         };
 
@@ -692,7 +707,7 @@ export class Game {
                     this.currentPass = pass;
                     this.net.init(id, (ok) => {
                         if(ok) { 
-                            this.net.hostRoom(id, pass, seed, () => this.worldState.getFullState(), (n) => this.guestDataDB[n], () => this.guestDataDB); 
+                            this.net.hostRoom(id, pass, seed, () => this.worldState.getFullState(), (n) => this.guestDataDB[n], () => this.guestDataDB, () => this.localPlayer.homeBase); 
                             this.start(seed, id, nick); 
                         } else {
                             this.ui.showError("Falha ao inicializar conexão.");
@@ -757,7 +772,10 @@ export class Game {
     onJoined(data) {
         if (data.worldState) this.worldState.applyFullState(data.worldState);
         if (data.guests) this.guestDataDB = data.guests; 
-        this.start(data.seed, this.net.peer.id, document.getElementById('join-nickname').value.trim() || "Guest");
+        
+        // Agora passa a homeBase do pacote para o start
+        this.start(data.seed, this.net.peer.id, document.getElementById('join-nickname').value.trim() || "Guest", data.homeBase);
+        
         if (data.playerData) { this.localPlayer.deserialize(data.playerData); this.ui.updateHUD(this.localPlayer); }
     }
 
