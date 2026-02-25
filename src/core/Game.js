@@ -453,19 +453,21 @@ export class Game {
         });
     }
 
+    // ATUALIZADO: Removidos a cura e o ganho de capacidade no Level Up
     gainXp(amount) {
         const old = this.localPlayer.level; 
         this.localPlayer.xp += amount;
+        
         if (this.localPlayer.xp >= this.localPlayer.maxXp) {
             this.localPlayer.xp -= this.localPlayer.maxXp; 
             this.localPlayer.level++; 
             this.localPlayer.skillPoints = (this.localPlayer.skillPoints || 0) + 1;
             this.localPlayer.maxXp = Math.floor(this.localPlayer.maxXp * 1.5); 
-            this.localPlayer.maxPollen += 10; 
-            this.localPlayer.hp = this.localPlayer.maxHp;
-            this.chat.addMessage('SYSTEM', null, `Nível ${this.localPlayer.level}!`); 
-            this.ui.showError(`Nível ${this.localPlayer.level}!`);
+            
+            this.chat.addMessage('SYSTEM', null, `Nível ${this.localPlayer.level}! Ganhou +1 Ponto de Habilidade!`); 
+            this.ui.showError(`Nível ${this.localPlayer.level}! Abra a Skill Tree!`);
         }
+        
         if (this.localPlayer.level > old) this.saveProgress(true); 
         this.ui.updateHUD(this.localPlayer);
     }
@@ -645,7 +647,6 @@ export class Game {
     }
 
     setupEventListeners() {
-        // Alteração importante aqui para aceitar a homeBase do evento 'joined'
         window.addEventListener('joined', e => this.onJoined(e.detail));
         window.addEventListener('peerDisconnected', e => this.onPeerDisconnected(e.detail));
         window.addEventListener('netData', e => this.onNetData(e.detail));
