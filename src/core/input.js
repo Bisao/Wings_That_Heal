@@ -92,9 +92,9 @@ export class InputHandler {
         this.btnCollect = null;
         this.btnPollinate = null;
         
-        // ESTADOS ATUALIZADOS
-        this.isCollectingHeld = false; // Coleta continua sendo HOLD (segurar)
-        this.pollinationToggle = false; // Polinização agora é TOGGLE (clicar para ativar)
+        // ESTADOS DE AÇÃO
+        this.isCollectingHeld = false;
+        this.pollinationToggle = false;
 
         this.mousePos = { x: 0, y: 0 };
         this.isMouseDown = false;
@@ -104,15 +104,21 @@ export class InputHandler {
     }
 
     init() {
+        // CORREÇÃO: Verificação segura para evitar o erro toLowerCase()
         window.addEventListener('keydown', e => { 
+            if (!e || !e.key) return;
             const key = e.key.toLowerCase();
+            
             // Lógica de Toggle para PC (Tecla F)
             if (key === 'f') {
                 this.pollinationToggle = !this.pollinationToggle;
             }
             this.keys[key] = true; 
         });
-        window.addEventListener('keyup', e => { if(e.key) this.keys[e.key.toLowerCase()] = false; });
+
+        window.addEventListener('keyup', e => { 
+            if (e && e.key) this.keys[e.key.toLowerCase()] = false; 
+        });
 
         window.addEventListener('skillTreeToggled', (e) => {
             if (e.detail.isOpen) this.hideJoystick();
@@ -165,12 +171,10 @@ export class InputHandler {
         return this.keys['e'] || this.isCollectingHeld;
     }
 
-    // Retorna o estado do toggle
     isPollinating() {
         return this.pollinationToggle;
     }
 
-    // Método para desativar via script (ex: quando atacar)
     resetPollinationToggle() {
         this.pollinationToggle = false;
         if (this.btnPollinate) this.btnPollinate.classList.remove('is-active');
@@ -223,7 +227,6 @@ export class InputHandler {
             #btn-collect { background: #3498db; display: none; }
             #btn-pollinate { background: #2ecc71; opacity: 0.4; }
             
-            /* Estado Ativo do Toggle */
             .btn-bee-action.is-active {
                 background-color: #f39c12 !important;
                 box-shadow: 0 0 20px #f39c12;
@@ -257,35 +260,28 @@ export class InputHandler {
     }
 
     bindMobileActionEvents() {
-        // Coleta (Botão Azul): Mantém a lógica de Segurar (Hold)
-        this.btnCollect.addEventListener('pointerdown', () => { this.isCollectingHeld = true; });
-        this.btnCollect.addEventListener('pointerup', () => { this.isCollectingHeld = false; });
-        this.btnCollect.addEventListener('pointerleave', () => { this.isCollectingHeld = false; });
+        if (this.btnCollect) {
+            this.btnCollect.addEventListener('pointerdown', (e) => { e.preventDefault(); this.isCollectingHeld = true; });
+            this.btnCollect.addEventListener('pointerup', (e) => { e.preventDefault(); this.isCollectingHeld = false; });
+            this.btnCollect.addEventListener('pointerleave', (e) => { e.preventDefault(); this.isCollectingHeld = false; });
+        }
 
-        // Polinização (Botão Verde): Lógica de Alternar (Toggle)
-        this.btnPollinate.addEventListener('pointerdown', (e) => {
-            e.preventDefault();
-            this.pollinationToggle = !this.pollinationToggle;
-            
-            if (this.pollinationToggle) {
-                this.btnPollinate.classList.add('is-active');
-            } else {
-                this.btnPollinate.classList.remove('is-active');
-            }
-            window.dispatchEvent(new CustomEvent('joystickInteract'));
-        });
+        if (this.btnPollinate) {
+            this.btnPollinate.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                this.pollinationToggle = !this.pollinationToggle;
+                this.btnPollinate.classList.toggle('is-active', this.pollinationToggle);
+                window.dispatchEvent(new CustomEvent('joystickInteract'));
+            });
+        }
     }
 
     updateBeeActions(state) {
         if (!this.isMobile) return;
         if (this.btnCollect) this.btnCollect.style.display = state.canCollect ? 'flex' : 'none';
-        
         if (this.btnPollinate) {
             this.btnPollinate.style.opacity = state.hasPollen ? "1.0" : "0.4";
-            // Se o toggle estiver ligado mas o player não tiver pólen, podemos desativar automaticamente
-            if (!state.hasPollen && this.pollinationToggle) {
-                this.resetPollinationToggle();
-            }
+            if (!state.hasPollen && this.pollinationToggle) this.resetPollinationToggle();
         }
     }
 
@@ -323,19 +319,10 @@ export class InputHandler {
         if (this.isMobile && this.rightStick) {
             const vec = this.rightStick.vector;
             const mag = Math.sqrt(vec.x*vec.x + vec.y*vec.y);
-            
-            // Se o player começar a mirar/atirar, desliga a polinização automática
-            if (mag > 0.2 && this.pollinationToggle) {
-                this.resetPollinationToggle();
-            }
-            
+            if (mag > 0.2 && this.pollinationToggle) this.resetPollinationToggle();
             return { x: vec.x, y: vec.y, isFiring: mag > 0.2 };
         }
-        
-        if (this.isMouseDown && this.pollinationToggle) {
-            this.resetPollinationToggle();
-        }
-        
+        if (this.isMouseDown && this.pollinationToggle) this.resetPollinationToggle();
         return { x: this.aimVectorPC.x, y: this.aimVectorPC.y, isFiring: this.isMouseDown };
     }
 }
