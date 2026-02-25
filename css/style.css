@@ -217,6 +217,32 @@ canvas {
     text-align: center;
 }
 
+/* --- POPUP DE EXCLUSÃO DE COLMEIA --- */
+#delete-confirm-popup {
+    display: none; 
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.85); 
+    z-index: 9999999; 
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    backdrop-filter: blur(5px); 
+}
+
+#delete-confirm-popup > div {
+    background: #2c3e50;
+    padding: 30px;
+    border-radius: 10px;
+    border: 2px solid #e74c3c;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+    max-width: 90%;
+    width: 350px;
+}
+
 #lobby-overlay {
     position: fixed; 
     top: 0; 
@@ -446,6 +472,69 @@ input:focus {
     cursor: pointer;
     text-align: left;
     width: 100%; 
+    transition: background-color 0.2s;
+}
+
+.save-card:hover {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.save-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.save-card-title {
+    font-weight: bold;
+    color: var(--primary);
+    font-size: 16px;
+}
+
+.save-card-subtitle {
+    font-size: 11px;
+    color: #999;
+    margin-top: 4px;
+}
+
+.btn-delete-save {
+    background: transparent;
+    border: none;
+    color: #e74c3c;
+    font-size: 20px;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.btn-delete-save:hover {
+    transform: scale(1.2);
+}
+
+/* Oculta os detalhes por padrão */
+.save-card-details {
+    display: none;
+    margin-top: 15px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    padding-top: 15px;
+    font-size: 13px;
+}
+
+.save-detail-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    color: #ccc;
+}
+
+.pass-toggle {
+    cursor: pointer;
+    margin-left: 8px;
+}
+
+/* Exibe os detalhes quando a classe expanded estiver ativa */
+.save-card.expanded .save-card-details {
+    display: block;
+    animation: popIn 0.3s ease;
 }
 
 @keyframes popIn { 
