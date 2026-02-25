@@ -10,6 +10,7 @@ export class NetworkManager {
         this.getStateCallback = null;
         this.getGuestDataCallback = null; 
         this.getFullGuestDBStatsCallback = null; 
+        this.getHomeBaseCallback = null; // NOVO: Callback para pegar a base do Host
 
         this.authenticatedPeers = new Set();
     }
@@ -59,7 +60,8 @@ export class NetworkManager {
         });
     }
 
-    hostRoom(id, pass, seed, getStateFn, getGuestDataFn, getFullDBFn) {
+    // ATUALIZADO: Recebe a função que retorna a homeBase do Host
+    hostRoom(id, pass, seed, getStateFn, getGuestDataFn, getFullDBFn, getHomeBaseFn) {
         this._log(`Configurando como HOST da colmeia '${id}'...`, "#f1c40f");
         this.isHost = true;
         this.roomData = { id, pass, seed };
@@ -67,6 +69,7 @@ export class NetworkManager {
         this.getStateCallback = getStateFn;
         this.getGuestDataCallback = getGuestDataFn;
         this.getFullGuestDBStatsCallback = getFullDBFn;
+        this.getHomeBaseCallback = getHomeBaseFn;
 
         window.dispatchEvent(new CustomEvent('joined', { 
             detail: { seed: seed } 
@@ -98,6 +101,7 @@ export class NetworkManager {
                     const currentState = this.getStateCallback ? this.getStateCallback() : {};
                     const savedPlayerData = (this.getGuestDataCallback && data.nickname) ? this.getGuestDataCallback(data.nickname) : null;
                     const fullGuestsDB = this.getFullGuestDBStatsCallback ? this.getFullGuestDBStatsCallback() : {};
+                    const currentHomeBase = this.getHomeBaseCallback ? this.getHomeBaseCallback() : null; // Pega a base do Host
 
                     this.authenticatedPeers.add(conn.peer);
                     this.connections.push(conn);
@@ -108,7 +112,8 @@ export class NetworkManager {
                         seed: this.roomData.seed, 
                         worldState: currentState,
                         playerData: savedPlayerData,
-                        guests: fullGuestsDB 
+                        guests: fullGuestsDB,
+                        homeBase: currentHomeBase // ATUALIZADO: Envia a posição da colmeia matriz!
                     });
                 } else {
                     this._log(`Senha incorreta para: ${conn.peer}`, "#c0392b");
@@ -167,7 +172,6 @@ export class NetworkManager {
     }
 
     processAndRoute(data) {
-        // CORREÇÃO: Variável let correta para o escopo
         let senderId = data.fromId;
 
         if (data.targetIds && Array.isArray(data.targetIds)) {
@@ -189,7 +193,6 @@ export class NetworkManager {
         else {
             // Broadcast Global
             window.dispatchEvent(new CustomEvent('netData', { detail: data }));
-            // CORREÇÃO: Passa o fromId correto para o Broadcast excluir
             this.broadcast(data, senderId);
         }
     }
@@ -254,7 +257,6 @@ export class NetworkManager {
         }
     }
 
-    // CORREÇÃO: Garante que o peer especificado seja ignorado no laço
     broadcast(data, excludePeerId = null) {
         this.connections.forEach(c => { 
             if (c.peer !== excludePeerId && c.open && this.authenticatedPeers.has(c.peer)) {
