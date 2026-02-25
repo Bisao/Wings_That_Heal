@@ -543,7 +543,7 @@ input:focus {
 }
 
 /* =========================================================================
-   ASSINATURA DO ESTÚDIO (COM BRILHO SUTIL)
+   ASSINATURA DO ESTÚDIO (COM BRILHO SUTIL APENAS NO TEXTO)
    ========================================================================= */
 .studio-signature {
     position: absolute;
@@ -552,8 +552,12 @@ input:focus {
     font-size: 14px;
     letter-spacing: 2px;
     text-transform: uppercase;
+    /* Emoji mantém a cor normal */
+    color: rgba(255, 255, 255, 0.5); 
+}
 
-    /* Cria o degradê do brilho: Começa apagado, fica brilhante no meio, e apaga de novo */
+.shine-text {
+    /* Cria o degradê do brilho para o texto: Começa apagado, fica brilhante no meio, e apaga de novo */
     background: linear-gradient(
         90deg,
         rgba(255, 255, 255, 0.3) 0%,
