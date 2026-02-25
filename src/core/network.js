@@ -1,12 +1,12 @@
 export class NetworkManager {
     constructor() {
         this.peer = null;
-        this.conn = null; // Conexão do Client com o Host
-        this.connections = []; // Lista de conexões ativas (Apenas Host usa)
+        this.conn = null; 
+        this.connections = []; 
         this.isHost = false;
         this.roomData = { id: '', pass: '', seed: '' };
         
-        // Callbacks para integração com SaveSystem e WorldState
+        // Callbacks para integração
         this.getStateCallback = null;
         this.getGuestDataCallback = null; 
         this.getFullGuestDBStatsCallback = null; 
@@ -15,14 +15,12 @@ export class NetworkManager {
     }
 
     _log(msg, color = "#00ff00") {
-        // Estilização simples para o console do navegador
         console.log(`%c[Network] ${msg}`, `color: ${color}; font-weight: bold;`);
     }
 
     init(customID, callback) {
         this._log(`Inicializando Peer... ${customID || 'ID Aleatório'}`, "#3498db");
         
-        // CORREÇÃO: Remove caracteres inválidos para PeerJS e força minúsculas
         const cleanID = customID ? customID.replace(/[^a-zA-Z0-9_-]/g, '') : null;
 
         const options = { 
@@ -56,7 +54,6 @@ export class NetworkManager {
             if(callback) callback(false, err.type);
         });
 
-        // Configura recebimento de conexões (apenas se tornarmos Host depois)
         this.peer.on('connection', (conn) => {
             this.handleIncomingConnection(conn);
         });
@@ -67,24 +64,22 @@ export class NetworkManager {
         this.isHost = true;
         this.roomData = { id, pass, seed };
         
-        // Armazena as funções para pegar dados do SaveSystem quando alguém entrar
         this.getStateCallback = getStateFn;
         this.getGuestDataCallback = getGuestDataFn;
         this.getFullGuestDBStatsCallback = getFullDBFn;
 
-        // Dispara evento local para o próprio Host iniciar o jogo
         window.dispatchEvent(new CustomEvent('joined', { 
             detail: { seed: seed } 
         }));
     }
 
     handleIncomingConnection(conn) {
-        if (!this.isHost) return; // Se não sou host, ignoro conexões de entrada inesperadas
+        if (!this.isHost) return;
 
         this._log(`Tentativa de conexão recebida: ${conn.peer}`, "#bdc3c7");
 
         conn.on('open', () => {
-            // Conexão estabelecida, aguardando AUTH_REQUEST
+            // Conexão TCP/UDP aberta, aguardando AUTH_REQUEST
         });
 
         conn.on('close', () => {
@@ -100,7 +95,6 @@ export class NetworkManager {
                 if (!this.roomData.pass || data.password === this.roomData.pass) {
                     this._log(`Autenticando jogador: ${data.nickname || 'Guest'}`);
                     
-                    // Recupera dados frescos do jogo usando os callbacks
                     const currentState = this.getStateCallback ? this.getStateCallback() : {};
                     const savedPlayerData = (this.getGuestDataCallback && data.nickname) ? this.getGuestDataCallback(data.nickname) : null;
                     const fullGuestsDB = this.getFullGuestDBStatsCallback ? this.getFullGuestDBStatsCallback() : {};
@@ -108,7 +102,7 @@ export class NetworkManager {
                     this.authenticatedPeers.add(conn.peer);
                     this.connections.push(conn);
 
-                    // Envia o pacote de boas-vindas com o mundo e o save do player
+                    // Host envia o pacote de boas-vindas diretamente para quem conectou
                     conn.send({ 
                         type: 'AUTH_SUCCESS', 
                         seed: this.roomData.seed, 
@@ -127,18 +121,17 @@ export class NetworkManager {
             // 2. Segurança: Ignora dados de peers não autenticados
             if (!this.authenticatedPeers.has(conn.peer)) return;
 
-            // 3. Segurança: Sobrescreve IDs de origem para evitar spoofing
+            // 3. Segurança: Sobrescreve IDs de origem
             data.fromId = conn.peer;
             if (data.id) data.id = conn.peer; 
             if (data.ownerId) data.ownerId = conn.peer; 
 
-            // 4. Lógica de Roteamento (Party, Whisper, Broadcast)
+            // 4. Lógica de Roteamento
             this.processAndRoute(data);
         });
     }
 
     joinRoom(targetID, password, nickname) {
-        // Limpa ID para conectar
         const cleanTarget = targetID.replace(/[^a-zA-Z0-9_-]/g, '');
         this._log(`Conectando ao Host: ${cleanTarget}...`, "#3498db");
         
@@ -152,14 +145,12 @@ export class NetworkManager {
         this.conn.on('data', (data) => {
             if (data.type === 'AUTH_SUCCESS') {
                 this._log("Autenticação aceita! Entrando no mundo...", "#27ae60");
-                // Importante: Dispara o evento que o Game.js ouve para iniciar
                 window.dispatchEvent(new CustomEvent('joined', { detail: data }));
             } else if (data.type === 'AUTH_FAIL') {
                 alert(data.reason);
                 this.conn.close();
-                location.reload(); // Recarrega para limpar estado
+                location.reload();
             } else {
-                // Dados normais de jogo
                 window.dispatchEvent(new CustomEvent('netData', { detail: data }));
             }
         });
@@ -176,7 +167,9 @@ export class NetworkManager {
     }
 
     processAndRoute(data) {
-        // Roteamento baseado em alvos (Party/Whisper)
+        // CORREÇÃO: Variável let correta para o escopo
+        let senderId = data.fromId;
+
         if (data.targetIds && Array.isArray(data.targetIds)) {
             data.targetIds.forEach(tId => {
                 if (tId === this.peer.id) {
@@ -194,28 +187,24 @@ export class NetworkManager {
             }
         } 
         else {
-            // Broadcast (Global)
-            // Host processa o dado também
+            // Broadcast Global
             window.dispatchEvent(new CustomEvent('netData', { detail: data }));
-            // E retransmite para os outros (excluindo quem mandou)
-            this.broadcast(data, data.fromId);
+            // CORREÇÃO: Passa o fromId correto para o Broadcast excluir
+            this.broadcast(data, senderId);
         }
     }
 
     sendPayload(payload, targetIdOrIds = null) {
         if (!this.peer) return;
         
-        // Host sempre assina seus pacotes
         payload.fromId = this.peer.id; 
         
-        // Garante integridade do ID no payload local
         if (['MOVE', 'SPAWN_INFO', 'SHOOT'].includes(payload.type)) {
             if (payload.type === 'SHOOT') payload.ownerId = this.peer.id;
             else payload.id = this.peer.id;
         }
 
         if (this.isHost) {
-            // Lógica de envio do Host
             if (Array.isArray(targetIdOrIds)) {
                 targetIdOrIds.forEach(id => {
                     if (id === this.peer.id) window.dispatchEvent(new CustomEvent('netData', { detail: payload }));
@@ -225,12 +214,10 @@ export class NetworkManager {
                 if (targetIdOrIds === this.peer.id) window.dispatchEvent(new CustomEvent('netData', { detail: payload }));
                 else this.sendToId(targetIdOrIds, payload);
             } else {
-                // Host envia para todos (Broadcast)
-                this.broadcast(payload);
+                // Host envia um payload dele mesmo, então ninguém é excluído
+                this.broadcast(payload, this.peer.id);
             }
         } else if (this.conn && this.conn.open) {
-            // Lógica de envio do Cliente (Guest)
-            // Se tiver alvos, anexa ao payload para o Host rotear
             if (Array.isArray(targetIdOrIds)) {
                 payload.targetIds = targetIdOrIds;
             } else if (targetIdOrIds) {
@@ -240,9 +227,6 @@ export class NetworkManager {
         }
     }
 
-    /**
-     * Função utilitária para enviar cura específica para uma lista de IDs.
-     */
     sendHealToPlayers(playerIds, flowerX, flowerY, ownerId) {
         if (!this.isHost) return;
         
@@ -270,9 +254,9 @@ export class NetworkManager {
         }
     }
 
+    // CORREÇÃO: Garante que o peer especificado seja ignorado no laço
     broadcast(data, excludePeerId = null) {
         this.connections.forEach(c => { 
-            // Só envia para peers que já passaram pela autenticação
             if (c.peer !== excludePeerId && c.open && this.authenticatedPeers.has(c.peer)) {
                 c.send(data);
             }
