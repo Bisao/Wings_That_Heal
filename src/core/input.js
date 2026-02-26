@@ -225,6 +225,9 @@ export class InputHandler {
                 display: flex; flex-direction: column; align-items: center; justify-content: center;
                 pointer-events: auto; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
                 transition: all 0.2s;
+                /* Impede seleções acidentais no mobile que quebram o touchstart */
+                user-select: none; 
+                -webkit-touch-callout: none;
             }
             #btn-collect { background: #3498db; display: none; }
             #btn-pollinate { background: #2ecc71; opacity: 0.4; }
@@ -263,13 +266,29 @@ export class InputHandler {
     }
 
     bindMobileActionEvents() {
-        // Coleta (Botão Azul): Mantém a lógica de Segurar (Hold)
-        this.btnCollect.addEventListener('pointerdown', () => { this.isCollectingHeld = true; });
-        this.btnCollect.addEventListener('pointerup', () => { this.isCollectingHeld = false; });
-        this.btnCollect.addEventListener('pointerleave', () => { this.isCollectingHeld = false; });
+        if (!this.btnCollect || !this.btnPollinate) return;
+
+        // ATUALIZADO: Uso de touch events + preventDefault garante que o botão 
+        // fique pressionado durante o timer de 2 segundos.
+        this.btnCollect.addEventListener('touchstart', (e) => {
+            e.preventDefault(); 
+            this.isCollectingHeld = true;
+            this.btnCollect.style.transform = 'scale(0.9)'; // Feedback visual
+        }, { passive: false });
+
+        this.btnCollect.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            this.isCollectingHeld = false;
+            this.btnCollect.style.transform = 'scale(1.0)';
+        }, { passive: false });
+
+        this.btnCollect.addEventListener('touchcancel', (e) => {
+            this.isCollectingHeld = false;
+            this.btnCollect.style.transform = 'scale(1.0)';
+        });
 
         // Polinização (Botão Verde): Lógica de Alternar (Toggle)
-        this.btnPollinate.addEventListener('pointerdown', (e) => {
+        this.btnPollinate.addEventListener('touchstart', (e) => {
             e.preventDefault();
             this.pollinationToggle = !this.pollinationToggle;
             
@@ -279,7 +298,7 @@ export class InputHandler {
                 this.btnPollinate.classList.remove('is-active');
             }
             window.dispatchEvent(new CustomEvent('joystickInteract'));
-        });
+        }, { passive: false });
     }
 
     updateBeeActions(state) {
