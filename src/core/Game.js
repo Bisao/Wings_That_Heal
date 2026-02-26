@@ -57,7 +57,7 @@ export class Game {
         this.faintTimeout = null;
         this.invulnerabilityTimer = 0;
         this.lastManualSaveTime = 0;
-        this.frameCount = 0; // ATUALIZADO: Usado para controlar sincronia de rede
+        this.frameCount = 0; // Adicionado contador de frames global
         
         // Controle de Resgate
         this.rescueTimer = 0;
@@ -233,16 +233,6 @@ export class Game {
         this.ui.updateEnvironment(this.worldState.worldTime);
         if (this.invulnerabilityTimer > 0) this.invulnerabilityTimer--;
         
-        // ATUALIZADO: Host processa regeneração de pólen das flores
-        if (this.net.isHost) {
-            this.worldState.updateFlowers();
-            
-            // Sincroniza estado das flores com os guests a cada 1 segundo (aprox. 60 frames)
-            if (this.frameCount % 60 === 0) {
-                this.net.syncFlowerData(this.worldState.flowerData);
-            }
-        }
-        
         const gx = Math.round(this.localPlayer.pos.x);
         const gy = Math.round(this.localPlayer.pos.y);
         
@@ -254,6 +244,16 @@ export class Game {
         // A árvore mestra continua sob gerência do Host para emitir as ondas de cura
         if (this.hiveTree && this.net.isHost) {
             this.hiveTree.updateAndHeal(this);
+        }
+
+        // REGENERAÇÃO DE FLORES (Apenas o Host calcula e transmite periodicamente)
+        if (this.net.isHost) {
+            this.worldState.updateFlowers();
+            
+            // Sincroniza o estado das flores a cada 60 frames (~1 segundo) para evitar lag
+            if (this.frameCount % 60 === 0) {
+                this.net.syncFlowerData(this.worldState.flowerData);
+            }
         }
 
         Object.values(this.remotePlayers).forEach(p => p.update({}));
@@ -381,21 +381,34 @@ export class Game {
                     if (type === 'BROTO') { this.ctx.fillStyle = '#006400'; const sz = 12*this.zoomLevel; this.ctx.fillRect(sX+(rTileSize-sz)/2, sY+(rTileSize-sz)/2, sz, sz); }
                     else if (type === 'MUDA') { this.ctx.fillStyle = '#228B22'; const sz = 20*this.zoomLevel; this.ctx.fillRect(sX+(rTileSize-sz)/2, sY+(rTileSize-sz)/2, sz, sz); }
                     else if (['FLOR','FLOR_COOLDOWN'].includes(type) && this.assets.flower.complete) {
-                        if (type === 'FLOR_COOLDOWN') this.ctx.globalAlpha = 0.4;
+                        
+                        // Lógica Visual Baseada no Pólen Restante da Flor
+                        const key = `${Math.round(t.x)},${Math.round(t.y)}`;
+                        const flowerData = this.worldState.flowerData[key];
+                        let visualPollenScale = 1;
+                        
+                        if (flowerData) {
+                             visualPollenScale = Math.max(0.3, flowerData.currentPollen / flowerData.maxPollen);
+                             
+                             if (flowerData.currentPollen <= 0) {
+                                 this.ctx.globalAlpha = 0.4;
+                             }
+                        } else if (type === 'FLOR_COOLDOWN') {
+                            this.ctx.globalAlpha = 0.4;
+                        }
+                        
                         const by = rTileSize * 0.65; 
                         this.ctx.fillStyle = "rgba(0,0,0,0.3)"; this.ctx.beginPath(); this.ctx.ellipse(sX+rTileSize/2, sY+by, 8*this.zoomLevel, 3*this.zoomLevel, 0, 0, Math.PI*2); this.ctx.fill();
-                        this.ctx.save(); this.ctx.translate(sX+rTileSize/2, sY+by); this.ctx.rotate(Math.sin(Date.now()/800 + t.x*0.5)*0.1); this.ctx.drawImage(this.assets.flower, -rTileSize/2, -rTileSize, rTileSize, rTileSize); this.ctx.restore(); this.ctx.globalAlpha = 1.0;
-                    }
-
-                    // ATUALIZADO: Indicador visual do estado da flor se estiver parcialmente vazia
-                    if (type === 'FLOR' && this.worldState.flowerData[`${t.x},${t.y}`]) {
-                        const fData = this.worldState.flowerData[`${t.x},${t.y}`];
-                        if (fData.currentPollen < fData.maxPollen) {
-                            this.ctx.fillStyle = "rgba(0,0,0,0.5)";
-                            this.ctx.fillRect(sX + rTileSize*0.2, sY - 5, rTileSize*0.6, 4);
-                            this.ctx.fillStyle = "#f1c40f";
-                            this.ctx.fillRect(sX + rTileSize*0.2, sY - 5, (rTileSize*0.6) * (fData.currentPollen/fData.maxPollen), 4);
-                        }
+                        
+                        this.ctx.save(); 
+                        this.ctx.translate(sX+rTileSize/2, sY+by); 
+                        this.ctx.rotate(Math.sin(Date.now()/800 + t.x*0.5)*0.1); 
+                        // Flor encolhe conforme perde pólen
+                        this.ctx.scale(visualPollenScale, visualPollenScale); 
+                        this.ctx.drawImage(this.assets.flower, -rTileSize/2, -rTileSize, rTileSize, rTileSize); 
+                        this.ctx.restore(); 
+                        
+                        this.ctx.globalAlpha = 1.0;
                     }
                 }
             });
@@ -571,36 +584,33 @@ export class Game {
     }
 
     checkEnvironmentInteraction(gx, gy, tile) {
-        // Verifica se a flor ainda tem pólen pra extrair
-        let hasPollenLeft = false;
-        if (tile === 'FLOR' && this.worldState.flowerData[`${gx},${gy}`]) {
-            hasPollenLeft = this.worldState.flowerData[`${gx},${gy}`].currentPollen > 0;
-        }
+        
+        // Verifica se ainda tem pólen pra coletar nessa flor
+        const key = `${Math.round(gx)},${Math.round(gy)}`;
+        const flowerInfo = this.worldState.flowerData[key];
+        const flowerHasPollen = flowerInfo && flowerInfo.currentPollen > 0;
 
         this.input.updateBeeActions({
-            canCollect: tile === 'FLOR' && this.localPlayer.pollen < this.localPlayer.maxPollen && hasPollenLeft,
+            canCollect: tile === 'FLOR' && this.localPlayer.pollen < this.localPlayer.maxPollen && flowerHasPollen,
             hasPollen: this.localPlayer.pollen > 0,
             overBurntGround: tile === 'TERRA_QUEIMADA'
         });
 
-        // ATUALIZADO: Passa this.worldState e manda aviso na rede
         if (this.input.isCollecting()) {
+            // ATUALIZADO: Passa o worldState para a função da abelha
             if (this.localPlayer.collectPollen(tile, this.worldState)) {
                 this.gainXp(0.2);
                 
-                // Avisa as outras abelhas que eu coletei 1 de pólen dessa flor
+                // Dispara o evento de coleta para as outras abelhas
                 this.net.sendPayload({
                     type: 'POLLEN_COLLECTED',
                     x: gx,
                     y: gy
                 });
 
-                // Se a flor zerou, converte visualmente para FLOR_COOLDOWN (opcional)
-                const fData = this.worldState.flowerData[`${gx},${gy}`];
-                if (fData && fData.currentPollen <= 0) {
-                     this.changeTile(gx, gy, 'FLOR_COOLDOWN', this.localPlayer.id);
+                if (this.localPlayer.pollen >= this.localPlayer.maxPollen) {
+                    this.changeTile(gx, gy, 'FLOR_COOLDOWN', this.localPlayer.id);
                 }
-
                 this.ui.updateHUD(this.localPlayer);
             }
         }
@@ -815,6 +825,7 @@ export class Game {
         if (data.worldState) this.worldState.applyFullState(data.worldState);
         if (data.guests) this.guestDataDB = data.guests; 
         
+        // Agora passa a homeBase do pacote para o start
         this.start(data.seed, this.net.peer.id, document.getElementById('join-nickname').value.trim() || "Guest", data.homeBase);
         
         if (data.playerData) { this.localPlayer.deserialize(data.playerData); this.ui.updateHUD(this.localPlayer); }
@@ -839,20 +850,6 @@ export class Game {
     }
 
     onNetData(d) {
-        // ATUALIZADO: Eventos da rede processando a coleta e a regeneração
-        if (d.type === 'POLLEN_COLLECTED') {
-            // Outro jogador coletou, subtraímos do nosso lado também
-            this.worldState.collectPollenFromFlower(d.x, d.y);
-            const fData = this.worldState.flowerData[`${d.x},${d.y}`];
-            if (fData && fData.currentPollen <= 0) {
-                 this.changeTile(d.x, d.y, 'FLOR_COOLDOWN');
-            }
-        }
-        if (d.type === 'SYNC_FLOWERS') {
-            // Host mandou o mapa atualizado, resincroniza.
-            this.worldState.flowerData = d.data;
-        }
-
         if (d.type === 'TIME_SYNC') { this.worldState.worldTime = d.time; }
         if (d.type === 'WHISPER') this.chat.addMessage('WHISPER', d.fromNick, d.text);
         if (d.type === 'CHAT_MSG') this.chat.addMessage('GLOBAL', d.nick, d.text);
@@ -861,6 +858,16 @@ export class Game {
         if (d.type === 'SHOOT') this.projectiles.push(new Projectile(d.x, d.y, d.vx, d.vy, d.ownerId, d.damage));
         if (d.type === 'SPAWN_ENEMY') this.enemies.push(new Ant(d.id, d.x, d.y, d.type));
         
+        // NOVO: Alguém (que não é você) coletou pólen dessa flor. A gente desconta aqui.
+        if (d.type === 'POLLEN_COLLECTED') {
+            this.worldState.collectPollenFromFlower(d.x, d.y);
+        }
+
+        // NOVO: O host mandou a sincronização de todas as flores
+        if (d.type === 'SYNC_FLOWERS') {
+            this.worldState.flowerData = d.data;
+        }
+
         if (d.type === 'WAVE_SPAWN') {
             const wave = new WaveEffect(d.x, d.y, d.radius, d.color || "rgba(241, 196, 15, ALPHA)", d.amount);
             if (d.color && (d.color.includes('241, 196, 15') || d.color.includes('46, 204, 113'))) {
