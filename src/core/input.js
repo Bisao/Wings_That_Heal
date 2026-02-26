@@ -225,9 +225,11 @@ export class InputHandler {
                 display: flex; flex-direction: column; align-items: center; justify-content: center;
                 pointer-events: auto; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
                 transition: all 0.2s;
-                /* Impede seleções acidentais no mobile que quebram o touchstart */
+                
+                /* MÁGICA AQUI: Isso impede menus indesejados no Android/iOS no long-press */
                 user-select: none; 
                 -webkit-touch-callout: none;
+                -webkit-user-select: none;
             }
             #btn-collect { background: #3498db; display: none; }
             #btn-pollinate { background: #2ecc71; opacity: 0.4; }
@@ -268,12 +270,14 @@ export class InputHandler {
     bindMobileActionEvents() {
         if (!this.btnCollect || !this.btnPollinate) return;
 
-        // ATUALIZADO: Uso de touch events + preventDefault garante que o botão 
-        // fique pressionado durante o timer de 2 segundos.
+        // O SEGREDO ESTÁ AQUI: Substituir pointer events por touch events para o hold
+        // e usar oncontextmenu para blindar.
+        
+        // Botão COLHER (Hold to act)
         this.btnCollect.addEventListener('touchstart', (e) => {
             e.preventDefault(); 
             this.isCollectingHeld = true;
-            this.btnCollect.style.transform = 'scale(0.9)'; // Feedback visual
+            this.btnCollect.style.transform = 'scale(0.9)'; // Feedback visual de que apertou
         }, { passive: false });
 
         this.btnCollect.addEventListener('touchend', (e) => {
@@ -286,8 +290,15 @@ export class InputHandler {
             this.isCollectingHeld = false;
             this.btnCollect.style.transform = 'scale(1.0)';
         });
+        
+        // Bloqueia o menu de clicar com botão direito / segurar na tela
+        this.btnCollect.oncontextmenu = function(e) {
+             e.preventDefault();
+             e.stopPropagation();
+             return false;
+        };
 
-        // Polinização (Botão Verde): Lógica de Alternar (Toggle)
+        // Botão SOLTAR (Polinizar Toggle)
         this.btnPollinate.addEventListener('touchstart', (e) => {
             e.preventDefault();
             this.pollinationToggle = !this.pollinationToggle;
@@ -299,15 +310,25 @@ export class InputHandler {
             }
             window.dispatchEvent(new CustomEvent('joystickInteract'));
         }, { passive: false });
+        
+        this.btnPollinate.oncontextmenu = function(e) { e.preventDefault(); e.stopPropagation(); return false; };
     }
 
     updateBeeActions(state) {
         if (!this.isMobile) return;
-        if (this.btnCollect) this.btnCollect.style.display = state.canCollect ? 'flex' : 'none';
+        
+        // Aparecer ou sumir o botão Colher
+        if (this.btnCollect) {
+            this.btnCollect.style.display = state.canCollect ? 'flex' : 'none';
+            // Se o botão não pode aparecer, garante que a flag volte a falso para não travar
+            if (!state.canCollect && this.isCollectingHeld) {
+                this.isCollectingHeld = false;
+                this.btnCollect.style.transform = 'scale(1.0)';
+            }
+        }
         
         if (this.btnPollinate) {
             this.btnPollinate.style.opacity = state.hasPollen ? "1.0" : "0.4";
-            // Se o toggle estiver ligado mas o player não tiver pólen, podemos desativar automaticamente
             if (!state.hasPollen && this.pollinationToggle) {
                 this.resetPollinationToggle();
             }
