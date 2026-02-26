@@ -18,7 +18,7 @@ export class Player {
         this.isAttacking = false; 
 
         // --- SISTEMA DE RPG (Sincronizado com SaveSystem) ---
-        // ATUALIZADO: Valores iniciais reduzidos para forçar uso da Skill Tree
+        // Valores iniciais reduzidos para forçar uso da Skill Tree
         this.hp = 65;
         this.maxHp = 65;
         this.pollen = 0;
@@ -43,6 +43,10 @@ export class Player {
         this.collectionFrameCounter = 0;
         this.pollinateFrameCounter = 0;
         
+        // NOVO: Velocidade de coleta de pólen (frames). 120 frames ≈ 2 segundos a 60 FPS
+        // Pode ser aprimorado via Skill Tree (ex: reduzir para 90, 60 frames)
+        this.collectionSpeed = 120; 
+
         // Estado de Polinização (Toggle)
         this.isPollinatingActive = false;
 
@@ -65,21 +69,35 @@ export class Player {
     }
 
     /**
-     * Lógica de Coleta de Pólen (Segurar botão)
+     * ATUALIZADO: Lógica de Coleta de Pólen
+     * Agora usa a velocidade de coleta baseada em tempo (frames) e depende do estado da flor.
+     * @param {string} tileType - Tipo do bloco sob a abelha
+     * @param {object} worldState - Instância do WorldState para validar e subtrair o pólen da flor
      */
-    collectPollen(tileType) {
-        if (tileType !== 'FLOR' || this.pollen >= this.maxPollen || this.hp <= 0) {
+    collectPollen(tileType, worldState) {
+        if (tileType !== 'FLOR' || this.pollen >= this.maxPollen || this.hp <= 0 || !worldState) {
             this.collectionFrameCounter = 0;
             return false;
         }
 
         this.collectionFrameCounter++;
         
-        // Coleta 1 unidade a cada 5 frames
-        if (this.collectionFrameCounter >= 5) {
-            this.pollen++;
-            this.collectionFrameCounter = 0;
-            return true; 
+        // Quando o contador atinge a velocidade de coleta (ex: 2 segundos)
+        if (this.collectionFrameCounter >= this.collectionSpeed) {
+            
+            // Tenta puxar 1 de pólen fisicamente da flor no mundo
+            const extractedAmount = worldState.collectPollenFromFlower(this.pos.x, this.pos.y);
+            
+            if (extractedAmount > 0) {
+                // Sucesso! A flor tinha pólen, então a abelha ganha
+                this.pollen += extractedAmount;
+                this.collectionFrameCounter = 0;
+                return true; 
+            } else {
+                // Flor está vazia (0 de pólen). O timer reseta, mas a abelha não ganha nada
+                this.collectionFrameCounter = 0;
+                return false;
+            }
         }
         return false;
     }
@@ -252,7 +270,6 @@ export class Player {
         if (data.y !== undefined) this.pos.y = data.y;
         if (this.isLocal) this.targetPos = { ...this.pos }; 
 
-        // ATUALIZADO: Fallbacks alterados para respeitar os novos valores de início
         if (data.stats) {
             this.level = data.stats.level || 1;
             this.hp = data.stats.hp || 65;
