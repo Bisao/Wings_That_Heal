@@ -252,7 +252,7 @@ canvas {
     z-index: 5000;
     
     background: url('../assets/background_lobby.png') no-repeat center center;
-    background-size: cover; 
+    background-size: cover; /* Mantém cover no mobile */
     background-color: #1a1a1a; 
 
     display: flex; 
@@ -594,6 +594,8 @@ input:focus {
     #rpg-hud { max-width: 300px; transform: scale(1.1); transform-origin: top left; }
     #ranking-container { transform: scale(1.1); transform-origin: top right; }
     .lobby-modal { max-width: 550px; padding: 30px; }
+    /* Ajuste para esticar a imagem no desktop */
+    #lobby-overlay { background-size: 100% 100%; } 
 }
 
 @media (max-width: 768px) {
