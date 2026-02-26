@@ -3,12 +3,20 @@ export class WorldState {
         this.modifiedTiles = {}; 
         this.growingPlants = {}; 
         
+        // NOVO: Gerenciamento persistente de pólen por flor
+        this.flowerData = {}; 
+        
         // Dicionário para rastrear tentativas de polinização (Persistência)
         this.pollinationAttempts = {};
         
         // CONFIGURAÇÕES DE DIFICULDADE E IMERSÃO
         this.CHANCE_OF_CURE = 0.05; // 5% de chance de curar o tile a cada frame de polinização
         this.SPREAD_DELAY = 3000;  // 3 segundos entre a cura de cada tile vizinho (mais imersivo)
+
+        // CONFIGURAÇÕES DE PÓLEN (Mecânica de Coleta e Regeneração)
+        this.POLLEN_REGEN_COOLDOWN = 10000; // 10 segundos sem coleta para iniciar regen
+        this.POLLEN_REGEN_INTERVAL = 3000;  // +1 de pólen a cada 3 segundos
+        this.DEFAULT_MAX_POLLEN = 10;      // Capacidade padrão inicial de uma flor
 
         this.worldSize = 4000;
         this.START_TIME = new Date('2074-02-09T06:00:00').getTime();
@@ -53,12 +61,72 @@ export class WorldState {
         this.modifiedTiles[key] = type;
         
         if (type === 'FLOR') {
+            // Inicializa dados de pólen se for uma flor nova e não tiver dados prévios
+            if (!this.flowerData[key]) {
+                this.flowerData[key] = {
+                    currentPollen: this.DEFAULT_MAX_POLLEN,
+                    maxPollen: this.DEFAULT_MAX_POLLEN,
+                    lastCollectTime: Date.now(),
+                    lastRegenTime: Date.now()
+                };
+            }
             if (!this.growingPlants[key]) {
                 this.addGrowingPlant(x, y);
             }
+        } else {
+            // Se o tile mudou de flor para outra coisa (ex: foi destruído), remove os dados de pólen
+            delete this.flowerData[key];
         }
         
         return true;
+    }
+
+    /**
+     * MECÂNICA DE COLETA: Tenta remover 1 de pólen da flor.
+     * Deve ser chamada a cada "tick" (ex: 2 segundos) pela abelha coletando.
+     */
+    collectPollenFromFlower(x, y) {
+        const wx = this._wrap(x);
+        const wy = this._wrap(y);
+        const key = `${wx},${wy}`;
+        const data = this.flowerData[key];
+
+        // Se a flor não existir ou estiver vazia, retorna 0
+        if (!data || data.currentPollen <= 0) return 0;
+
+        // Reduz o pólen da flor
+        data.currentPollen -= 1;
+        
+        // Reseta o timer de regeneração, pois a flor acabou de ser interagida
+        data.lastCollectTime = Date.now();
+        data.lastRegenTime = Date.now();
+
+        return 1; // Retorna a quantidade extraída com sucesso
+    }
+
+    /**
+     * MECÂNICA DE REGENERAÇÃO: Deve ser chamada constantemente no loop principal (Game Loop).
+     */
+    updateFlowers() {
+        const now = Date.now();
+
+        for (const key in this.flowerData) {
+            const data = this.flowerData[key];
+
+            // 1. Verifica se passou o cooldown de 10 segundos sem interações
+            if (now - data.lastCollectTime >= this.POLLEN_REGEN_COOLDOWN) {
+                
+                // 2. Verifica se a flor ainda tem espaço para regenerar pólen
+                if (data.currentPollen < data.maxPollen) {
+                    
+                    // 3. Adiciona 1 de pólen a cada 3 segundos passados
+                    if (now - data.lastRegenTime >= this.POLLEN_REGEN_INTERVAL) {
+                        data.currentPollen = Math.min(data.maxPollen, data.currentPollen + 1);
+                        data.lastRegenTime = now;
+                    }
+                }
+            }
+        }
     }
 
     getModifiedTile(x, y) {
@@ -126,7 +194,10 @@ export class WorldState {
     removeGrowingPlant(x, y) {
         const wx = this._wrap(x);
         const wy = this._wrap(y);
-        delete this.growingPlants[`${wx},${wy}`];
+        const key = `${wx},${wy}`;
+        
+        delete this.growingPlants[key];
+        delete this.flowerData[key]; // Limpa os dados de pólen se a flor for removida do mapa
     }
 
     /**
@@ -179,6 +250,7 @@ export class WorldState {
         return { 
             tiles: this.modifiedTiles, 
             plants: this.growingPlants,
+            flowers: this.flowerData, // Salva o estado do pólen de cada flor para os novos jogadores
             worldTime: this.worldTime 
         };
     }
@@ -186,6 +258,8 @@ export class WorldState {
     applyFullState(stateData) {
         if (stateData) {
             this.modifiedTiles = stateData.tiles || {};
+            this.flowerData = stateData.flowers || {}; // Restaura os níveis de pólen ao carregar o mapa
+            
             const rawPlants = stateData.plants || {};
             this.growingPlants = {};
 
@@ -204,6 +278,7 @@ export class WorldState {
     reset() {
         this.modifiedTiles = {};
         this.growingPlants = {};
+        this.flowerData = {};
         this.worldTime = this.START_TIME;
     }
 }
