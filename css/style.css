@@ -65,8 +65,9 @@ canvas {
 /* --- HUD (Interface de Jogo) --- */
 #rpg-hud {
     position: fixed; 
-    top: 15px; 
-    left: 15px; 
+    /* Adicionado safe-area-inset para evitar notch no topo e laterais */
+    top: calc(15px + env(safe-area-inset-top, 0px)); 
+    left: calc(15px + env(safe-area-inset-left, 0px)); 
     z-index: 1000;
     display: flex; 
     flex-direction: column; 
@@ -130,7 +131,8 @@ canvas {
 
 #hud-time {
     position: fixed; 
-    top: 15px; 
+    /* Respeitando o safe-area-inset no topo */
+    top: calc(15px + env(safe-area-inset-top, 0px)); 
     left: 50%; 
     transform: translateX(-50%);
     background: rgba(0, 0, 0, 0.8); 
@@ -146,8 +148,9 @@ canvas {
 
 #hud-coords {
     position: fixed; 
-    bottom: 10px; 
-    right: 10px; 
+    /* Respeitando áreas seguras na base e na direita */
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px)); 
+    right: calc(10px + env(safe-area-inset-right, 0px)); 
     color: rgba(255,255,255,0.5); 
     font-size: 10px; 
     pointer-events: none; 
@@ -157,8 +160,9 @@ canvas {
 /* --- Ranking --- */
 #ranking-container {
     position: fixed; 
-    top: 60px; 
-    right: 15px; 
+    /* Respeitando o safe-area-inset no topo e direita */
+    top: calc(60px + env(safe-area-inset-top, 0px)); 
+    right: calc(15px + env(safe-area-inset-right, 0px)); 
     z-index: 1000;
     background: var(--glass); 
     padding: 12px; 
@@ -184,7 +188,8 @@ canvas {
 /* --- Telas de Sistema --- */
 #toast-msg {
     position: fixed; 
-    top: 15%; 
+    /* O toast pode usar safe area também, para não cobrir elementos nativos do celular */
+    top: calc(15% + env(safe-area-inset-top, 0px)); 
     left: 50%; 
     transform: translateX(-50%);
     background: linear-gradient(135deg, #FFD700, #F39C12); 
@@ -426,8 +431,9 @@ input:focus {
 /* --- Botões HUD --- */
 #btn-skills {
     position: fixed; 
-    top: 150px; 
-    left: 15px; 
+    /* Adicionado cálculo para notch */
+    top: calc(150px + env(safe-area-inset-top, 0px)); 
+    left: calc(15px + env(safe-area-inset-left, 0px)); 
     width: 45px; 
     height: 45px;
     background: #8e44ad; 
@@ -446,8 +452,9 @@ input:focus {
 
 #chat-toggle-btn {
     position: fixed; 
-    top: 210px; 
-    left: 15px; 
+    /* Adicionado cálculo para notch */
+    top: calc(210px + env(safe-area-inset-top, 0px)); 
+    left: calc(15px + env(safe-area-inset-left, 0px)); 
     width: 45px; 
     height: 45px;
     background: var(--primary); 
@@ -597,9 +604,38 @@ input:focus {
 }
 
 @media (max-width: 768px) {
-    #rpg-hud { top: 10px; left: 10px; transform: scale(0.80); transform-origin: top left; }
-    #hud-time { top: 10px; left: auto; right: 10px; transform: none; font-size: 12px; } 
-    #ranking-container { top: 45px; right: 10px; transform: scale(0.75); transform-origin: top right; }
-    #btn-skills { top: 200px; left: 10px; width: 40px; height: 40px; font-size: 18px; }
-    #chat-toggle-btn { top: 255px; left: 10px; width: 40px; height: 40px; font-size: 18px; }
+    /* Adicionada margem segura via safe-area-inset também na query mobile */
+    #rpg-hud { 
+        top: calc(10px + env(safe-area-inset-top, 0px)); 
+        left: calc(10px + env(safe-area-inset-left, 0px)); 
+        transform: scale(0.80); 
+        transform-origin: top left; 
+    }
+    #hud-time { 
+        top: calc(10px + env(safe-area-inset-top, 0px)); 
+        left: auto; 
+        right: calc(10px + env(safe-area-inset-right, 0px)); 
+        transform: none; 
+        font-size: 12px; 
+    } 
+    #ranking-container { 
+        top: calc(45px + env(safe-area-inset-top, 0px)); 
+        right: calc(10px + env(safe-area-inset-right, 0px)); 
+        transform: scale(0.75); 
+        transform-origin: top right; 
+    }
+    #btn-skills { 
+        top: calc(200px + env(safe-area-inset-top, 0px)); 
+        left: calc(10px + env(safe-area-inset-left, 0px)); 
+        width: 40px; 
+        height: 40px; 
+        font-size: 18px; 
+    }
+    #chat-toggle-btn { 
+        top: calc(255px + env(safe-area-inset-top, 0px)); 
+        left: calc(10px + env(safe-area-inset-left, 0px)); 
+        width: 40px; 
+        height: 40px; 
+        font-size: 18px; 
+    }
 }
