@@ -1,7 +1,7 @@
 export class Player {
     constructor(id, nickname, isLocal = false) {
         this.id = id;
-        this.nickname = nickname;
+        this.nickname = nickname || "Abelha"; // Garante fallback seguro, mas prioriza o nick fornecido
         this.isLocal = isLocal;
         
         this.pos = { x: 0, y: 0 };
@@ -51,7 +51,7 @@ export class Player {
         this.isPollinatingActive = false;
 
         // COR ÚNICA: Gera uma cor baseada no nome do jogador
-        this.color = this.generateColor(nickname);
+        this.color = this.generateColor(this.nickname);
 
         this.sprites = {};
         ['Up', 'Down', 'Left', 'Right', 'Idle', 'LeftIdle', 'RightIdle', 'Fainted'].forEach(d => {
@@ -237,6 +237,7 @@ export class Player {
         }
     }
 
+    // Garante que o nickname não será apagado no respawn
     respawn() {
         this.hp = this.maxHp;
         this.pollen = 0;
@@ -253,7 +254,7 @@ export class Player {
     serialize() {
         return {
             id: this.id,
-            nickname: this.nickname,
+            nickname: this.nickname, // Sempre manda o nickname
             x: this.pos.x,
             y: this.pos.y,
             stats: {
@@ -270,6 +271,13 @@ export class Player {
 
     deserialize(data) {
         if (!data) return;
+        
+        // CORREÇÃO AQUI: Garante que o nickname, se vier no pacote, não sobrescreva se for undefined
+        if (data.nickname !== undefined && data.nickname !== null && data.nickname !== "") {
+            this.nickname = data.nickname;
+            this.color = this.generateColor(this.nickname); // Atualiza a cor se o nick mudar
+        }
+
         if (data.x !== undefined) this.pos.x = data.x;
         if (data.y !== undefined) this.pos.y = data.y;
         if (this.isLocal) this.targetPos = { ...this.pos }; 
@@ -344,6 +352,7 @@ export class Player {
         }
 
         if (isDead) {
+            // Se estiver morto, vamos garantir que o sprite vire e fique em PB
             ctx.rotate(Math.PI / 2);
             ctx.filter = "grayscale(100%) brightness(0.8)"; 
         }
