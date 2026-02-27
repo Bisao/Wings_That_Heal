@@ -43,8 +43,7 @@ export class Player {
         this.collectionFrameCounter = 0;
         this.pollinateFrameCounter = 0;
         
-        // NOVO: Velocidade de coleta de pólen (frames). 120 frames ≈ 2 segundos a 60 FPS
-        // Pode ser aprimorado via Skill Tree (ex: reduzir para 90, 60 frames)
+        // Velocidade de coleta de pólen (frames). 120 frames ≈ 2 segundos a 60 FPS
         this.collectionSpeed = 120; 
 
         // Estado de Polinização (Toggle)
@@ -69,10 +68,9 @@ export class Player {
     }
 
     /**
-     * ATUALIZADO: Lógica de Coleta de Pólen
-     * Agora usa a velocidade de coleta baseada em tempo (frames) e depende do estado da flor.
+     * Lógica de Coleta de Pólen
      * @param {string} tileType - Tipo do bloco sob a abelha
-     * @param {object} worldState - Instância do WorldState para validar e subtrair o pólen da flor
+     * @param {object} worldState - Instância do WorldState
      */
     collectPollen(tileType, worldState) {
         if (tileType !== 'FLOR' || this.pollen >= this.maxPollen || this.hp <= 0 || !worldState) {
@@ -82,10 +80,7 @@ export class Player {
 
         this.collectionFrameCounter++;
         
-        // Quando o contador atinge a velocidade de coleta (ex: 2 segundos)
         if (this.collectionFrameCounter >= this.collectionSpeed) {
-            
-            // CORREÇÃO AQUI: Precisamos arredondar as coordenadas para casar com a chave do dicionário de flores
             const gridX = Math.round(this.pos.x);
             const gridY = Math.round(this.pos.y);
 
@@ -93,12 +88,10 @@ export class Player {
             const extractedAmount = worldState.collectPollenFromFlower(gridX, gridY);
             
             if (extractedAmount > 0) {
-                // Sucesso! A flor tinha pólen, então a abelha ganha
                 this.pollen += extractedAmount;
                 this.collectionFrameCounter = 0;
                 return true; 
             } else {
-                // Flor está vazia (0 de pólen). O timer reseta, mas a abelha não ganha nada
                 this.collectionFrameCounter = 0;
                 return false;
             }
@@ -108,10 +101,8 @@ export class Player {
 
     /**
      * Lógica de Polinização (Modo Toggle)
-     * Chamada pelo Game.js continuamente se o toggle estiver ON
      */
     pollinate(tileType) {
-        // Se não for terra queimada, não tiver pólen ou estiver morto, reseta o contador interno
         if (tileType !== 'TERRA_QUEIMADA' || this.pollen <= 0 || this.hp <= 0) {
             this.pollinateFrameCounter = 0;
             return false;
@@ -119,7 +110,6 @@ export class Player {
 
         this.pollinateFrameCounter++;
         
-        // Gasta 1 de pólen e converte o tile após 15 frames de sobrevoo
         if (this.pollinateFrameCounter >= 15) {
             this.pollen--;
             this.pollinateFrameCounter = 0;
@@ -131,7 +121,6 @@ export class Player {
     shootPollen(aimX = 0, aimY = 0) {
         if (this.pollen <= 0 || this.attackCooldown > 0 || this.hp <= 0) return null;
 
-        // Ao atirar, o gasto de pólen é imediato
         this.pollen--; 
         this.attackCooldown = this.attackSpeed;
         this.isAttacking = true;
@@ -186,10 +175,25 @@ export class Player {
         }
     }
 
+    /**
+     * Aplica cura normal. Só funciona se o jogador NÃO estiver desmaiado.
+     */
     applyHeal(amount) {
         if (this.hp <= 0) return; 
         this.hp = Math.min(this.maxHp, this.hp + amount);
         this.healEffectTimer = 30;
+    }
+
+    /**
+     * MECÂNICA DE RESGATE: Revive o jogador desmaiado.
+     * Esta função ignora a trava de HP <= 0.
+     */
+    revive(healthAmount = 25) {
+        this.hp = healthAmount;
+        this.healEffectTimer = 60;
+        this.setInvulnerable(180); // 3 segundos de invulnerabilidade ao acordar
+        this.isPollinatingActive = false;
+        console.log(`[Player] ${this.nickname} foi resgatado com ${healthAmount} HP!`);
     }
 
     setInvulnerable(frames) {
@@ -205,7 +209,6 @@ export class Player {
 
         const isMoving = moveVector.x !== 0 || moveVector.y !== 0;
 
-        // Rastro de Pólen: Mais denso se a polinização automática estiver ligada
         if (this.isLocal && this.pollen > 0 && particles) {
             const particleChance = this.isPollinatingActive ? 0.6 : 0.2;
             if (isMoving && Math.random() < particleChance) {
@@ -214,7 +217,7 @@ export class Player {
         }
 
         if (this.isLocal) {
-            if (isMoving) {
+            if (isMoving && this.hp > 0) {
                 if (Math.abs(moveVector.x) > Math.abs(moveVector.y)) {
                     this.currentDir = moveVector.x > 0 ? 'Right' : 'Left';
                 } else {
@@ -237,7 +240,6 @@ export class Player {
         }
     }
 
-    // Garante que o nickname não será apagado no respawn
     respawn() {
         this.hp = this.maxHp;
         this.pollen = 0;
@@ -254,7 +256,7 @@ export class Player {
     serialize() {
         return {
             id: this.id,
-            nickname: this.nickname, // Sempre manda o nickname
+            nickname: this.nickname,
             x: this.pos.x,
             y: this.pos.y,
             stats: {
@@ -272,10 +274,9 @@ export class Player {
     deserialize(data) {
         if (!data) return;
         
-        // CORREÇÃO AQUI: Garante que o nickname, se vier no pacote, não sobrescreva se for undefined
         if (data.nickname !== undefined && data.nickname !== null && data.nickname !== "") {
             this.nickname = data.nickname;
-            this.color = this.generateColor(this.nickname); // Atualiza a cor se o nick mudar
+            this.color = this.generateColor(this.nickname);
         }
 
         if (data.x !== undefined) this.pos.x = data.x;
@@ -284,7 +285,7 @@ export class Player {
 
         if (data.stats) {
             this.level = data.stats.level || 1;
-            this.hp = data.stats.hp || 65;
+            this.hp = data.stats.hp !== undefined ? data.stats.hp : 65;
             this.maxHp = data.stats.maxHp || 65;
             this.pollen = data.stats.pollen || 0;
             this.maxPollen = data.stats.maxPollen || 35;
@@ -303,7 +304,6 @@ export class Player {
         
         const isPartner = Array.isArray(partyMemberIds) ? partyMemberIds.includes(this.id) : this.id === partyMemberIds;
 
-        // Setas indicadoras para parceiros de grupo
         if (this.isLocal && Array.isArray(partyMemberIds) && partyMemberIds.length > 0) {
             partyMemberIds.forEach(memberId => {
                 const partner = remotePlayers[memberId];
@@ -337,7 +337,6 @@ export class Player {
         const floatY = isDead ? 0 : Math.sin(Date.now() / 200) * (3 * zoomScale); 
         const drawY = sY - (12 * zoomScale) + floatY;
 
-        // Sombra
         ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
         ctx.beginPath();
         ctx.ellipse(sX, sY + (8 * zoomScale), (isDead ? 12 : 10) * zoomScale, 4 * zoomScale, 0, 0, Math.PI * 2);
@@ -352,7 +351,6 @@ export class Player {
         }
 
         if (isDead) {
-            // Se estiver morto, vamos garantir que o sprite vire e fique em PB
             ctx.rotate(Math.PI / 2);
             ctx.filter = "grayscale(100%) brightness(0.8)"; 
         }
@@ -365,7 +363,6 @@ export class Player {
         }
         ctx.restore();
 
-        // Aura visual se a polinização automática estiver ligada
         if (this.isPollinatingActive && !isDead) {
             ctx.save();
             ctx.strokeStyle = "rgba(46, 204, 113, 0.6)";
