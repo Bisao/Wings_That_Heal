@@ -86,7 +86,12 @@ export class NetworkManager {
             this._log(`Peer desconectado: ${conn.peer}`, "#e67e22");
             this.connections = this.connections.filter(c => c.peer !== conn.peer);
             this.authenticatedPeers.delete(conn.peer);
+            
+            // Dispara internamente para o Host remover o boneco
             window.dispatchEvent(new CustomEvent('peerDisconnected', { detail: { peerId: conn.peer } }));
+            
+            // AVISA AOS OUTROS CONVIDADOS QUE ESTE JOGADOR CAIU (EVITA FANTASMAS NOS CLIENTES)
+            this.broadcast({ type: 'PEER_DISCONNECT', peerId: conn.peer });
         });
 
         conn.on('data', (data) => {
@@ -95,12 +100,28 @@ export class NetworkManager {
                 if (!this.roomData.pass || data.password === this.roomData.pass) {
                     this._log(`Autenticando jogador: ${data.nickname || 'Guest'}`);
                     
-                    // O currentState agora inclui o dicionário 'flowers' para sincronizar o pólen
+                    // CLEANUP DE FANTASMAS: Se o mesmo Nickname tentar entrar, removemos o ID antigo dele
+                    if (data.nickname) {
+                        const ghosts = this.connections.filter(c => c._nickname === data.nickname && c.peer !== conn.peer);
+                        ghosts.forEach(ghostConn => {
+                            this._log(`Removendo fantasma do jogador via refresh: ${data.nickname}`, "#e74c3c");
+                            this.authenticatedPeers.delete(ghostConn.peer);
+                            // Remove do Host e avisa os outros clientes para deletarem o fantasma
+                            window.dispatchEvent(new CustomEvent('peerDisconnected', { detail: { peerId: ghostConn.peer } }));
+                            this.broadcast({ type: 'PEER_DISCONNECT', peerId: ghostConn.peer });
+                            ghostConn.close();
+                        });
+                        this.connections = this.connections.filter(c => c._nickname !== data.nickname || c.peer === conn.peer);
+                        // Atrela o nickname à conexão para rastreio
+                        conn._nickname = data.nickname;
+                    }
+
                     const currentState = this.getStateCallback ? this.getStateCallback() : {};
                     const savedPlayerData = (this.getGuestDataCallback && data.nickname) ? this.getGuestDataCallback(data.nickname) : null;
                     const fullGuestsDB = this.getFullGuestDBStatsCallback ? this.getFullGuestDBStatsCallback() : {};
                     const currentHomeBase = this.getHomeBaseCallback ? this.getHomeBaseCallback() : null; 
 
+                    this.connections = this.connections.filter(c => c.peer !== conn.peer); // Evita duplicatas do mesmo peer
                     this.authenticatedPeers.add(conn.peer);
                     this.connections.push(conn);
 
@@ -245,10 +266,6 @@ export class NetworkManager {
         });
     }
 
-    /**
-     * NOVO: Método para o Host sincronizar o estado exato das flores 
-     * (capacidade e pólen) para evitar dessincronização visual nos clientes.
-     */
     syncFlowerData(flowerDict) {
         if (!this.isHost) return;
 
@@ -257,10 +274,7 @@ export class NetworkManager {
             data: flowerDict
         };
 
-        // Envia para todos na sala
         this.broadcast(payload, this.peer.id);
-        
-        // Também despacha para o próprio host (se ele precisar atualizar UI interna)
         window.dispatchEvent(new CustomEvent('netData', { detail: payload }));
     }
 
