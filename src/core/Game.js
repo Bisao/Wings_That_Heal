@@ -390,13 +390,13 @@ export class Game {
                         
                         const wx = Math.round(t.x);
                         const wy = Math.round(t.y);
-                        const key = `${wx},${wy}`;
-                        let flowerData = this.worldState.flowerData[key];
-
-                        // SEGUNDA PROTEÇÃO: Se é uma flor mas não tem data, tenta registrar agora
-                        if (!flowerData && type === 'FLOR') {
-                            this.worldState.setTile(wx, wy, 'FLOR'); 
-                            flowerData = this.worldState.flowerData[key];
+                        
+                        // INTEGRAÇÃO PERFEITA: Busca os dados com segurança
+                        let flowerData = null;
+                        if (type === 'FLOR') {
+                            flowerData = this.worldState.getFlowerDataSafely ? this.worldState.getFlowerDataSafely(wx, wy) : this.worldState.flowerData[`${wx},${wy}`];
+                        } else {
+                            flowerData = this.worldState.flowerData[`${wx},${wy}`];
                         }
                         
                         if (flowerData && flowerData.currentPollen <= 0) {
@@ -667,9 +667,14 @@ export class Game {
 
     checkEnvironmentInteraction(gx, gy, tile) {
         
-        // Verifica se ainda tem pólen pra coletar nessa flor
-        const key = `${Math.round(gx)},${Math.round(gy)}`;
-        const flowerInfo = this.worldState.flowerData[key];
+        // INTEGRAÇÃO PERFEITA: Busca a flor de forma 100% segura usando o novo método
+        let flowerInfo = null;
+        if (tile === 'FLOR' && this.worldState.getFlowerDataSafely) {
+            flowerInfo = this.worldState.getFlowerDataSafely(gx, gy);
+        } else {
+            flowerInfo = this.worldState.flowerData[`${Math.round(gx)},${Math.round(gy)}`];
+        }
+        
         const flowerHasPollen = flowerInfo && flowerInfo.currentPollen > 0;
 
         this.input.updateBeeActions({
@@ -679,11 +684,9 @@ export class Game {
         });
 
         if (this.input.isCollecting()) {
-            // Passa o worldState para a função da abelha
             if (this.localPlayer.collectPollen(tile, this.worldState)) {
                 this.gainXp(0.2);
                 
-                // Dispara o evento de coleta para as outras abelhas
                 this.net.sendPayload({
                     type: 'POLLEN_COLLECTED',
                     x: gx,
