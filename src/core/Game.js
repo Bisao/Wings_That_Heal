@@ -391,13 +391,10 @@ export class Game {
                         const wx = Math.round(t.x);
                         const wy = Math.round(t.y);
                         
-                        // INTEGRAÇÃO PERFEITA: Busca os dados com segurança
-                        let flowerData = null;
-                        if (type === 'FLOR') {
-                            flowerData = this.worldState.getFlowerDataSafely ? this.worldState.getFlowerDataSafely(wx, wy) : this.worldState.flowerData[`${wx},${wy}`];
-                        } else {
-                            flowerData = this.worldState.flowerData[`${wx},${wy}`];
-                        }
+                        // GARANTIA MATEMÁTICA: Faz o wrap das coordenadas para o tamanho do mundo
+                        // Isso resolve definitivamente o bug das coordenadas negativas!
+                        const key = `${this.worldState._wrap(wx)},${this.worldState._wrap(wy)}`;
+                        const flowerData = this.worldState.flowerData[key];
                         
                         if (flowerData && flowerData.currentPollen <= 0) {
                             this.ctx.globalAlpha = 0.4;
@@ -667,13 +664,9 @@ export class Game {
 
     checkEnvironmentInteraction(gx, gy, tile) {
         
-        // INTEGRAÇÃO PERFEITA: Busca a flor de forma 100% segura usando o novo método
-        let flowerInfo = null;
-        if (tile === 'FLOR' && this.worldState.getFlowerDataSafely) {
-            flowerInfo = this.worldState.getFlowerDataSafely(gx, gy);
-        } else {
-            flowerInfo = this.worldState.flowerData[`${Math.round(gx)},${Math.round(gy)}`];
-        }
+        // GARANTIA MATEMÁTICA: O wrap protege a checagem de pólen na coleta para funcionar em números negativos
+        const key = `${this.worldState._wrap(Math.round(gx))},${this.worldState._wrap(Math.round(gy))}`;
+        const flowerInfo = this.worldState.flowerData[key];
         
         const flowerHasPollen = flowerInfo && flowerInfo.currentPollen > 0;
 
