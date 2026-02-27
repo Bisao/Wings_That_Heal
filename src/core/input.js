@@ -91,6 +91,7 @@ export class InputHandler {
         
         this.btnCollect = null;
         this.btnPollinate = null;
+        this.btnCollectLabel = null; // Para mudar o texto do botão de ação
         
         // ESTADOS ATUALIZADOS
         this.isCollectingHeld = false; // Coleta continua sendo HOLD (segurar)
@@ -105,7 +106,6 @@ export class InputHandler {
 
     init() {
         window.addEventListener('keydown', e => { 
-            // CORREÇÃO: Evita TypeError se a tecla for indefinida
             if (!e || !e.key) return; 
 
             const key = e.key.toLowerCase();
@@ -221,12 +221,10 @@ export class InputHandler {
             .btn-bee-action {
                 width: 70px; height: 70px;
                 border-radius: 50%; border: 3px solid white;
-                color: white; font-weight: 900; font-size: 12px;
+                color: white; font-weight: 900; font-size: 11px;
                 display: flex; flex-direction: column; align-items: center; justify-content: center;
                 pointer-events: auto; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
                 transition: all 0.2s;
-                
-                /* MÁGICA AQUI: Isso impede menus indesejados no Android/iOS no long-press */
                 user-select: none; 
                 -webkit-touch-callout: none;
                 -webkit-user-select: none;
@@ -234,7 +232,6 @@ export class InputHandler {
             #btn-collect { background: #3498db; display: none; }
             #btn-pollinate { background: #2ecc71; opacity: 0.4; }
             
-            /* Estado Ativo do Toggle */
             .btn-bee-action.is-active {
                 background-color: #f39c12 !important;
                 box-shadow: 0 0 20px #f39c12;
@@ -244,7 +241,7 @@ export class InputHandler {
             @media (max-width: 768px) and (orientation: landscape) {
                 #stick-left-zone, #stick-right-zone { width: 110px; height: 110px; }
                 .mobile-action-group { bottom: 135px; }
-                .btn-bee-action { width: 55px; height: 55px; }
+                .btn-bee-action { width: 55px; height: 55px; font-size: 9px; }
             }
         `;
         document.head.appendChild(style);
@@ -258,26 +255,25 @@ export class InputHandler {
             <div id="stick-left-zone" class="joystick-zone"><div id="stick-left-knob" class="joystick-knob"></div></div>
             <div class="mobile-action-group">
                 <button id="btn-pollinate" class="btn-bee-action"><span>✨</span>SOLTAR</button>
-                <button id="btn-collect" class="btn-bee-action"><span>🍯</span>COLHER</button>
+                <button id="btn-collect" class="btn-bee-action"><span id="collect-icon">🍯</span><span id="collect-label">COLHER</span></button>
             </div>
             <div id="stick-right-zone" class="joystick-zone"><div id="stick-right-knob" class="joystick-knob"></div></div>
         `;
         document.body.appendChild(div);
         this.btnCollect = document.getElementById('btn-collect');
         this.btnPollinate = document.getElementById('btn-pollinate');
+        this.btnCollectLabel = document.getElementById('collect-label');
+        this.btnCollectIcon = document.getElementById('collect-icon');
     }
 
     bindMobileActionEvents() {
         if (!this.btnCollect || !this.btnPollinate) return;
-
-        // O SEGREDO ESTÁ AQUI: Substituir pointer events por touch events para o hold
-        // e usar oncontextmenu para blindar.
         
-        // Botão COLHER (Hold to act)
+        // Botão de Ação (Coleta / Resgate) - Baseado em HOLD
         this.btnCollect.addEventListener('touchstart', (e) => {
             e.preventDefault(); 
             this.isCollectingHeld = true;
-            this.btnCollect.style.transform = 'scale(0.9)'; // Feedback visual de que apertou
+            this.btnCollect.style.transform = 'scale(0.9)';
         }, { passive: false });
 
         this.btnCollect.addEventListener('touchend', (e) => {
@@ -291,7 +287,6 @@ export class InputHandler {
             this.btnCollect.style.transform = 'scale(1.0)';
         });
         
-        // Bloqueia o menu de clicar com botão direito / segurar na tela
         this.btnCollect.oncontextmenu = function(e) {
              e.preventDefault();
              e.stopPropagation();
@@ -314,19 +309,38 @@ export class InputHandler {
         this.btnPollinate.oncontextmenu = function(e) { e.preventDefault(); e.stopPropagation(); return false; };
     }
 
+    /**
+     * ATUALIZADO: Gerencia a visibilidade e o texto dos botões mobile.
+     * @param {object} state - Estado enviado pelo Game.js (canCollect, isRescue, etc)
+     */
     updateBeeActions(state) {
         if (!this.isMobile) return;
         
-        // Aparecer ou sumir o botão Colher
+        // Controle do botão de Ação (Colher / Resgatar)
         if (this.btnCollect) {
-            this.btnCollect.style.display = state.canCollect ? 'flex' : 'none';
-            // Se o botão não pode aparecer, garante que a flag volte a falso para não travar
-            if (!state.canCollect && this.isCollectingHeld) {
+            // O botão aparece se puder coletar OU se houver um resgate disponível
+            const shouldShow = state.canCollect || state.isRescue;
+            this.btnCollect.style.display = shouldShow ? 'flex' : 'none';
+
+            // Muda o rótulo do botão dependendo da ação
+            if (state.isRescue) {
+                this.btnCollect.style.backgroundColor = '#f1c40f'; // Amarelo para resgate
+                if (this.btnCollectLabel) this.btnCollectLabel.innerText = "AJUDAR";
+                if (this.btnCollectIcon) this.btnCollectIcon.innerText = "❤️";
+            } else {
+                this.btnCollect.style.backgroundColor = '#3498db'; // Azul para coleta
+                if (this.btnCollectLabel) this.btnCollectLabel.innerText = "COLHER";
+                if (this.btnCollectIcon) this.btnCollectIcon.innerText = "🍯";
+            }
+
+            // Garante que a flag de hold não trave se o botão sumir
+            if (!shouldShow && this.isCollectingHeld) {
                 this.isCollectingHeld = false;
                 this.btnCollect.style.transform = 'scale(1.0)';
             }
         }
         
+        // Controle do botão de Polinização
         if (this.btnPollinate) {
             this.btnPollinate.style.opacity = state.hasPollen ? "1.0" : "0.4";
             if (!state.hasPollen && this.pollinationToggle) {
