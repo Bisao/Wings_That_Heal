@@ -327,7 +327,11 @@ export class Game {
         }
         
         this.particles.update();
+        
+        // Verifica a Proximidade de Resgate (Raio definido no Player.js)
+        this.localPlayer.checkRescueRange(this.remotePlayers);
         this.checkRescue();
+        
         this.checkEnvironmentInteraction(gx, gy, currentTile); 
         this.checkEnvironmentDamage(gx, gy);
 
@@ -392,7 +396,6 @@ export class Game {
                         const wy = Math.round(t.y);
                         
                         // GARANTIA MATEMÁTICA: Faz o wrap das coordenadas para o tamanho do mundo
-                        // Isso resolve definitivamente o bug das coordenadas negativas!
                         const key = `${this.worldState._wrap(wx)},${this.worldState._wrap(wy)}`;
                         const flowerData = this.worldState.flowerData[key];
                         
@@ -424,9 +427,8 @@ export class Game {
                         const dy = this.localPlayer.pos.y - t.y;
                         const distSq = dx * dx + dy * dy;
 
-                        // Se estiver mais perto que a flor anterior registrada E tiver pólen E não estiver em Cooldown
                         if (distSq <= minFlowerDistSq && flowerData && flowerData.currentPollen > 0 && type !== 'FLOR_COOLDOWN') {
-                            minFlowerDistSq = distSq; // Atualiza a menor distância
+                            minFlowerDistSq = distSq; 
                             closestFlowerUI = {
                                 sX: sX,
                                 sY: sY,
@@ -448,7 +450,6 @@ export class Game {
             const uiBaseY = sY - (10 * this.zoomLevel) + floatY;
             const uiCenterX = sX + rTileSize / 2;
 
-            // Desenha o Prompt da tecla [E] apenas se NÃO for mobile
             if (!this.input.isMobile) {
                 const kw = 20 * this.zoomLevel;
                 const kh = 20 * this.zoomLevel;
@@ -475,7 +476,6 @@ export class Game {
                 this.ctx.fillText("E", uiCenterX, ky + kh / 2 + 1);
             }
 
-            // Desenha a Barra de Progresso
             const barW = 30 * this.zoomLevel;
             const barH = 5 * this.zoomLevel;
             const barY = uiBaseY + (this.input.isMobile ? -15 * this.zoomLevel : -2 * this.zoomLevel);
@@ -483,7 +483,6 @@ export class Game {
             this.ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
             this.ctx.fillRect(uiCenterX - barW/2, barY, barW, barH);
             
-            // Cor dinâmica: Verde > Amarelo > Vermelho
             let barColor = "#2ecc71"; 
             if (pRatio < 0.5) barColor = "#f1c40f"; 
             if (pRatio < 0.25) barColor = "#e74c3c";
@@ -625,55 +624,50 @@ export class Game {
         this.net.sendPayload({ type: 'MOVE', id: this.localPlayer.id, nick: this.localPlayer.nickname, x: this.localPlayer.pos.x, y: this.localPlayer.pos.y, dir: this.localPlayer.currentDir });
     }
 
+    // NOVA LÓGICA DE RESGATE: Agora usando isRescuing() ou a tecla R e integrado com a UI
     checkRescue() {
-        let nearbyFaintedPartner = null;
-        this.partyMembers.forEach(memberId => {
-            if (memberId === this.localPlayer.id) return;
-            const partner = this.remotePlayers[memberId];
-            if (partner && partner.hp <= 0 && Math.sqrt(Math.pow(this.localPlayer.pos.x - partner.pos.x, 2) + Math.pow(this.localPlayer.pos.y - partner.pos.y, 2)) < 1.5) {
-                nearbyFaintedPartner = { id: memberId, nickname: partner.nickname, obj: partner };
-                partner.showRescuePrompt = true;
-            }
-        });
-        if (nearbyFaintedPartner) {
-            this.currentRescueTarget = nearbyFaintedPartner;
-            const canAfford = this.localPlayer.pollen >= this.RESCUE_POLLEN_COST;
-            
-            this.input.updateBeeActions({
-                canCollect: false,
-                hasPollen: canAfford,
-                overBurntGround: false,
-                isRescue: true,
-                rescueTargetNick: nearbyFaintedPartner.nickname
-            });
+        if (this.localPlayer.showRescuePrompt && this.localPlayer.rescueTargetId) {
+            const partner = this.remotePlayers[this.localPlayer.rescueTargetId];
+            if (!partner) return;
 
-            if (this.input.isCollecting() && canAfford) {
+            this.currentRescueTarget = { id: this.localPlayer.rescueTargetId, nickname: partner.nickname, obj: partner };
+            const canAfford = this.localPlayer.pollen >= this.RESCUE_POLLEN_COST;
+
+            // Detecta a ação de curar baseada no Desktop ("R") ou Mobile (isRescuing())
+            const isPressingRescue = (this.input.keys && (this.input.keys['r'] || this.input.keys['R'])) || (typeof this.input.isRescuing === 'function' && this.input.isRescuing());
+
+            if (isPressingRescue && canAfford) {
                 this.input.resetPollinationToggle();
                 this.rescueTimer++;
                 if (this.rescueTimer >= this.RESCUE_DURATION) {
                     this.localPlayer.pollen -= this.RESCUE_POLLEN_COST;
-                    this.net.sendPayload({ type: 'PARTY_RESCUE', fromNick: this.localPlayer.nickname }, this.currentRescueTarget.id);
+                    // Envia o comando de resgate e cura 25 de vida do aliado
+                    this.net.sendPayload({ type: 'PARTY_RESCUE', fromNick: this.localPlayer.nickname, amount: 25 }, this.currentRescueTarget.id);
                     this.rescueTimer = 0;
+                    this.ui.showToast(`Você resgatou ${partner.nickname}!`, 'success');
                 }
-            } else { this.rescueTimer = Math.max(0, this.rescueTimer - 2); }
-        } else { 
-            this.currentRescueTarget = null; 
-            this.rescueTimer = 0; 
+            } else {
+                this.rescueTimer = Math.max(0, this.rescueTimer - 2);
+            }
+        } else {
+            this.currentRescueTarget = null;
+            this.rescueTimer = 0;
         }
     }
 
     checkEnvironmentInteraction(gx, gy, tile) {
-        
-        // GARANTIA MATEMÁTICA: O wrap protege a checagem de pólen na coleta para funcionar em números negativos
         const key = `${this.worldState._wrap(Math.round(gx))},${this.worldState._wrap(Math.round(gy))}`;
         const flowerInfo = this.worldState.flowerData[key];
-        
         const flowerHasPollen = flowerInfo && flowerInfo.currentPollen > 0;
 
+        // Atualizamos o InputHandler com o estado da flor E do resgate
         this.input.updateBeeActions({
             canCollect: tile === 'FLOR' && this.localPlayer.pollen < this.localPlayer.maxPollen && flowerHasPollen,
             hasPollen: this.localPlayer.pollen > 0,
-            overBurntGround: tile === 'TERRA_QUEIMADA'
+            overBurntGround: tile === 'TERRA_QUEIMADA',
+            isRescue: this.localPlayer.showRescuePrompt,
+            rescueTargetNick: this.currentRescueTarget ? this.currentRescueTarget.nickname : null,
+            canAffordRescue: this.localPlayer.pollen >= this.RESCUE_POLLEN_COST
         });
 
         if (this.input.isCollecting()) {
@@ -735,12 +729,17 @@ export class Game {
         if (overlay) overlay.style.opacity = hpRatio < 0.7 ? (0.7 - hpRatio) * 1.4 : 0;
     }
 
+    // Desenha o círculo de progresso no jogador que está sendo resgatado
     drawRescueUI(rTileSize) {
         if (this.currentRescueTarget && this.rescueTimer > 0) {
             const tPos = this.currentRescueTarget.obj.pos;
             const tScreenX = (tPos.x - this.camera.x) * rTileSize + this.canvas.width / 2;
             const tScreenY = (tPos.y - this.camera.y) * rTileSize + this.canvas.height / 2;
-            this.ctx.strokeStyle = "#ffffff"; this.ctx.lineWidth = 4 * this.zoomLevel; this.ctx.beginPath();
+            
+            this.ctx.strokeStyle = "#ffffff"; 
+            this.ctx.lineWidth = 4 * this.zoomLevel; 
+            this.ctx.beginPath();
+            // Desenha o progresso da cura como um arco
             this.ctx.arc(tScreenX, tScreenY, 30 * this.zoomLevel, -Math.PI/2, (-Math.PI/2) + (Math.PI*2 * (this.rescueTimer/this.RESCUE_DURATION)));
             this.ctx.stroke();
         }
@@ -970,12 +969,12 @@ export class Game {
         if (d.type === 'PARTY_SYNC') { this.localPartyName = d.pName; this.localPartyIcon = d.pIcon; d.members.forEach(id => { if (!this.partyMembers.includes(id)) this.partyMembers.push(id); }); this.chat.openPartyTab(d.pName, d.pIcon); this.ui.updateHUD(this.localPlayer); }
         if (d.type === 'PARTY_LEAVE') { this.chat.addMessage('SYSTEM', null, `Alguém saiu.`); this.partyMembers = this.partyMembers.filter(id => id !== d.fromId); if (this.partyMembers.length === 0) this.chat.closePartyTab(); }
         
+        // APLICANDO A CURA DE RESGATE AQUI
         if (d.type === 'PARTY_RESCUE') {
             if (this.isFainted) {
                 clearTimeout(this.faintTimeout);
                 this.isFainted = false;
-                this.localPlayer.hp = 25;
-                this.localPlayer.pollen = Math.max(0, this.localPlayer.pollen - 10);
+                this.localPlayer.revive(d.amount || 25);
                 this.invulnerabilityTimer = 180;
                 document.getElementById('faint-screen').style.display = 'none';
             } else {
