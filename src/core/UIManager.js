@@ -1,7 +1,8 @@
 /**
  * UIManager.js
  * Gerencia a Interface do Usuário, Notificações, Feedback Visual e Configurações.
- * Atualizado para suportar o Gerenciador de Colmeias, Sistema de Resgate e Menu In-Game.
+ * Atualizado para suportar o Gerenciador de Colmeias, Sistema de Resgate e Menu In-Game
+ * com Confirmação Customizada de Saída.
  */
 export class UIManager {
     constructor() {
@@ -373,11 +374,11 @@ export class UIManager {
     }
 
     // ============================================================================
-    // LÓGICA DO MENU DE CONFIGURAÇÕES IN-GAME
+    // LÓGICA DO MENU DE CONFIGURAÇÕES IN-GAME E MODAL DE SAÍDA
     // ============================================================================
 
     /**
-     * Cria a UI do Modal de Configurações e o Botão de Engrenagem no HUD.
+     * Cria a UI do Modal de Configurações, Confirmação de Saída e o Botão de Engrenagem no HUD.
      */
     initSettingsUI() {
         const injectUI = () => {
@@ -425,7 +426,7 @@ export class UIManager {
                 });
             }
 
-            // 2. Cria o Modal de Configurações
+            // 2. Cria o Modal de Configurações e o Painel de Confirmação de Saída
             if (document.getElementById('settings-modal')) return;
 
             const modal = document.createElement('div');
@@ -442,7 +443,7 @@ export class UIManager {
             `;
             
             modal.innerHTML = `
-                <div style="
+                <div id="settings-main-panel" style="
                     background: #1a1a1a; 
                     padding: 25px; 
                     border-radius: 15px; 
@@ -454,37 +455,78 @@ export class UIManager {
                 ">
                     <h2 style="margin-top: 0; color: #FFD700; text-transform: uppercase; font-size: 20px; letter-spacing: 1px;">Configurações</h2>
                     
-                    <div style="margin: 25px 0; text-align: left;">
+                    <div style="margin: 20px 0; text-align: left;">
                         <label style="font-weight: bold; font-size: 14px; color: #ccc;">🎵 Volume da Música</label>
                         <input type="range" id="vol-music" min="0" max="1" step="0.1" value="0.5" style="width: 100%; margin-top: 10px; cursor: pointer;">
                     </div>
 
-                    <div style="margin: 25px 0; text-align: left;">
+                    <div style="margin: 20px 0; text-align: left;">
                         <label style="font-weight: bold; font-size: 14px; color: #ccc;">🔊 Volume dos Efeitos</label>
                         <input type="range" id="vol-sfx" min="0" max="1" step="0.1" value="0.5" style="width: 100%; margin-top: 10px; cursor: pointer;">
                     </div>
 
                     <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 30px;">
                         <button id="btn-settings-close" style="padding: 12px; background: #34495e; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; transition: 0.2s;">VOLTAR AO JOGO</button>
-                        <button id="btn-settings-exit" style="padding: 12px; background: #e74c3c; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; transition: 0.2s;">🚪 SALVAR E SAIR</button>
+                        <button id="btn-settings-exit-trigger" style="padding: 12px; background: #e74c3c; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; transition: 0.2s;">🚪 SALVAR E SAIR</button>
+                    </div>
+                </div>
+
+                <div id="settings-confirm-panel" style="
+                    display: none;
+                    background: #2c1e0f; 
+                    padding: 25px; 
+                    border-radius: 15px; 
+                    border: 3px solid #e74c3c; 
+                    width: 90%; max-width: 300px; 
+                    text-align: center; color: white; 
+                    pointer-events: auto;
+                    box-shadow: 0 10px 40px rgba(231, 76, 60, 0.4);
+                ">
+                    <h3 style="margin-top: 0; color: #fff; font-size: 18px; text-transform: uppercase;">Salvar Colmeia?</h3>
+                    <p style="font-size: 14px; color: #bbb; margin-bottom: 25px;">Deseja realmente salvar seu progresso e retornar para o menu inicial?</p>
+                    
+                    <div style="display: flex; gap: 10px;">
+                        <button id="btn-confirm-no" style="flex: 1; padding: 12px; background: #34495e; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer;">CANCELAR</button>
+                        <button id="btn-confirm-yes" style="flex: 1; padding: 12px; background: #2ecc71; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer;">SIM, SALVAR</button>
                     </div>
                 </div>
             `;
             document.body.appendChild(modal);
 
-            // Ações dos botões do modal
+            const mainPanel = document.getElementById('settings-main-panel');
+            const confirmPanel = document.getElementById('settings-confirm-panel');
+
+            // --- Lógica de Navegação dos Modais ---
+            
+            // Botão "Voltar ao Jogo" no painel principal
             document.getElementById('btn-settings-close').onclick = () => this.toggleSettings();
             
-            document.getElementById('btn-settings-exit').onclick = () => {
-                if(confirm('Deseja realmente salvar o jogo e voltar para a tela inicial?')) {
-                    // Dispara evento para o Game salvar o estado
-                    window.dispatchEvent(new CustomEvent('exitToMainMenu'));
-                    // Recarrega a página após breve delay para garantir o save
-                    setTimeout(() => location.reload(), 300);
-                }
+            // Botão "Salvar e Sair" no painel principal -> Abre o painel de confirmação
+            document.getElementById('btn-settings-exit-trigger').onclick = () => {
+                mainPanel.style.display = 'none';
+                confirmPanel.style.display = 'block';
             };
 
-            // Lógica dos Sliders de Áudio
+            // Botão "Cancelar" no painel de confirmação -> Volta para o painel principal
+            document.getElementById('btn-confirm-no').onclick = () => {
+                confirmPanel.style.display = 'none';
+                mainPanel.style.display = 'block';
+            };
+
+            // Botão "Sim, Salvar" no painel de confirmação -> Dispara a saída real
+            document.getElementById('btn-confirm-yes').onclick = () => {
+                // Altera o painel para um estado de carregamento amigável
+                confirmPanel.innerHTML = `
+                    <div style="padding: 20px 0;">
+                        <p style="color: #FFD700; font-weight: bold; font-size: 16px; margin: 0;">Salvando colmeia... 🐝</p>
+                        <p style="color: #aaa; font-size: 12px; margin-top: 10px;">Aguarde o voo seguro.</p>
+                    </div>
+                `;
+                // Dispara o evento global que o Game.js (ou NetworkManager) vai escutar para salvar com segurança
+                window.dispatchEvent(new CustomEvent('requestSaveAndExit'));
+            };
+
+            // --- Lógica dos Sliders de Áudio ---
             const volMusic = document.getElementById('vol-music');
             const volSfx = document.getElementById('vol-sfx');
 
@@ -521,7 +563,16 @@ export class UIManager {
     toggleSettings() {
         const modal = document.getElementById('settings-modal');
         if (!modal) return;
+        
         this.isSettingsOpen = !this.isSettingsOpen;
         modal.style.display = this.isSettingsOpen ? 'flex' : 'none';
+
+        // Sempre que o modal for fechado, garantimos que ele resete para a tela principal
+        if (!this.isSettingsOpen) {
+            const mainPanel = document.getElementById('settings-main-panel');
+            const confirmPanel = document.getElementById('settings-confirm-panel');
+            if (mainPanel) mainPanel.style.display = 'block';
+            if (confirmPanel) confirmPanel.style.display = 'none';
+        }
     }
 }
