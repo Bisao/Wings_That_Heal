@@ -10,6 +10,9 @@ export class UIManager {
         this.months = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
         this.toastTimeout = null;
         this.isSettingsOpen = false;
+        
+        // Flag para garantir que reconstruímos a badge do nome apenas uma vez
+        this.hasRebuiltNameBadge = false;
 
         // Data base exata de início do mundo (Sincronizada com o START_TIME do WorldState)
         this.START_TIME = new Date('2074-02-09T06:00:00').getTime();
@@ -124,14 +127,78 @@ export class UIManager {
     updateHUD(localPlayer) {
         if (!localPlayer) return;
 
-        // Atualiza Texto do Nome
-        const nameEl = document.getElementById('hud-name');
-        if (nameEl) nameEl.innerText = localPlayer.nickname;
-
-        // Oculta completamente a informação de Level como solicitado
+        // Oculta completamente a informação de Level original do HTML, se existir
         const lvlEl = document.getElementById('hud-lvl');
         if (lvlEl) {
             lvlEl.style.display = 'none';
+        }
+
+        // Reconstrução da Badge do Nome (Limpa o "Lv" residual e posiciona a engrenagem)
+        if (!this.hasRebuiltNameBadge) {
+            const nameEl = document.getElementById('hud-name');
+            if (nameEl && nameEl.parentElement) {
+                const badgeContainer = nameEl.parentElement;
+                
+                // Força o container a aceitar cliques (MUITO IMPORTANTE para a engrenagem funcionar)
+                badgeContainer.style.pointerEvents = 'auto'; 
+                badgeContainer.style.display = 'flex';
+                badgeContainer.style.alignItems = 'center';
+                badgeContainer.style.gap = '8px';
+                badgeContainer.style.justifyContent = 'center';
+                
+                // Limpa todo o conteúdo HTML da badge (Remove textos residuais como 'LV')
+                badgeContainer.innerHTML = '';
+                
+                // Cria a Engrenagem
+                const btn = document.createElement('button');
+                btn.id = 'btn-hud-settings';
+                btn.title = 'Configurações';
+                btn.innerHTML = '⚙️';
+                btn.style.cssText = `
+                    background: transparent; 
+                    border: none; 
+                    color: white; 
+                    font-size: 16px; 
+                    cursor: pointer; 
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: center;
+                    padding: 0;
+                    margin: 0;
+                    transition: transform 0.2s;
+                    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+                    z-index: 100;
+                    pointer-events: auto;
+                `;
+                
+                // Animações da Engrenagem
+                btn.addEventListener('mousedown', () => btn.style.transform = 'scale(0.8) rotate(45deg)');
+                btn.addEventListener('mouseup', () => btn.style.transform = 'scale(1) rotate(0deg)');
+                btn.addEventListener('touchstart', () => btn.style.transform = 'scale(0.8) rotate(45deg)', {passive: true});
+                btn.addEventListener('touchend', () => btn.style.transform = 'scale(1) rotate(0deg)', {passive: true});
+                
+                // Ação de Clique
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Impede que o clique passe para a tela do jogo
+                    window.dispatchEvent(new CustomEvent('toggleSettings'));
+                });
+
+                // Recria o elemento do nome
+                const newNameEl = document.createElement('span');
+                newNameEl.id = 'hud-name';
+                newNameEl.innerText = localPlayer.nickname;
+                newNameEl.style.pointerEvents = 'none'; // O nome não precisa de clique
+                
+                // Injeta no DOM (Engrenagem + Nome)
+                badgeContainer.appendChild(btn);
+                badgeContainer.appendChild(newNameEl);
+                
+                this.hasRebuiltNameBadge = true;
+            }
+        } else {
+            // Se já reconstruiu, apenas atualiza o texto do nome normalmente
+            const nameEl = document.getElementById('hud-name');
+            if (nameEl) nameEl.innerText = localPlayer.nickname;
         }
 
         // Atualiza Barras de Status
@@ -514,63 +581,12 @@ export class UIManager {
     }
 
     /**
-     * Cria a UI do Modal de Configurações, Confirmação de Saída e acopla a Engrenagem no Painel do Jogador.
+     * Cria a UI do Modal de Configurações, Confirmação de Saída e removemos a injeção da engrenagem daqui
+     * pois ela agora é criada dinamicamente no updateHUD.
      */
     initSettingsUI() {
         const injectUI = () => {
-            // 1. Acopla o botão de configurações DIRETAMENTE dentro do Player Badge
-            const nameEl = document.getElementById('hud-name');
-            if (nameEl && !document.getElementById('btn-hud-settings')) {
-                const badgeContainer = nameEl.parentElement;
-                
-                // Força o badge container a trabalhar com flexbox para alinhamento horizontal
-                badgeContainer.style.display = 'flex';
-                badgeContainer.style.alignItems = 'center';
-                badgeContainer.style.gap = '6px'; // Espaço sutil entre o botão e o nome
-
-                const btn = document.createElement('button');
-                btn.id = 'btn-hud-settings';
-                btn.title = 'Configurações';
-                btn.innerHTML = '⚙️';
-                
-                // Estilo transparente e limpo integrado ao badge
-                btn.style.cssText = `
-                    background: transparent; 
-                    border: none; 
-                    color: white; 
-                    font-size: 16px; 
-                    cursor: pointer; 
-                    display: flex; 
-                    align-items: center; 
-                    justify-content: center;
-                    padding: 0;
-                    transition: transform 0.2s;
-                    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-                `;
-                
-                // Injeta o botão EXATAMENTE ANTES do nome
-                badgeContainer.insertBefore(btn, nameEl);
-
-                // Varre os nós do HTML para esconder aquele texto estático "LV " se existir fora do hud-lvl
-                badgeContainer.childNodes.forEach(node => {
-                    if (node.nodeType === Node.TEXT_NODE && node.textContent.toUpperCase().includes('LV')) {
-                        node.textContent = '';
-                    }
-                });
-
-                // Animações sutis ao clicar
-                btn.addEventListener('mousedown', () => btn.style.transform = 'scale(0.8) rotate(45deg)');
-                btn.addEventListener('mouseup', () => btn.style.transform = 'scale(1) rotate(0deg)');
-                btn.addEventListener('touchstart', () => btn.style.transform = 'scale(0.8) rotate(45deg)', {passive: true});
-                btn.addEventListener('touchend', () => btn.style.transform = 'scale(1) rotate(0deg)', {passive: true});
-
-                // Ação de clique
-                btn.addEventListener('click', () => {
-                    window.dispatchEvent(new CustomEvent('toggleSettings'));
-                });
-            }
-
-            // 2. Cria o Modal de Configurações e o Painel de Confirmação de Saída
+            // Cria o Modal de Configurações e o Painel de Confirmação de Saída
             if (document.getElementById('settings-modal')) return;
 
             const modal = document.createElement('div');
