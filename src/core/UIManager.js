@@ -1,9 +1,8 @@
 /**
  * UIManager.js
  * Gerencia a Interface do Usuário, Notificações, Feedback Visual e Configurações.
- * Atualizado para suportar o Gerenciador de Colmeias, Sistema de Resgate e Menu In-Game
- * com Confirmação Customizada de Saída + PAINEL DE ADMIN para o Host.
- * Visual do HUD limpo: Botão de configuração acoplado ao nome do jogador.
+ * Atualizado para suportar Alertas Visuais de Invasão (Ciclo de 7 Dias) no Relógio,
+ * com ícones dinâmicos de Sol/Lua e Feedback de Cores (Dia/Noite/Invasão).
  */
 export class UIManager {
     constructor() {
@@ -11,6 +10,9 @@ export class UIManager {
         this.months = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
         this.toastTimeout = null;
         this.isSettingsOpen = false;
+
+        // Data base exata de início do mundo (Sincronizada com o START_TIME do WorldState)
+        this.START_TIME = new Date('2074-02-09T06:00:00').getTime();
 
         // Garante que o elemento de tempo existe e está no local correto da hierarquia (Direto no Body)
         this.ensureTimeElement();
@@ -28,6 +30,23 @@ export class UIManager {
      * imunes a conflitos de CSS externo.
      */
     ensureTimeElement() {
+        // INJEÇÃO DE CSS DE ALTA PERFORMANCE PARA O ALERTA (Evita lag de transição sobreposta)
+        if (!document.getElementById('hud-time-styles')) {
+            const style = document.createElement('style');
+            style.id = 'hud-time-styles';
+            style.innerHTML = `
+                @keyframes pulseRedAlert {
+                    0% { box-shadow: 0 0 10px rgba(255, 71, 87, 0.4); }
+                    50% { box-shadow: 0 0 25px rgba(255, 71, 87, 1); }
+                    100% { box-shadow: 0 0 10px rgba(255, 71, 87, 0.4); }
+                }
+                .horde-alert {
+                    animation: pulseRedAlert 1.5s infinite ease-in-out !important;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
         let timeEl = document.getElementById('hud-time');
         
         if (!timeEl) {
@@ -50,10 +69,11 @@ export class UIManager {
         timeEl.style.borderRadius = '20px';
         timeEl.style.fontWeight = '900';
         timeEl.style.fontSize = '14px';
-        timeEl.style.border = '1px solid rgba(255, 215, 0, 0.3)';
+        timeEl.style.border = '2px solid rgba(255, 215, 0, 0.3)';
         timeEl.style.pointerEvents = 'none'; // Impede que roube cliques do jogo
         timeEl.style.whiteSpace = 'nowrap';
-        timeEl.style.transition = 'color 0.5s ease, background 0.5s ease';
+        // Especifica apenas as propriedades seguras para transição (não "all") para não conflitar com a animação de box-shadow
+        timeEl.style.transition = 'color 0.5s ease, background 0.5s ease, border-color 0.5s ease'; 
         timeEl.style.boxShadow = '0 4px 6px rgba(0,0,0,0.5)';
         
         // Texto provisório para evitar que fique invisível até o servidor mandar a primeira hora
@@ -66,8 +86,6 @@ export class UIManager {
 
     /**
      * Exibe notificações temporárias no topo da tela.
-     * @param {string} msg - Texto da mensagem.
-     * @param {string} type - Tipo da mensagem: 'error', 'success', 'info'.
      */
     showToast(msg, type = 'info') {
         const toast = document.getElementById('toast-msg');
@@ -99,17 +117,10 @@ export class UIManager {
         }, 3000);
     }
 
-    /**
-     * Mantém compatibilidade com chamadas de erro do sistema.
-     */
     showError(msg) {
         this.showToast(msg, 'error');
     }
 
-    /**
-     * Atualiza todas as informações do HUD (Barra de Status, Nível, Nome).
-     * @param {Object} localPlayer - O objeto do jogador local.
-     */
     updateHUD(localPlayer) {
         if (!localPlayer) return;
 
@@ -141,9 +152,6 @@ export class UIManager {
         }
     }
 
-    /**
-     * Função auxiliar interna para atualizar e animar as barras de HUD.
-     */
     _updateBar(fillId, textId, current, max) {
         const fill = document.getElementById(fillId);
         
@@ -163,7 +171,7 @@ export class UIManager {
     }
 
     /**
-     * Atualiza o Relógio do Mundo e o efeito de Iluminação Global (Dia/Noite).
+     * Atualiza o Relógio do Mundo, Iluminação Global e a Interface de Invasão (Dia 7).
      * @param {number} worldTime - Timestamp do servidor de tempo do mundo.
      */
     updateEnvironment(worldTime) {
@@ -176,34 +184,57 @@ export class UIManager {
         const displayTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
         const displayDate = `${String(date.getDate()).padStart(2, '0')} ${this.months[date.getMonth()]}`;
 
+        // CÁLCULO DE DIAS DECORRIDOS E SISTEMA DE HORDAS
+        const msPerDay = 1000 * 60 * 60 * 24;
+        const daysElapsed = Math.floor((worldTime - this.START_TIME) / msPerDay);
+        // Considerando que o Dia 0 é o primeiro dia do jogador, a invasão ocorre quando diasElapsed for múltiplo de 7 (7, 14, 21...)
+        const isHordeDay = daysElapsed > 0 && (daysElapsed % 7 === 0);
+        // O Alerta vermelho começa às 09:00 e vai até meia-noite
+        const isRedAlert = isHordeDay && hours >= 9;
+
         // Atualiza Elemento do HUD
         const timeEl = document.getElementById('hud-time');
+        
         if (timeEl) {
-            timeEl.innerText = `${displayDate} - ${displayTime}`;
-
             // LÓGICA DE ILUMINAÇÃO GLOBAL (Dia/Noite)
             const h = hours + minutes / 60;
-            
-            // Calculamos a intensidade da escuridão usando uma função de cosseno
             let darkness = (Math.cos((h / 24) * Math.PI * 2) + 1) / 2;
+            darkness = Math.pow(darkness, 0.6); // Ajuste de curva exponencial
+
+            const isNight = darkness > 0.6;
+            const icon = isNight ? "🌙" : "☀️";
             
-            // Ajuste de curva exponencial para tornar o pôr do sol mais dramático
-            darkness = Math.pow(darkness, 0.6);
+            // Renderiza o texto do relógio com o ícone no meio
+            timeEl.innerText = `${displayDate} ${icon} ${displayTime}`;
 
             const overlay = document.getElementById('day-night-overlay');
             if (overlay) {
-                // Escuridão máxima limitada a 80% para manter jogabilidade
                 overlay.style.opacity = darkness * 0.8;
+            }
+
+            // APLICAÇÃO DE ESTILOS E ALERTAS DO RELÓGIO
+            if (isRedAlert) {
+                // Alerta de Invasão (A partir das 09h do Dia 7)
+                timeEl.style.color = "#ff4757"; // Vermelho Brilhante
+                timeEl.style.background = "rgba(0,0,0,0.85)";
+                timeEl.style.borderColor = "#ff4757";
+                timeEl.classList.add('horde-alert'); // Ativa a animação CSS suave
                 
-                // Ajuste de contraste do relógio dependendo da luz
-                if (darkness > 0.6) {
-                    timeEl.style.color = "#f1c40f"; // Dourado na noite
+            } else {
+                timeEl.classList.remove('horde-alert'); // Remove a animação de pulso
+
+                if (isNight) {
+                    // Noite Normal
+                    timeEl.style.color = "#74b9ff"; // Azul claro (Lunar)
                     timeEl.style.background = "rgba(0,0,0,0.8)";
-                    timeEl.style.borderColor = "rgba(255, 215, 0, 0.5)";
+                    timeEl.style.borderColor = "#0984e3"; // Azul escuro
+                    timeEl.style.boxShadow = "0 4px 10px rgba(9, 132, 227, 0.4)";
                 } else {
-                    timeEl.style.color = "#2c3e50"; // Escuro no dia
-                    timeEl.style.background = "rgba(255,255,255,0.7)";
-                    timeEl.style.borderColor = "rgba(44, 62, 80, 0.3)";
+                    // Dia Normal
+                    timeEl.style.color = "#2c3e50"; // Texto escuro para contraste
+                    timeEl.style.background = "rgba(255,255,255,0.85)";
+                    timeEl.style.borderColor = "#f1c40f"; // Contorno Dourado (Solar)
+                    timeEl.style.boxShadow = "0 4px 10px rgba(241, 196, 15, 0.3)";
                 }
             }
         }
