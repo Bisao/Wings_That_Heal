@@ -189,6 +189,7 @@ export class Game {
         skillBtn.onclick = () => this.localPlayer.skillTree.toggle(); 
         if (!document.getElementById('btn-skills')) document.body.appendChild(skillBtn);
 
+        this.ui.setupAdminPanel(this.net.isHost);
         this.ui.updateHUD(this.localPlayer);
         this.resize();
         requestAnimationFrame(() => this.loop());
@@ -246,13 +247,18 @@ export class Game {
             this.hiveTree.updateAndHeal(this);
         }
 
-        // REGENERAÇÃO DE FLORES (Apenas o Host calcula e transmite periodicamente)
+        // SISTEMAS DE HOST (Apenas o Host calcula e transmite)
         if (this.net.isHost) {
             this.worldState.updateFlowers();
             
-            // Sincroniza o estado das flores a cada 60 frames (~1 segundo) para evitar lag
+            // NOVO: Atualiza a saúde do solo (A magia do gradiente de cor acontece aqui)
+            this.worldState.updateSoilHealth();
+            
+            // Sincroniza o estado das flores e saúde a cada 60 frames (~1 segundo) para evitar lag
             if (this.frameCount % 60 === 0) {
                 this.net.syncFlowerData(this.worldState.flowerData);
+                // Transmite os dados de vida do solo pros guests verem o gradiente crescendo juntos
+                this.net.sendPayload({ type: 'SYNC_HEALTH', data: this.worldState.soilHealth });
             }
         }
 
@@ -356,9 +362,6 @@ export class Game {
         const cY = Math.floor(this.localPlayer.pos.y / this.world.chunkSize);
         const range = this.zoomLevel < 0.8 ? 2 : 1;
 
-        // ==============================================================
-        // CONTROLE DA UI DE FLOR: Só queremos renderizar a UI da MAIS PRÓXIMA
-        // ==============================================================
         let closestFlowerUI = null;
         let minFlowerDistSq = Math.pow(this.localPlayer.collectionRange || 1.5, 2);
 
@@ -373,6 +376,9 @@ export class Game {
                     
                     const isBaseTile = this.localPlayer.homeBase && Math.round(t.x) === Math.round(this.localPlayer.homeBase.x) && Math.round(t.y) === Math.round(this.localPlayer.homeBase.y);
                     
+                    // =========================================================
+                    // NOVO: APLICAÇÃO DO GRADIENTE DE COR DE SAÚDE DO SOLO
+                    // =========================================================
                     if (isBaseTile) {
                          this.ctx.fillStyle = '#2ecc71'; 
                          this.ctx.fillRect(sX, sY, rTileSize + 1, rTileSize + 1);
@@ -380,7 +386,12 @@ export class Game {
                          this.ctx.fillStyle = '#f1c40f';
                          this.ctx.fillRect(sX, sY, rTileSize + 1, rTileSize + 1);
                     } else {
-                         this.ctx.fillStyle = (['GRAMA','GRAMA_SAFE','BROTO','MUDA','FLOR', 'FLOR_COOLDOWN'].includes(type) ? '#2ecc71' : '#34495e');
+                         // As classes seguras usam o verde. A terra queimada usa cinza (#34495e)
+                         const baseColor = (['GRAMA','GRAMA_SAFE','BROTO','MUDA','FLOR', 'FLOR_COOLDOWN'].includes(type) ? '#2ecc71' : '#34495e');
+                         
+                         // Pega a cor exata interpolada baseada na vida daquele tile (0 a 100)
+                         this.ctx.fillStyle = this.worldState.getTileColor(t.x, t.y, baseColor);
+                         
                          this.ctx.fillRect(sX, sY, rTileSize + 1, rTileSize + 1);
                     }
 
@@ -394,8 +405,6 @@ export class Game {
                         
                         const wx = Math.round(t.x);
                         const wy = Math.round(t.y);
-                        
-                        // GARANTIA MATEMÁTICA: Faz o wrap das coordenadas para o tamanho do mundo
                         const key = `${this.worldState._wrap(wx)},${this.worldState._wrap(wy)}`;
                         const flowerData = this.worldState.flowerData[key];
                         
@@ -411,7 +420,6 @@ export class Game {
                         this.ctx.ellipse(sX+rTileSize/2, sY+by, 8*this.zoomLevel, 3*this.zoomLevel, 0, 0, Math.PI*2); 
                         this.ctx.fill();
                         
-                        // Desenha a flor sempre do tamanho original
                         this.ctx.save(); 
                         this.ctx.translate(sX+rTileSize/2, sY+by); 
                         this.ctx.rotate(Math.sin(Date.now()/800 + t.x*0.5)*0.1); 
@@ -420,9 +428,6 @@ export class Game {
                         
                         this.ctx.globalAlpha = 1.0;
 
-                        // ==========================================
-                        // LÓGICA DE UI DA FLOR PARA O JOGADOR LOCAL
-                        // ==========================================
                         const dx = this.localPlayer.pos.x - t.x;
                         const dy = this.localPlayer.pos.y - t.y;
                         const distSq = dx * dx + dy * dy;
@@ -441,9 +446,6 @@ export class Game {
             });
         }
 
-        // ==============================================================
-        // RENDERIZA A UI APENAS PARA A FLOR MAIS PRÓXIMA (Evita sobreposição)
-        // ==============================================================
         if (closestFlowerUI) {
             const { sX, sY, rTileSize, pRatio } = closestFlowerUI;
             const floatY = Math.sin(Date.now() / 200) * (3 * this.zoomLevel);
@@ -490,7 +492,6 @@ export class Game {
             this.ctx.fillStyle = barColor;
             this.ctx.fillRect(uiCenterX - barW/2 + 1, barY + 1, Math.max(0, (barW - 2) * pRatio), barH - 2);
         }
-        // ==============================================================
 
         if (this.localPlayer.homeBase) {
             this.drawFragmentedTree(this.ctx, rTileSize);
@@ -624,7 +625,6 @@ export class Game {
         this.net.sendPayload({ type: 'MOVE', id: this.localPlayer.id, nick: this.localPlayer.nickname, x: this.localPlayer.pos.x, y: this.localPlayer.pos.y, dir: this.localPlayer.currentDir });
     }
 
-    // NOVA LÓGICA DE RESGATE: Agora usando isRescuing() ou a tecla R e integrado com a UI
     checkRescue() {
         if (this.localPlayer.showRescuePrompt && this.localPlayer.rescueTargetId) {
             const partner = this.remotePlayers[this.localPlayer.rescueTargetId];
@@ -633,7 +633,6 @@ export class Game {
             this.currentRescueTarget = { id: this.localPlayer.rescueTargetId, nickname: partner.nickname, obj: partner };
             const canAfford = this.localPlayer.pollen >= this.RESCUE_POLLEN_COST;
 
-            // Detecta a ação de curar baseada no Desktop ("R") ou Mobile (isRescuing())
             const isPressingRescue = (this.input.keys && (this.input.keys['r'] || this.input.keys['R'])) || (typeof this.input.isRescuing === 'function' && this.input.isRescuing());
 
             if (isPressingRescue && canAfford) {
@@ -641,7 +640,6 @@ export class Game {
                 this.rescueTimer++;
                 if (this.rescueTimer >= this.RESCUE_DURATION) {
                     this.localPlayer.pollen -= this.RESCUE_POLLEN_COST;
-                    // Envia o comando de resgate e cura 25 de vida do aliado
                     this.net.sendPayload({ type: 'PARTY_RESCUE', fromNick: this.localPlayer.nickname, amount: 25 }, this.currentRescueTarget.id);
                     this.rescueTimer = 0;
                     this.ui.showToast(`Você resgatou ${partner.nickname}!`, 'success');
@@ -660,7 +658,6 @@ export class Game {
         const flowerInfo = this.worldState.flowerData[key];
         const flowerHasPollen = flowerInfo && flowerInfo.currentPollen > 0;
 
-        // Atualizamos o InputHandler com o estado da flor E do resgate
         this.input.updateBeeActions({
             canCollect: tile === 'FLOR' && this.localPlayer.pollen < this.localPlayer.maxPollen && flowerHasPollen,
             hasPollen: this.localPlayer.pollen > 0,
@@ -695,7 +692,9 @@ export class Game {
                         setTimeout(() => {
                             const target = this.worldState.getModifiedTile(data.x, data.y) || this.world.getTileAt(data.x, data.y);
                             if (target === 'TERRA_QUEIMADA') {
-                                this.changeTile(data.x, data.y, 'GRAMA', this.localPlayer.id);
+                                // Antes trocava para GRAMA. Agora avisa pro server iniciar o gradiente
+                                this.worldState.soilHealth[`${this.worldState._wrap(data.x)},${this.worldState._wrap(data.y)}`] = 1;
+                                
                                 this.localPlayer.tilesCured++;
                                 this.gainXp(15);
 
@@ -729,7 +728,6 @@ export class Game {
         if (overlay) overlay.style.opacity = hpRatio < 0.7 ? (0.7 - hpRatio) * 1.4 : 0;
     }
 
-    // Desenha o círculo de progresso no jogador que está sendo resgatado
     drawRescueUI(rTileSize) {
         if (this.currentRescueTarget && this.rescueTimer > 0) {
             const tPos = this.currentRescueTarget.obj.pos;
@@ -739,7 +737,6 @@ export class Game {
             this.ctx.strokeStyle = "#ffffff"; 
             this.ctx.lineWidth = 4 * this.zoomLevel; 
             this.ctx.beginPath();
-            // Desenha o progresso da cura como um arco
             this.ctx.arc(tScreenX, tScreenY, 30 * this.zoomLevel, -Math.PI/2, (-Math.PI/2) + (Math.PI*2 * (this.rescueTimer/this.RESCUE_DURATION)));
             this.ctx.stroke();
         }
@@ -780,13 +777,38 @@ export class Game {
         window.addEventListener('netData', e => this.onNetData(e.detail));
         window.addEventListener('chatSend', e => this.onChatSend(e.detail));
 
-        // NOVO: Escuta o evento de salvar e sair emitido pelo UIManager
+        window.addEventListener('adminChangeTime', (e) => {
+            if (!this.net.isHost) return;
+            const targetHour = e.detail;
+            const now = new Date(this.worldState.worldTime);
+            now.setHours(targetHour, 0, 0, 0);
+            this.worldState.worldTime = now.getTime();
+        });
+
+        window.addEventListener('adminTriggerInvasion', () => {
+            if (!this.net.isHost || !this.hostSim) return;
+            for(let i=0; i<10; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 5 + Math.random() * 5;
+                const x = this.localPlayer.pos.x + Math.cos(angle) * dist;
+                const y = this.localPlayer.pos.y + Math.sin(angle) * dist;
+                const id = 'inv_' + Date.now() + '_' + i;
+                const type = Math.random() > 0.3 ? 'NORMAL' : 'RED';
+                this.hostSim.spawnEnemy(id, x, y, type);
+            }
+        });
+
+        window.addEventListener('adminHealAll', () => {
+            if (!this.net.isHost) return;
+            this.localPlayer.applyHeal(100);
+            this.ui.updateHUD(this.localPlayer);
+            this.net.sendPayload({ type: 'PLAYER_HEAL', amount: 100 });
+        });
+
         window.addEventListener('requestSaveAndExit', async () => {
             if (this.net.isHost) {
-                // Força o jogo a salvar e ESPERA o processo terminar com o await
                 await this.saveProgress(true); 
             }
-            // Dá um fôlego rápido para o disco gravar antes de recarregar
             setTimeout(() => {
                 window.location.reload(); 
             }, 800);
@@ -914,7 +936,6 @@ export class Game {
         if (data.worldState) this.worldState.applyFullState(data.worldState);
         if (data.guests) this.guestDataDB = data.guests; 
         
-        // Agora passa a homeBase do pacote para o start
         this.start(data.seed, this.net.peer.id, document.getElementById('join-nickname').value.trim() || "Guest", data.homeBase);
         
         if (data.playerData) { this.localPlayer.deserialize(data.playerData); this.ui.updateHUD(this.localPlayer); }
@@ -940,6 +961,10 @@ export class Game {
 
     onNetData(d) {
         if (d.type === 'TIME_SYNC') { this.worldState.worldTime = d.time; }
+        
+        // NOVO: Recebe a saúde do solo em tempo real do host e aplica no cliente
+        if (d.type === 'SYNC_HEALTH') { this.worldState.soilHealth = d.data; }
+
         if (d.type === 'WHISPER') this.chat.addMessage('WHISPER', d.fromNick, d.text);
         if (d.type === 'CHAT_MSG') this.chat.addMessage('GLOBAL', d.nick, d.text);
         if (d.type === 'PARTY_MSG') this.chat.addMessage('PARTY', d.fromNick, d.text);
@@ -947,17 +972,14 @@ export class Game {
         if (d.type === 'SHOOT') this.projectiles.push(new Projectile(d.x, d.y, d.vx, d.vy, d.ownerId, d.damage));
         if (d.type === 'SPAWN_ENEMY') this.enemies.push(new Ant(d.id, d.x, d.y, d.type));
         
-        // NOVO: Escuta o Host avisando que um jogador caiu para limparmos o fantasma
         if (d.type === 'PEER_DISCONNECT') {
             this.onPeerDisconnected({ peerId: d.peerId });
         }
 
-        // NOVO: Alguém (que não é você) coletou pólen dessa flor. A gente desconta aqui.
         if (d.type === 'POLLEN_COLLECTED') {
             this.worldState.collectPollenFromFlower(d.x, d.y);
         }
 
-        // NOVO: O host mandou a sincronização de todas as flores
         if (d.type === 'SYNC_FLOWERS') {
             this.worldState.flowerData = d.data;
         }
@@ -981,7 +1003,6 @@ export class Game {
         if (d.type === 'PARTY_SYNC') { this.localPartyName = d.pName; this.localPartyIcon = d.pIcon; d.members.forEach(id => { if (!this.partyMembers.includes(id)) this.partyMembers.push(id); }); this.chat.openPartyTab(d.pName, d.pIcon); this.ui.updateHUD(this.localPlayer); }
         if (d.type === 'PARTY_LEAVE') { this.chat.addMessage('SYSTEM', null, `Alguém saiu.`); this.partyMembers = this.partyMembers.filter(id => id !== d.fromId); if (this.partyMembers.length === 0) this.chat.closePartyTab(); }
         
-        // APLICANDO A CURA DE RESGATE AQUI
         if (d.type === 'PARTY_RESCUE') {
             if (this.isFainted) {
                 clearTimeout(this.faintTimeout);
