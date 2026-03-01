@@ -3,6 +3,7 @@
  * Gerencia a Interface do Usuário, Notificações, Feedback Visual e Configurações.
  * Atualizado para suportar Alertas Visuais de Invasão (Ciclo de 7 Dias) no Relógio,
  * com ícones dinâmicos de Sol/Lua e Feedback de Cores (Dia/Noite/Invasão).
+ * Otimizado para telas Landscape (Samsung S10+ e Ultrawide) e Botão Único de Ação.
  */
 export class UIManager {
     constructor() {
@@ -17,8 +18,8 @@ export class UIManager {
         // Data base exata de início do mundo (Sincronizada com o START_TIME do WorldState)
         this.START_TIME = new Date('2074-02-09T06:00:00').getTime();
 
-        // Garante que o elemento de tempo existe e está no local correto da hierarquia (Direto no Body)
-        this.ensureTimeElement();
+        // Garante que os estilos do HUD e Media Queries existam no DOM
+        this.ensureStylesAndHUD();
 
         // Inicializa a interface de configurações (Botão e Modal)
         this.initSettingsUI();
@@ -28,12 +29,11 @@ export class UIManager {
     }
 
     /**
-     * Verifica se o elemento de data/hora existe no DOM e garante que seja filho direto do Body.
-     * Injeta o estilo via JavaScript para garantir visibilidade e centralização perfeitas,
-     * imunes a conflitos de CSS externo.
+     * Verifica se o elemento de data/hora existe no DOM e injeta estilos vitais,
+     * incluindo as correções para o Modo Paisagem (Landscape) para telas largas (S10+).
      */
-    ensureTimeElement() {
-        // INJEÇÃO DE CSS DE ALTA PERFORMANCE PARA O ALERTA (Evita lag de transição sobreposta)
+    ensureStylesAndHUD() {
+        // INJEÇÃO DE CSS DE ALTA PERFORMANCE E MEDIA QUERIES
         if (!document.getElementById('hud-time-styles')) {
             const style = document.createElement('style');
             style.id = 'hud-time-styles';
@@ -45,6 +45,43 @@ export class UIManager {
                 }
                 .horde-alert {
                     animation: pulseRedAlert 1.5s infinite ease-in-out !important;
+                }
+
+                /* CORREÇÃO PARA MODO LANDSCAPE (Celulares na horizontal como S10+) */
+                @media (orientation: landscape) and (max-height: 600px) {
+                    /* Reduz e compacta o HUD principal na esquerda */
+                    #rpg-hud {
+                        transform: scale(0.8);
+                        transform-origin: top left;
+                        max-width: 40% !important;
+                        top: 5px !important;
+                        left: 5px !important;
+                    }
+                    /* Empurra o ranking estritamente para o canto superior direito */
+                    #ranking-container {
+                        transform: scale(0.75);
+                        transform-origin: top right;
+                        top: 5px !important;
+                        right: 5px !important;
+                    }
+                    /* Sobe o relógio e diminui para não colidir com outros elementos */
+                    #hud-time {
+                        top: 5px !important;
+                        font-size: 11px !important;
+                        padding: 4px 10px !important;
+                    }
+                    /* Otimiza notificações no topo */
+                    #toast-msg {
+                        top: 40px !important;
+                        font-size: 12px !important;
+                        padding: 8px 15px !important;
+                    }
+                    /* Afasta um pouco o botão de ação do canto inferior para conforto */
+                    .mobile-action-btn {
+                        bottom: 20px !important;
+                        right: 20px !important;
+                        transform: scale(0.9);
+                    }
                 }
             `;
             document.head.appendChild(style);
@@ -62,7 +99,7 @@ export class UIManager {
             document.body.appendChild(timeEl);
         }
 
-        // Aplicação rigorosa de estilos in-line para garantir que nunca mais suma ou saia do centro
+        // Aplicação rigorosa de estilos in-line para o relógio
         timeEl.style.position = 'fixed';
         timeEl.style.top = '15px';
         timeEl.style.left = '50%';
@@ -73,13 +110,11 @@ export class UIManager {
         timeEl.style.fontWeight = '900';
         timeEl.style.fontSize = '14px';
         timeEl.style.border = '2px solid rgba(255, 215, 0, 0.3)';
-        timeEl.style.pointerEvents = 'none'; // Impede que roube cliques do jogo
+        timeEl.style.pointerEvents = 'none'; 
         timeEl.style.whiteSpace = 'nowrap';
-        // Especifica apenas as propriedades seguras para transição (não "all") para não conflitar com a animação de box-shadow
         timeEl.style.transition = 'color 0.5s ease, background 0.5s ease, border-color 0.5s ease'; 
         timeEl.style.boxShadow = '0 4px 6px rgba(0,0,0,0.5)';
         
-        // Texto provisório para evitar que fique invisível até o servidor mandar a primeira hora
         if (!timeEl.innerText) {
             timeEl.innerText = "Aguardando sincronização solar...";
             timeEl.style.color = "#FFD700";
@@ -96,7 +131,6 @@ export class UIManager {
 
         toast.innerText = msg;
         
-        // Define cores baseadas no tipo de mensagem (Gradientes Profissionais)
         if (type === 'error') {
             toast.style.background = "linear-gradient(135deg, #e74c3c, #c0392b)"; // Vermelho
             toast.style.color = "white";
@@ -111,7 +145,6 @@ export class UIManager {
         toast.style.opacity = "1";
         toast.style.transform = "translateX(-50%) translateY(0)"; // Efeito de descida
 
-        // Limpa timeout anterior para evitar conflitos de sobreposição
         if (this.toastTimeout) clearTimeout(this.toastTimeout);
         
         this.toastTimeout = setTimeout(() => {
@@ -133,22 +166,26 @@ export class UIManager {
             lvlEl.style.display = 'none';
         }
 
-        // Reconstrução da Badge do Nome (Limpa o "Lv" residual e posiciona a engrenagem)
+        // Reconstrução da Badge do Nome
         if (!this.hasRebuiltNameBadge) {
             const nameEl = document.getElementById('hud-name');
             if (nameEl && nameEl.parentElement) {
                 const badgeContainer = nameEl.parentElement;
                 
-                // Força o container a aceitar cliques (MUITO IMPORTANTE para a engrenagem funcionar)
+                // Força o container a aceitar cliques e redefine totalmente o alinhamento
                 badgeContainer.style.pointerEvents = 'auto'; 
                 badgeContainer.style.display = 'flex';
                 badgeContainer.style.alignItems = 'center';
                 badgeContainer.style.gap = '8px';
                 
-                // === ALTERAÇÕES DE ALINHAMENTO E BORDA ===
-                badgeContainer.style.justifyContent = 'flex-start'; // Alinha o botão e o nome mais à esquerda
-                badgeContainer.style.borderLeft = 'none'; // Remove a borda amarela
-                badgeContainer.style.paddingLeft = '10px'; // Dá um espaço para não grudar totalmente na margem da tela
+                // === REMOÇÃO DA BORDA E ALINHAMENTO À ESQUERDA ===
+                badgeContainer.style.justifyContent = 'flex-start';
+                badgeContainer.style.border = 'none'; // Arranca qualquer borda do CSS antigo
+                badgeContainer.style.borderLeft = 'none'; 
+                badgeContainer.style.paddingLeft = '0px'; // Cola na margem da esquerda
+                badgeContainer.style.marginLeft = '0px'; 
+                badgeContainer.style.background = 'transparent'; // Remove fundo se existir
+                badgeContainer.style.boxShadow = 'none'; // Remove sombras residuais
                 
                 // Limpa todo o conteúdo HTML da badge (Remove textos residuais como 'LV')
                 badgeContainer.innerHTML = '';
@@ -162,7 +199,7 @@ export class UIManager {
                     background: transparent; 
                     border: none; 
                     color: white; 
-                    font-size: 16px; 
+                    font-size: 18px; 
                     cursor: pointer; 
                     display: flex; 
                     align-items: center; 
@@ -183,7 +220,7 @@ export class UIManager {
                 
                 // Ação de Clique
                 btn.addEventListener('click', (e) => {
-                    e.stopPropagation(); // Impede que o clique passe para a tela do jogo
+                    e.stopPropagation(); 
                     window.dispatchEvent(new CustomEvent('toggleSettings'));
                 });
 
@@ -191,7 +228,9 @@ export class UIManager {
                 const newNameEl = document.createElement('span');
                 newNameEl.id = 'hud-name';
                 newNameEl.innerText = localPlayer.nickname;
-                newNameEl.style.pointerEvents = 'none'; // O nome não precisa de clique
+                newNameEl.style.pointerEvents = 'none'; 
+                newNameEl.style.fontWeight = 'bold';
+                newNameEl.style.textShadow = '0px 2px 4px rgba(0,0,0,0.8)';
                 
                 // Injeta no DOM (Engrenagem + Nome)
                 badgeContainer.appendChild(btn);
@@ -225,14 +264,10 @@ export class UIManager {
 
     _updateBar(fillId, textId, current, max) {
         const fill = document.getElementById(fillId);
-        
-        // Removemos a atualização do texto, pois os números foram ocultados no CSS
         if (fill) {
-            // Garante porcentagem válida entre 0% e 100%
             const pct = Math.max(0, Math.min(100, (current / max) * 100));
             fill.style.width = `${pct}%`;
             
-            // Adiciona um brilho extra se a barra estiver cheia (Pólen)
             if (fillId === 'bar-pollen-fill' && pct >= 100) {
                 fill.style.boxShadow = "0 0 10px #f1c40f";
             } else {
@@ -243,7 +278,6 @@ export class UIManager {
 
     /**
      * Atualiza o Relógio do Mundo, Iluminação Global e a Interface de Invasão (Dia 7).
-     * @param {number} worldTime - Timestamp do servidor de tempo do mundo.
      */
     updateEnvironment(worldTime) {
         if (!worldTime) return;
@@ -258,9 +292,7 @@ export class UIManager {
         // CÁLCULO DE DIAS DECORRIDOS E SISTEMA DE HORDAS
         const msPerDay = 1000 * 60 * 60 * 24;
         const daysElapsed = Math.floor((worldTime - this.START_TIME) / msPerDay);
-        // Considerando que o Dia 0 é o primeiro dia do jogador, a invasão ocorre quando diasElapsed for múltiplo de 7 (7, 14, 21...)
         const isHordeDay = daysElapsed > 0 && (daysElapsed % 7 === 0);
-        // O Alerta vermelho começa às 09:00 e vai até meia-noite
         const isRedAlert = isHordeDay && hours >= 9;
 
         // Atualiza Elemento do HUD
@@ -270,12 +302,11 @@ export class UIManager {
             // LÓGICA DE ILUMINAÇÃO GLOBAL (Dia/Noite)
             const h = hours + minutes / 60;
             let darkness = (Math.cos((h / 24) * Math.PI * 2) + 1) / 2;
-            darkness = Math.pow(darkness, 0.6); // Ajuste de curva exponencial
+            darkness = Math.pow(darkness, 0.6); 
 
             const isNight = darkness > 0.6;
             const icon = isNight ? "🌙" : "☀️";
             
-            // Renderiza o texto do relógio com o ícone no meio
             timeEl.innerText = `${displayDate} ${icon} ${displayTime}`;
 
             const overlay = document.getElementById('day-night-overlay');
@@ -285,26 +316,22 @@ export class UIManager {
 
             // APLICAÇÃO DE ESTILOS E ALERTAS DO RELÓGIO
             if (isRedAlert) {
-                // Alerta de Invasão (A partir das 09h do Dia 7)
-                timeEl.style.color = "#ff4757"; // Vermelho Brilhante
+                timeEl.style.color = "#ff4757"; 
                 timeEl.style.background = "rgba(0,0,0,0.85)";
                 timeEl.style.borderColor = "#ff4757";
-                timeEl.classList.add('horde-alert'); // Ativa a animação CSS suave
-                
+                timeEl.classList.add('horde-alert'); 
             } else {
-                timeEl.classList.remove('horde-alert'); // Remove a animação de pulso
+                timeEl.classList.remove('horde-alert'); 
 
                 if (isNight) {
-                    // Noite Normal
-                    timeEl.style.color = "#74b9ff"; // Azul claro (Lunar)
+                    timeEl.style.color = "#74b9ff"; 
                     timeEl.style.background = "rgba(0,0,0,0.8)";
-                    timeEl.style.borderColor = "#0984e3"; // Azul escuro
+                    timeEl.style.borderColor = "#0984e3"; 
                     timeEl.style.boxShadow = "0 4px 10px rgba(9, 132, 227, 0.4)";
                 } else {
-                    // Dia Normal
-                    timeEl.style.color = "#2c3e50"; // Texto escuro para contraste
+                    timeEl.style.color = "#2c3e50"; 
                     timeEl.style.background = "rgba(255,255,255,0.85)";
-                    timeEl.style.borderColor = "#f1c40f"; // Contorno Dourado (Solar)
+                    timeEl.style.borderColor = "#f1c40f"; 
                     timeEl.style.boxShadow = "0 4px 10px rgba(241, 196, 15, 0.3)";
                 }
             }
@@ -317,12 +344,10 @@ export class UIManager {
     updateRanking(guestDataDB, localPlayer, remotePlayers) {
         let ranking = [];
 
-        // Adiciona dados salvos (Histórico)
         Object.entries(guestDataDB || {}).forEach(([nick, stats]) => {
             ranking.push({ nick, score: stats.tilesCured || 0, online: false });
         });
 
-        // Adiciona/Atualiza o Player Local
         if (localPlayer) {
             const me = ranking.find(r => r.nick === localPlayer.nickname);
             if (me) {
@@ -333,7 +358,6 @@ export class UIManager {
             }
         }
 
-        // Adiciona/Atualiza Players Remotos ativos
         Object.values(remotePlayers).forEach(p => {
             if (!p.nickname) return;
             const entry = ranking.find(r => r.nick === p.nickname);
@@ -384,9 +408,6 @@ export class UIManager {
         }
     }
 
-    /**
-     * Exibe coordenadas e debug de performance.
-     */
     updateCoords(x, y) {
         const el = document.getElementById('hud-coords');
         if(el) {
@@ -395,9 +416,6 @@ export class UIManager {
         }
     }
 
-    /**
-     * Renderiza o Menu de Seleção de Colmeias (Saves).
-     */
     renderSaveList(saveSystem, onEnterWorld) {
         const container = document.getElementById('save-list-container');
         if (!container) return;
@@ -501,36 +519,23 @@ export class UIManager {
         });
     }
 
-    /**
-     * Renderiza o feedback de resgate (barra de progresso sobre o aliado).
-     */
     drawRescueProgress(ctx, x, y, progress) {
         const width = 40;
         const height = 6;
         const offsetX = -width / 2;
-        const offsetY = -50; // Acima da cabeça da abelha
+        const offsetY = -50; 
 
-        // Fundo da barra
         ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
         ctx.fillRect(x + offsetX, y + offsetY, width, height);
 
-        // Progresso (Verde para preenchimento)
         ctx.fillStyle = "#2ecc71";
         ctx.fillRect(x + offsetX, y + offsetY, width * progress, height);
 
-        // Borda
         ctx.strokeStyle = "white";
         ctx.lineWidth = 1;
         ctx.strokeRect(x + offsetX, y + offsetY, width, height);
     }
 
-    // ============================================================================
-    // LÓGICA DO MENU DE CONFIGURAÇÕES IN-GAME E MODAL DE SAÍDA + PAINEL ADMIN
-    // ============================================================================
-
-    /**
-     * NOVO: Configura o Painel Admin (Injetado dentro de initSettingsUI para o Host)
-     */
     setupAdminPanel(isHost) {
         if (!isHost) return;
 
@@ -554,7 +559,6 @@ export class UIManager {
             <button id="btn-admin-heal-all" style="width:100%; padding:10px; background:#27ae60; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; font-size:12px;">✨ CURA GLOBAL</button>
         `;
 
-        // Insere o painel de admin logo antes dos botões de saída
         const btnsContainer = mainPanel.querySelector('.btn-settings-container');
         if (btnsContainer) {
             mainPanel.insertBefore(adminSection, btnsContainer);
@@ -562,7 +566,6 @@ export class UIManager {
             mainPanel.appendChild(adminSection);
         }
 
-        // Eventos de tempo
         adminSection.querySelectorAll('.btn-admin-time').forEach(btn => {
             btn.onclick = () => {
                 const hour = parseInt(btn.getAttribute('data-time'));
@@ -571,26 +574,19 @@ export class UIManager {
             };
         });
 
-        // Evento de Invasão
         document.getElementById('btn-admin-invasion').onclick = () => {
             window.dispatchEvent(new CustomEvent('adminTriggerInvasion'));
-            this.toggleSettings(); // Fecha para ver a confusão
+            this.toggleSettings(); 
         };
 
-        // Evento de Cura Global
         document.getElementById('btn-admin-heal-all').onclick = () => {
             window.dispatchEvent(new CustomEvent('adminHealAll'));
             this.showToast("Onda de cura enviada!", "success");
         };
     }
 
-    /**
-     * Cria a UI do Modal de Configurações, Confirmação de Saída e removemos a injeção da engrenagem daqui
-     * pois ela agora é criada dinamicamente no updateHUD.
-     */
     initSettingsUI() {
         const injectUI = () => {
-            // Cria o Modal de Configurações e o Painel de Confirmação de Saída
             if (document.getElementById('settings-modal')) return;
 
             const modal = document.createElement('div');
@@ -660,47 +656,36 @@ export class UIManager {
             const mainPanel = document.getElementById('settings-main-panel');
             const confirmPanel = document.getElementById('settings-confirm-panel');
 
-            // --- Lógica de Navegação dos Modais ---
-            
-            // Botão "Voltar ao Jogo" no painel principal
             document.getElementById('btn-settings-close').onclick = () => this.toggleSettings();
             
-            // Botão "Salvar e Sair" no painel principal -> Abre o painel de confirmação
             document.getElementById('btn-settings-exit-trigger').onclick = () => {
                 mainPanel.style.display = 'none';
                 confirmPanel.style.display = 'block';
             };
 
-            // Botão "Cancelar" no painel de confirmação -> Volta para o painel principal
             document.getElementById('btn-confirm-no').onclick = () => {
                 confirmPanel.style.display = 'none';
                 mainPanel.style.display = 'block';
             };
 
-            // Botão "Sim, Salvar" no painel de confirmação -> Dispara a saída real
             document.getElementById('btn-confirm-yes').onclick = () => {
-                // Altera o painel para um estado de carregamento amigável
                 confirmPanel.innerHTML = `
                     <div style="padding: 20px 0;">
                         <p style="color: #FFD700; font-weight: bold; font-size: 16px; margin: 0;">Salvando colmeia... 🐝</p>
                         <p style="color: #aaa; font-size: 12px; margin-top: 10px;">Aguarde o voo seguro.</p>
                     </div>
                 `;
-                // Dispara o evento global que o Game.js escuta para salvar com segurança
                 window.dispatchEvent(new CustomEvent('requestSaveAndExit'));
             };
 
-            // --- Lógica dos Sliders de Áudio ---
             const volMusic = document.getElementById('vol-music');
             const volSfx = document.getElementById('vol-sfx');
 
-            // Carrega valores salvos anteriormente (se existirem)
             const savedMusic = localStorage.getItem('bgmVolume');
             const savedSfx = localStorage.getItem('sfxVolume');
             if (savedMusic !== null) volMusic.value = savedMusic;
             if (savedSfx !== null) volSfx.value = savedSfx;
 
-            // Emite eventos quando o usuário mexe nas barras
             volMusic.addEventListener('input', (e) => {
                 const val = parseFloat(e.target.value);
                 localStorage.setItem('bgmVolume', val);
@@ -721,9 +706,6 @@ export class UIManager {
         }
     }
 
-    /**
-     * Alterna a visibilidade do painel de configurações.
-     */
     toggleSettings() {
         const modal = document.getElementById('settings-modal');
         if (!modal) return;
@@ -731,12 +713,54 @@ export class UIManager {
         this.isSettingsOpen = !this.isSettingsOpen;
         modal.style.display = this.isSettingsOpen ? 'flex' : 'none';
 
-        // Sempre que o modal for fechado, garantimos que ele resete para a tela principal
         if (!this.isSettingsOpen) {
             const mainPanel = document.getElementById('settings-main-panel');
             const confirmPanel = document.getElementById('settings-confirm-panel');
             if (mainPanel) mainPanel.style.display = 'block';
             if (confirmPanel) confirmPanel.style.display = 'none';
+        }
+    }
+
+    // ============================================================================
+    // SISTEMA DE BOTÃO ÚNICO DE AÇÃO (PREPARAÇÃO)
+    // ============================================================================
+
+    /**
+     * Atualiza visualmente o botão de ação principal na tela (Mobile).
+     * Essa função será chamada pelo Player.js quando se aproximar de um alvo.
+     * @param {string} state - 'pollinate' (curar planta), 'collect' (pegar pólen) ou 'default' (voo normal)
+     */
+    updateActionBtnState(state) {
+        // Encontra o botão de interação móvel pelo ID que você já tem no HTML
+        const actionBtn = document.getElementById('btn-action'); 
+        if (!actionBtn) return;
+
+        // Se o estado visual atual for o mesmo, não faz nada para economizar performance
+        if (actionBtn.getAttribute('data-state') === state) return;
+
+        actionBtn.setAttribute('data-state', state);
+
+        // Transição suave
+        actionBtn.style.transition = 'all 0.3s ease';
+
+        if (state === 'collect') {
+            actionBtn.innerHTML = '🍯'; 
+            actionBtn.style.boxShadow = '0 0 15px #f1c40f'; // Brilho Amarelo
+            actionBtn.style.border = '2px solid #f1c40f';
+            actionBtn.style.background = 'rgba(241, 196, 15, 0.2)';
+        } 
+        else if (state === 'pollinate') {
+            actionBtn.innerHTML = '✨'; 
+            actionBtn.style.boxShadow = '0 0 15px #2ecc71'; // Brilho Verde
+            actionBtn.style.border = '2px solid #2ecc71';
+            actionBtn.style.background = 'rgba(46, 204, 113, 0.2)';
+        } 
+        else {
+            // Estado Padrão (Sem alvo próximo)
+            actionBtn.innerHTML = '🐝'; 
+            actionBtn.style.boxShadow = '0 4px 6px rgba(0,0,0,0.5)';
+            actionBtn.style.border = '2px solid rgba(255,255,255,0.2)';
+            actionBtn.style.background = 'rgba(0,0,0,0.6)';
         }
     }
 }
