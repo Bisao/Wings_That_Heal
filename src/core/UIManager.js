@@ -144,7 +144,11 @@ export class UIManager {
                 badgeContainer.style.display = 'flex';
                 badgeContainer.style.alignItems = 'center';
                 badgeContainer.style.gap = '8px';
-                badgeContainer.style.justifyContent = 'center';
+                
+                // === ALTERAÇÕES DE ALINHAMENTO E BORDA ===
+                badgeContainer.style.justifyContent = 'flex-start'; // Alinha o botão e o nome mais à esquerda
+                badgeContainer.style.borderLeft = 'none'; // Remove a borda amarela
+                badgeContainer.style.paddingLeft = '10px'; // Dá um espaço para não grudar totalmente na margem da tela
                 
                 // Limpa todo o conteúdo HTML da badge (Remove textos residuais como 'LV')
                 badgeContainer.innerHTML = '';
